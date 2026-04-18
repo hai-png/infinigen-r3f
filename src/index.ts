@@ -26,6 +26,12 @@ export * from './math/index.js';
 // Placement Algorithms
 export * from './placement/index.js';
 
+// Constraint Evaluator (NEW - Sprint 1)
+export * from './evaluator/index.js';
+
+// Room Solver (NEW - Sprint 2)
+export * from './room-solver/index.js';
+
 // Re-export commonly used types
 export type {
   Node,
