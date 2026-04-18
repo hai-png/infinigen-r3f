@@ -1,0 +1,89 @@
+{
+  "name": "@infinigen/r3f",
+  "version": "0.1.0",
+  "description": "React Three Fiber port of Infinigen's constraint-based procedural generation system",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./constraint-language": {
+      "types": "./dist/constraint-language/index.d.ts",
+      "import": "./dist/constraint-language/index.js"
+    },
+    "./reasoning": {
+      "types": "./dist/reasoning/index.d.ts",
+      "import": "./dist/reasoning/index.js"
+    },
+    "./solver": {
+      "types": "./dist/solver/index.d.ts",
+      "import": "./dist/solver/index.js"
+    },
+    "./math": {
+      "types": "./dist/math/index.d.ts",
+      "import": "./dist/math/index.js"
+    },
+    "./placement": {
+      "types": "./dist/placement/index.d.ts",
+      "import": "./dist/placement/index.js"
+    },
+    "./tags": {
+      "types": "./dist/tags/index.d.ts",
+      "import": "./dist/tags/index.js"
+    },
+    "./room-solver": {
+      "types": "./dist/room-solver/index.d.ts",
+      "import": "./dist/room-solver/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src/**/*.ts",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "react",
+    "three",
+    "fiber",
+    "r3f",
+    "procedural",
+    "generation",
+    "constraints",
+    "infinigen",
+    "3d",
+    "webgl"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "three": ">=0.150.0"
+  },
+  "dependencies": {
+    "simplex-noise": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/three": "^0.160.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.55.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/infinigen/infinigen-r3f.git"
+  },
+  "bugs": {
+    "url": "https://github.com/infinigen/infinigen-r3f/issues"
+  },
+  "homepage": "https://github.com/infinigen/infinigen-r3f#readme"
+}

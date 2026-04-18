@@ -1,0 +1,767 @@
+/**
+ * Base Node class for constraint language AST
+ */
+export abstract class Node {
+  /**
+   * Get all children of this node as a Map of field names to child nodes
+   */
+  abstract children(): Map<string, Node>;
+
+  /**
+   * Traverse the AST in depth-first order
+   * @param inorder - If true, traverse in inorder (left, root, right)
+   */
+  *traverse(inorder: boolean = false): Generator<Node> {
+    if (!inorder) {
+      yield this;
+    }
+
+    for (const [, child] of this.children()) {
+      yield* child.traverse(inorder);
+    }
+
+    if (inorder) {
+      yield this;
+    }
+  }
+
+  /**
+   * Get the size of the subtree rooted at this node
+   */
+  size(): number {
+    let count = 1;
+    for (const [, child] of this.children()) {
+      count += child.size();
+    }
+    return count;
+  }
+
+  /**
+   * Deep clone this node and all its children
+   */
+  abstract clone(): Node;
+}
+
+/**
+ * Represents a variable in the constraint language
+ */
+export class Variable extends Node {
+  constructor(public readonly name: string) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map();
+  }
+
+  clone(): Variable {
+    return new Variable(this.name);
+  }
+
+  equals(other: Variable): boolean {
+    return this.name === other.name;
+  }
+
+  toString(): string {
+    return `Var(${this.name})`;
+  }
+}
+
+/**
+ * Domain types for variables
+ */
+export type DomainType = 'object_set' | 'numeric' | 'pose' | 'bbox' | 'boolean';
+
+/**
+ * Base class for domains
+ */
+export abstract class Domain {
+  abstract readonly type: DomainType;
+  
+  /**
+   * Check if this domain implies another domain
+   */
+  abstract implies(other: Domain): boolean;
+
+  /**
+   * Check if a value satisfies this domain
+   */
+  abstract satisfies(value: any): boolean;
+
+  /**
+   * Check if this domain intersects with another
+   */
+  abstract intersects(other: Domain): boolean;
+
+  /**
+   * Compute the intersection of two domains
+   */
+  abstract intersect(other: Domain): Domain;
+
+  /**
+   * Compute the union of two domains
+   */
+  abstract union(other: Domain): Domain;
+
+  /**
+   * Substitute a variable with another domain
+   */
+  abstract substitute(variable: Variable, replacement: Domain): Domain;
+
+  /**
+   * Check if this domain is a subset of another
+   */
+  isSubset(other: Domain): boolean {
+    return this.implies(other);
+  }
+
+  /**
+   * Get a sample value from this domain
+   */
+  abstract sample(seed?: number): any;
+}
+
+/**
+ * Domain representing a set of objects
+ */
+export class ObjectSetDomain extends Domain {
+  readonly type: DomainType = 'object_set';
+
+  constructor(
+    public readonly includes?: Set<string>,
+    public readonly excludes?: Set<string>,
+    public readonly tagFilter?: any // TagExpression
+  ) {
+    super();
+  }
+
+  implies(other: Domain): boolean {
+    if (!(other instanceof ObjectSetDomain)) {
+      return false;
+    }
+    
+    // If we have explicit includes, they must be a superset of other's includes
+    if (this.includes && other.includes) {
+      for (const obj of other.includes) {
+        if (!this.includes.has(obj)) {
+          return false;
+        }
+      }
+    }
+    
+    // If we have explicit excludes, they must be a subset of other's excludes
+    if (this.excludes && other.excludes) {
+      for (const obj of this.excludes) {
+        if (!other.excludes.has(obj)) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }
+
+  satisfies(value: any): boolean {
+    if (this.includes && !this.includes.has(value)) {
+      return false;
+    }
+    if (this.excludes && this.excludes.has(value)) {
+      return false;
+    }
+    return true;
+  }
+
+  intersects(other: Domain): boolean {
+    if (!(other instanceof ObjectSetDomain)) {
+      return false;
+    }
+    
+    // Check if includes conflict with excludes
+    if (this.includes && other.excludes) {
+      for (const obj of this.includes) {
+        if (other.excludes.has(obj)) {
+          return false;
+        }
+      }
+    }
+    
+    if (other.includes && this.excludes) {
+      for (const obj of other.includes) {
+        if (this.excludes.has(obj)) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }
+
+  intersect(other: Domain): Domain {
+    if (!(other instanceof ObjectSetDomain)) {
+      return this;
+    }
+
+    const includes = new Set<string>();
+    const excludes = new Set<string>();
+
+    // Intersection of includes
+    if (this.includes && other.includes) {
+      for (const obj of this.includes) {
+        if (other.includes.has(obj)) {
+          includes.add(obj);
+        }
+      }
+    } else if (this.includes) {
+      for (const obj of this.includes) {
+        includes.add(obj);
+      }
+    } else if (other.includes) {
+      for (const obj of other.includes) {
+        includes.add(obj);
+      }
+    }
+
+    // Union of excludes
+    if (this.excludes) {
+      for (const obj of this.excludes) {
+        excludes.add(obj);
+      }
+    }
+    if (other.excludes) {
+      for (const obj of other.excludes) {
+        excludes.add(obj);
+      }
+    }
+
+    return new ObjectSetDomain(includes, excludes);
+  }
+
+  union(other: Domain): Domain {
+    if (!(other instanceof ObjectSetDomain)) {
+      return this;
+    }
+
+    const excludes = new Set<string>();
+
+    // Intersection of excludes (both must exclude)
+    if (this.excludes && other.excludes) {
+      for (const obj of this.excludes) {
+        if (other.excludes.has(obj)) {
+          excludes.add(obj);
+        }
+      }
+    }
+
+    return new ObjectSetDomain(undefined, excludes);
+  }
+
+  substitute(variable: Variable, replacement: Domain): Domain {
+    return this; // ObjectSetDomain doesn't contain variables
+  }
+
+  sample(seed?: number): any {
+    if (this.includes && this.includes.size > 0) {
+      const idx = seed ? Math.floor(Math.abs(Math.sin(seed) * 1000000) % this.includes.size) : 0;
+      return Array.from(this.includes)[idx];
+    }
+    return null;
+  }
+
+  clone(): ObjectSetDomain {
+    return new ObjectSetDomain(
+      this.includes ? new Set(this.includes) : undefined,
+      this.excludes ? new Set(this.excludes) : undefined,
+      this.tagFilter
+    );
+  }
+
+  children(): Map<string, Node> {
+    return new Map();
+  }
+}
+
+/**
+ * Domain representing numeric ranges
+ */
+export class NumericDomain extends Domain {
+  readonly type: DomainType = 'numeric';
+
+  constructor(
+    public readonly min: number = -Infinity,
+    public readonly max: number = Infinity,
+    public readonly discrete?: Set<number>
+  ) {
+    super();
+  }
+
+  implies(other: Domain): boolean {
+    if (!(other instanceof NumericDomain)) {
+      return false;
+    }
+
+    if (this.discrete && other.discrete) {
+      for (const val of this.discrete) {
+        if (!other.discrete.has(val)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (this.discrete) {
+      for (const val of this.discrete) {
+        if (val < other.min || val > other.max) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (other.discrete) {
+      return false; // Range can't imply discrete set
+    }
+
+    return this.min >= other.min && this.max <= other.max;
+  }
+
+  satisfies(value: number): boolean {
+    if (this.discrete) {
+      return this.discrete.has(value);
+    }
+    return value >= this.min && value <= this.max;
+  }
+
+  intersects(other: Domain): boolean {
+    if (!(other instanceof NumericDomain)) {
+      return false;
+    }
+
+    if (this.discrete && other.discrete) {
+      for (const val of this.discrete) {
+        if (other.discrete.has(val)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (this.discrete) {
+      for (const val of this.discrete) {
+        if (val >= other.min && val <= other.max) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (other.discrete) {
+      for (const val of other.discrete) {
+        if (val >= this.min && val <= this.max) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return this.min <= other.max && this.max >= other.min;
+  }
+
+  intersect(other: Domain): Domain {
+    if (!(other instanceof NumericDomain)) {
+      return this;
+    }
+
+    if (this.discrete && other.discrete) {
+      const intersection = new Set<number>();
+      for (const val of this.discrete) {
+        if (other.discrete.has(val)) {
+          intersection.add(val);
+        }
+      }
+      return new NumericDomain(-Infinity, Infinity, intersection);
+    }
+
+    if (this.discrete) {
+      const filtered = new Set<number>();
+      for (const val of this.discrete) {
+        if (val >= other.min && val <= other.max) {
+          filtered.add(val);
+        }
+      }
+      return new NumericDomain(-Infinity, Infinity, filtered);
+    }
+
+    if (other.discrete) {
+      const filtered = new Set<number>();
+      for (const val of other.discrete) {
+        if (val >= this.min && val <= this.max) {
+          filtered.add(val);
+        }
+      }
+      return new NumericDomain(-Infinity, Infinity, filtered);
+    }
+
+    return new NumericDomain(
+      Math.max(this.min, other.min),
+      Math.min(this.max, other.max)
+    );
+  }
+
+  union(other: Domain): Domain {
+    if (!(other instanceof NumericDomain)) {
+      return this;
+    }
+
+    if (this.discrete && other.discrete) {
+      const union = new Set<number>([...this.discrete, ...other.discrete]);
+      return new NumericDomain(-Infinity, Infinity, union);
+    }
+
+    // For continuous ranges, return unbounded if they don't overlap
+    if (!this.intersects(other)) {
+      return new NumericDomain(-Infinity, Infinity);
+    }
+
+    return new NumericDomain(
+      Math.min(this.min, other.min),
+      Math.max(this.max, other.max)
+    );
+  }
+
+  substitute(variable: Variable, replacement: Domain): Domain {
+    return this;
+  }
+
+  sample(seed?: number): number {
+    if (this.discrete && this.discrete.size > 0) {
+      const arr = Array.from(this.discrete);
+      const idx = seed ? Math.floor(Math.abs(Math.sin(seed) * 1000000) % arr.length) : 0;
+      return arr[idx];
+    }
+    
+    const range = this.max - this.min;
+    if (!isFinite(range)) {
+      return 0;
+    }
+    
+    const random = seed ? Math.abs(Math.sin(seed)) : Math.random();
+    return this.min + random * range;
+  }
+
+  clone(): NumericDomain {
+    return new NumericDomain(
+      this.min,
+      this.max,
+      this.discrete ? new Set(this.discrete) : undefined
+    );
+  }
+
+  children(): Map<string, Node> {
+    return new Map();
+  }
+}
+
+/**
+ * Domain representing a pose (position + rotation)
+ */
+export class PoseDomain extends Domain {
+  readonly type: DomainType = 'pose';
+
+  constructor(
+    public readonly positionDomain?: BBoxDomain,
+    public readonly rotationDomain?: NumericDomain // Euler angles
+  ) {
+    super();
+  }
+
+  implies(other: Domain): boolean {
+    if (!(other instanceof PoseDomain)) {
+      return false;
+    }
+
+    if (this.positionDomain && other.positionDomain) {
+      if (!this.positionDomain.implies(other.positionDomain)) {
+        return false;
+      }
+    }
+
+    if (this.rotationDomain && other.rotationDomain) {
+      if (!this.rotationDomain.implies(other.rotationDomain)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  satisfies(value: any): boolean {
+    // value should be { position: Vector3, rotation: Vector3 }
+    if (this.positionDomain && !this.positionDomain.satisfies(value.position)) {
+      return false;
+    }
+    if (this.rotationDomain && !this.rotationDomain.satisfies(value.rotation)) {
+      return false;
+    }
+    return true;
+  }
+
+  intersects(other: Domain): boolean {
+    if (!(other instanceof PoseDomain)) {
+      return false;
+    }
+
+    if (this.positionDomain && other.positionDomain) {
+      if (!this.positionDomain.intersects(other.positionDomain)) {
+        return false;
+      }
+    }
+
+    if (this.rotationDomain && other.rotationDomain) {
+      if (!this.rotationDomain.intersects(other.rotationDomain)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  intersect(other: Domain): Domain {
+    if (!(other instanceof PoseDomain)) {
+      return this;
+    }
+
+    return new PoseDomain(
+      this.positionDomain?.intersect(other.positionDomain || new BBoxDomain()),
+      this.rotationDomain?.intersect(other.rotationDomain || new NumericDomain())
+    );
+  }
+
+  union(other: Domain): Domain {
+    if (!(other instanceof PoseDomain)) {
+      return this;
+    }
+
+    return new PoseDomain(
+      this.positionDomain?.union(other.positionDomain || new BBoxDomain()),
+      this.rotationDomain?.union(other.rotationDomain || new NumericDomain())
+    );
+  }
+
+  substitute(variable: Variable, replacement: Domain): Domain {
+    return this;
+  }
+
+  sample(seed?: number): any {
+    return {
+      position: this.positionDomain?.sample(seed) || [0, 0, 0],
+      rotation: this.rotationDomain?.sample(seed) || [0, 0, 0]
+    };
+  }
+
+  clone(): PoseDomain {
+    return new PoseDomain(
+      this.positionDomain?.clone(),
+      this.rotationDomain?.clone()
+    );
+  }
+
+  children(): Map<string, Node> {
+    return new Map();
+  }
+}
+
+/**
+ * Domain representing a bounding box
+ */
+export class BBoxDomain extends Domain {
+  readonly type: DomainType = 'bbox';
+
+  constructor(
+    public readonly mins: number[] = [-Infinity, -Infinity, -Infinity],
+    public readonly maxs: number[] = [Infinity, Infinity, Infinity]
+  ) {
+    super();
+  }
+
+  implies(other: Domain): boolean {
+    if (!(other instanceof BBoxDomain)) {
+      return false;
+    }
+
+    for (let i = 0; i < 3; i++) {
+      if (this.mins[i] < other.mins[i] || this.maxs[i] > other.maxs[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  satisfies(value: number[]): boolean {
+    for (let i = 0; i < 3; i++) {
+      if (value[i] < this.mins[i] || value[i] > this.maxs[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  intersects(other: Domain): boolean {
+    if (!(other instanceof BBoxDomain)) {
+      return false;
+    }
+
+    for (let i = 0; i < 3; i++) {
+      if (this.mins[i] > other.maxs[i] || this.maxs[i] < other.mins[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  intersect(other: Domain): Domain {
+    if (!(other instanceof BBoxDomain)) {
+      return this;
+    }
+
+    const mins = this.mins.map((v, i) => Math.max(v, other.mins[i]));
+    const maxs = this.maxs.map((v, i) => Math.min(v, other.maxs[i]));
+    return new BBoxDomain(mins, maxs);
+  }
+
+  union(other: Domain): Domain {
+    if (!(other instanceof BBoxDomain)) {
+      return this;
+    }
+
+    const mins = this.mins.map((v, i) => Math.min(v, other.mins[i]));
+    const maxs = this.maxs.map((v, i) => Math.max(v, other.maxs[i]));
+    return new BBoxDomain(mins, maxs);
+  }
+
+  substitute(variable: Variable, replacement: Domain): Domain {
+    return this;
+  }
+
+  sample(seed?: number): number[] {
+    return this.mins.map((min, i) => {
+      const max = this.maxs[i];
+      const range = max - min;
+      if (!isFinite(range)) {
+        return 0;
+      }
+      const random = seed ? Math.abs(Math.sin(seed + i)) : Math.random();
+      return min + random * range;
+    });
+  }
+
+  clone(): BBoxDomain {
+    return new BBoxDomain([...this.mins], [...this.maxs]);
+  }
+
+  children(): Map<string, Node> {
+    return new Map();
+  }
+}
+
+/**
+ * Boolean domain (true/false)
+ */
+export class BooleanDomain extends Domain {
+  readonly type: DomainType = 'boolean';
+
+  constructor(public readonly value?: boolean) {
+    super();
+  }
+
+  implies(other: Domain): boolean {
+    if (!(other instanceof BooleanDomain)) {
+      return false;
+    }
+
+    if (this.value !== undefined && other.value !== undefined) {
+      return this.value === other.value;
+    }
+
+    if (other.value !== undefined) {
+      return false; // Unspecified can't imply specific
+    }
+
+    return true;
+  }
+
+  satisfies(value: boolean): boolean {
+    if (this.value !== undefined) {
+      return value === this.value;
+    }
+    return true;
+  }
+
+  intersects(other: Domain): boolean {
+    if (!(other instanceof BooleanDomain)) {
+      return false;
+    }
+
+    if (this.value !== undefined && other.value !== undefined) {
+      return this.value === other.value;
+    }
+
+    return true;
+  }
+
+  intersect(other: Domain): Domain {
+    if (!(other instanceof BooleanDomain)) {
+      return this;
+    }
+
+    if (this.value !== undefined && other.value !== undefined) {
+      if (this.value !== other.value) {
+        return new BooleanDomain(); // Empty domain
+      }
+      return new BooleanDomain(this.value);
+    }
+
+    if (this.value !== undefined) {
+      return new BooleanDomain(this.value);
+    }
+
+    if (other.value !== undefined) {
+      return new BooleanDomain(other.value);
+    }
+
+    return new BooleanDomain();
+  }
+
+  union(other: Domain): Domain {
+    if (!(other instanceof BooleanDomain)) {
+      return this;
+    }
+
+    if (this.value !== undefined && other.value !== undefined) {
+      if (this.value !== other.value) {
+        return new BooleanDomain(); // All values
+      }
+      return new BooleanDomain(this.value);
+    }
+
+    return new BooleanDomain();
+  }
+
+  substitute(variable: Variable, replacement: Domain): Domain {
+    return this;
+  }
+
+  sample(seed?: number): boolean {
+    if (this.value !== undefined) {
+      return this.value;
+    }
+    return seed ? Math.abs(Math.sin(seed)) > 0.5 : Math.random() > 0.5;
+  }
+
+  clone(): BooleanDomain {
+    return new BooleanDomain(this.value);
+  }
+
+  children(): Map<string, Node> {
+    return new Map();
+  }
+}
