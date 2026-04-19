@@ -3,6 +3,8 @@
  */
 
 export * from './GPUAcceleration';
+export * from './DrawCallOptimizer';
+export * from './MemoryProfiler';
 
 // Future optimization modules can be added here:
 // export * from './MemoryOptimizer';

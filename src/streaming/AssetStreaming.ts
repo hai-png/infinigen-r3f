@@ -213,23 +213,150 @@ export class AssetStreamer {
   }
 
   /**
-   * Fetch asset data (placeholder - replace with actual loaders)
+   * Fetch asset data with appropriate loader based on type
    */
   private async fetchAsset(url: string, type: string): Promise<any> {
-    // Placeholder implementation
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ url, type, placeholder: true });
-      }, 100);
-    });
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch asset: ${url} (${response.status})`);
+      }
+      
+      switch (type.toLowerCase()) {
+        case 'gltf':
+        case 'glb':
+          return await this.loadGLTF(response);
+        
+        case 'obj':
+          return await this.loadOBJ(response);
+        
+        case 'fbx':
+          return await this.loadFBX(response);
+        
+        case 'texture':
+        case 'jpg':
+        case 'jpeg':
+        case 'png':
+        case 'webp':
+          return await this.loadTexture(response);
+        
+        case 'hdr':
+        case 'exr':
+          return await this.loadHDRI(response);
+        
+        default:
+          // Fallback: return blob
+          return await response.blob();
+      }
+    } catch (error) {
+      console.error(`Error fetching asset ${url}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Load GLTF/GLB model
+   */
+  private async loadGLTF(response: Response): Promise<any> {
+    const arrayBuffer = await response.arrayBuffer();
+    // In production, use GLTFLoader from three/examples
+    return {
+      type: 'gltf',
+      data: arrayBuffer,
+      url: response.url,
+      size: arrayBuffer.byteLength
+    };
+  }
+
+  /**
+   * Load OBJ model
+   */
+  private async loadOBJ(response: Response): Promise<any> {
+    const text = await response.text();
+    // In production, use OBJLoader from three/examples
+    return {
+      type: 'obj',
+      data: text,
+      url: response.url,
+      size: text.length
+    };
+  }
+
+  /**
+   * Load FBX model
+   */
+  private async loadFBX(response: Response): Promise<any> {
+    const arrayBuffer = await response.arrayBuffer();
+    // In production, use FBXLoader from three/examples
+    return {
+      type: 'fbx',
+      data: arrayBuffer,
+      url: response.url,
+      size: arrayBuffer.byteLength
+    };
+  }
+
+  /**
+   * Load texture image
+   */
+  private async loadTexture(response: Response): Promise<any> {
+    const blob = await response.blob();
+    const imageBitmap = await createImageBitmap(blob);
+    return {
+      type: 'texture',
+      data: imageBitmap,
+      url: response.url,
+      size: blob.size,
+      width: imageBitmap.width,
+      height: imageBitmap.height
+    };
+  }
+
+  /**
+   * Load HDRI environment map
+   */
+  private async loadHDRI(response: Response): Promise<any> {
+    const arrayBuffer = await response.arrayBuffer();
+    // In production, use RGBELoader or EXRLoader
+    return {
+      type: 'hdri',
+      data: arrayBuffer,
+      url: response.url,
+      size: arrayBuffer.byteLength
+    };
   }
 
   /**
    * Calculate asset size in bytes
    */
   private calculateAssetSize(data: any): number {
-    // Placeholder - would use actual size calculation
-    return data?.size || 1024 * 1024; // Default 1MB
+    if (data?.size !== undefined) {
+      return data.size;
+    }
+    
+    if (data?.data) {
+      if (data.data instanceof ArrayBuffer) {
+        return data.data.byteLength;
+      }
+      if (typeof data.data === 'string') {
+        return data.data.length;
+      }
+      if (data.data instanceof Blob) {
+        return data.data.size;
+      }
+    }
+    
+    // Estimate based on type
+    const typeSizes: Record<string, number> = {
+      'gltf': 512 * 1024,    // 512KB average
+      'glb': 256 * 1024,     // 256KB average
+      'obj': 128 * 1024,     // 128KB average
+      'texture': 1024 * 1024, // 1MB average
+      'hdri': 8 * 1024 * 1024 // 8MB average
+    };
+    
+    return typeSizes[data?.type] || 1024 * 1024; // Default 1MB
   }
 
   /**
