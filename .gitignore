@@ -1,20 +1,11 @@
 ```
 # Dependencies
-node_modules/
+original_infinigen/
 
-# Build artifacts
-dist/
-build/
-target/
-
-# TypeScript/JavaScript
-*.tsbuildinfo
-*.js.map
-*.jsx.map
-*.ts.map
-
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
 # Environment
 .env
@@ -24,19 +15,4 @@ target/
 # Editors
 .vscode/
 .idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Python (if present)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-venv/
-.venv/
-.env
-.env.local
 ```
