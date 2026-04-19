@@ -2,7 +2,7 @@
  * Placement Algorithms Module
  * 
  * Exports path finding, density-based placement,
- * and other spatial algorithms.
+ * instance scattering, and other spatial algorithms.
  */
 
 export {
@@ -20,3 +20,11 @@ export {
   ThresholdFilter,
   DensityParams
 } from './density.js';
+
+export {
+  InstanceScatterer,
+  MultiObjectScatterer,
+  SpatialHashGrid,
+  ScatteredInstance,
+  ScatterConfig
+} from './instance-scatter.js';

@@ -35,6 +35,12 @@ export * from './room-solver/index.js';
 // SIM Module - Physics & Kinematics (NEW - Sprint 3)
 export * from './sim/index.js';
 
+// Hybrid Bridge (NEW - Sprint 4)
+export * from './bridge/index.js';
+
+// Shared Types
+export * from './types.js';
+
 // Re-export commonly used types
 export type {
   Node,
