@@ -136,3 +136,63 @@ export {
   NamedScoreTerm,
   buildProblem
 } from './constants.js';
+
+// Utilities
+export {
+  simplifyConstraint,
+  simplifyExpression,
+  extractVariables,
+  isSatisfiable,
+  getExpressionBounds,
+  substituteVariable,
+  toCNF,
+  supportSet,
+  constraintsEqual,
+  estimateComplexity,
+  constraintToString,
+  expressionToString
+} from './util.js';
+
+// Result Types
+export {
+  ConstraintStatus,
+  EvaluationResult,
+  ScoreTermResult,
+  Solution,
+  SolverResult,
+  SolveStatus,
+  SolverStatistics,
+  ViolationReport,
+  ViolationDetail,
+  FixSuggestion,
+  FixType,
+  ViolationSummary,
+  createEmptyEvaluationResult,
+  createEmptySolution,
+  createSuccessResult,
+  createFailureResult,
+  formatSolution,
+  formatViolationReport,
+  mergeEvaluationResults,
+  compareSolutions
+} from './result.js';
+
+// Room-Specific Constraints
+export {
+  objectsInRoom,
+  objectsWithFunction,
+  InRoom,
+  RoomsAdjacent,
+  RoomsNotAdjacent,
+  RoomHasEntranceAccess,
+  RoomHasNaturalLight,
+  ArrangeFurnitureInRoom,
+  TrafficFlowPath,
+  PrivacyHierarchy,
+  FunctionalZones,
+  defineRoom,
+  validateRoomConfig,
+  type RoomFunction,
+  type PrivacyLevel,
+  type RoomAdjacency
+} from './rooms.js';

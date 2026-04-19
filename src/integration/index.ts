@@ -1,10 +1,19 @@
 /**
- * Integration Module
- * 
- * React Three Fiber integration components and hooks
- * for using Infinigen constraint solver in R3F applications.
+ * Integration Module Exports - Phase 12 Enhanced
  */
 
-export * from './bridge';
-export * from './use-solver';
-export * from './constraint-debugger';
+export { HybridBridge } from './bridge';
+export { useSolver } from './use-solver';
+export { ConstraintDebugger } from './constraint-debugger';
+export { ViolationDebugger } from './ViolationDebugger';
+export { DomainInspector } from './DomainInspector';
+export { SolverProfiler } from './SolverProfiler';
+
+export default {
+  HybridBridge,
+  useSolver,
+  ConstraintDebugger,
+  ViolationDebugger,
+  DomainInspector,
+  SolverProfiler,
+};
