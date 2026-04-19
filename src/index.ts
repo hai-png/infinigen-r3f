@@ -38,6 +38,12 @@ export * from './sim/index.js';
 // Hybrid Bridge (NEW - Sprint 4)
 export * from './bridge/index.js';
 
+// Room Decoration System (NEW - Sprint 5)
+export * from './decorate/index.js';
+
+// Animation Policy System (NEW - Sprint 6)
+export * from './animation/index.js';
+
 // Shared Types
 export * from './types.js';
 
