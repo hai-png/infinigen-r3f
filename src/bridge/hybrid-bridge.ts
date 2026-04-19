@@ -15,7 +15,7 @@ import { MeshData, PhysicsConfig } from '../types';
 
 export interface BridgeRequest {
   id: string;
-  method: 'mesh_boolean' | 'mesh_subdivide' | 'export_mjcf' | 'generate_procedural' | 'raycast_batch';
+  method: 'mesh_boolean' | 'mesh_subdivide' | 'export_mjcf' | 'generate_procedural' | 'raycast_batch' | 'optimize_decoration' | 'optimize_trajectories';
   params: any;
   binaryPayload?: ArrayBuffer;
 }
@@ -29,6 +29,7 @@ export interface BridgeResponse {
 }
 
 export class HybridBridge {
+  private static instance: HybridBridge | null = null;
   private ws: WebSocket | null = null;
   private pendingRequests: Map<string, { resolve: Function; reject: Function }> = new Map();
   private url: string;
@@ -37,6 +38,34 @@ export class HybridBridge {
 
   constructor(url: string = 'ws://localhost:8765') {
     this.url = url;
+  }
+
+  /**
+   * Get singleton instance
+   */
+  static getInstance(): HybridBridge {
+    if (!HybridBridge.instance) {
+      HybridBridge.instance = new HybridBridge();
+    }
+    return HybridBridge.instance;
+  }
+
+  /**
+   * Check if bridge is connected
+   */
+  static isConnected(): boolean {
+    return HybridBridge.instance?.connected ?? false;
+  }
+
+  /**
+   * Connect to Python backend
+   */
+  static async connect(url?: string): Promise<void> {
+    const instance = HybridBridge.getInstance();
+    if (url) {
+      instance.url = url;
+    }
+    await instance.connect();
   }
 
   async connect(): Promise<void> {
@@ -195,6 +224,30 @@ export class HybridBridge {
     } catch (e) {
       // Fallback to simple distance check if backend unavailable
       return rays.map(() => Infinity);
+    }
+  }
+
+  /**
+   * Optimize decoration layout using Python backend
+   */
+  async optimizeDecorationLayout(roomBounds: any, decorations: any[]): Promise<any[]> {
+    try {
+      return await this.request<any[]>('optimize_decoration', { roomBounds, decorations });
+    } catch (e) {
+      console.warn('[HybridBridge] Decoration optimization failed, returning original');
+      return decorations;
+    }
+  }
+
+  /**
+   * Optimize trajectories using Python backend
+   */
+  async optimizeTrajectories(trajectories: any[]): Promise<any[]> {
+    try {
+      return await this.request<any[]>('optimize_trajectories', { trajectories });
+    } catch (e) {
+      console.warn('[HybridBridge] Trajectory optimization failed, returning original');
+      return trajectories;
     }
   }
 

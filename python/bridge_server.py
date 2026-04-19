@@ -52,10 +52,15 @@ class InfinigenBridgeServer:
         """Handle incoming messages from clients"""
         try:
             data = json.loads(message)
+            # Support both old 'type' and new 'method' formats
             msg_type = data.get('type', 'TASK')
+            method = data.get('method', None)
             
             if msg_type == 'SYNC_STATE':
                 await self.handle_sync_state(websocket, data.get('payload', {}))
+            elif method in ['mesh_boolean', 'mesh_subdivide', 'export_mjcf', 'generate_procedural', 'raycast_batch']:
+                # New RPC-style method calls
+                await self.handle_rpc_method(websocket, data)
             elif msg_type in ['GENERATE_GEOMETRY', 'RUN_SIMULATION', 'RENDER_IMAGE', 'BAKE_PHYSICS']:
                 await self.handle_task(websocket, data)
             else:
@@ -86,6 +91,58 @@ class InfinigenBridgeServer:
             'status': 'success',
             'message': 'State synchronized'
         }))
+    
+    async def handle_rpc_method(self, websocket: WebSocketServerProtocol, request: Dict[str, Any]):
+        """Handle RPC-style method calls from the hybrid bridge"""
+        method = request.get('method')
+        params = request.get('params', {})
+        request_id = request.get('id', 'unknown')
+        
+        print(f"[Bridge] RPC call: {method}")
+        
+        try:
+            result = None
+            
+            if method == 'mesh_boolean':
+                result = await self.mesh_boolean(
+                    params.get('operation', 'union'),
+                    params.get('meshes', [])
+                )
+            elif method == 'mesh_subdivide':
+                result = await self.mesh_subdivide(
+                    params.get('mesh', {}),
+                    params.get('levels', 2)
+                )
+            elif method == 'export_mjcf':
+                result = await self.export_mjcf(
+                    params.get('config', {})
+                )
+            elif method == 'generate_procedural':
+                result = await self.generate_procedural(
+                    params.get('type', 'terrain'),
+                    params.get('params', {})
+                )
+            elif method == 'raycast_batch':
+                result = await self.raycast_batch(
+                    params.get('rays', [])
+                )
+            else:
+                raise ValueError(f"Unknown method: {method}")
+            
+            # Send success response
+            await websocket.send(json.dumps({
+                'id': request_id,
+                'success': True,
+                'result': result
+            }))
+            
+        except Exception as e:
+            print(f"[Bridge] RPC {method} failed: {str(e)}")
+            await websocket.send(json.dumps({
+                'id': request_id,
+                'success': False,
+                'error': str(e)
+            }))
     
     async def _update_blender_scene(self, state: Dict[str, Any]):
         """Update Blender scene to match frontend state"""
@@ -469,6 +526,407 @@ class InfinigenBridgeServer:
         else:
             # Assume it's already a path
             return str(mesh_data)
+    
+    async def mesh_boolean(self, operation: str, meshes: list) -> dict:
+        """
+        Perform boolean operations on meshes using trimesh or Blender
+        
+        Args:
+            operation: 'union', 'difference', or 'intersection'
+            meshes: List of mesh data (vertices, faces) or file paths
+            
+        Returns:
+            Result mesh as {vertices: [...], faces: [...]}
+        """
+        print(f"[Bridge] Performing mesh {operation} on {len(meshes)} meshes")
+        
+        try:
+            import trimesh
+            import numpy as np
+            
+            # Load meshes from data or paths
+            loaded_meshes = []
+            for i, mesh_data in enumerate(meshes):
+                if isinstance(mesh_data, str):
+                    # It's a file path
+                    mesh = trimesh.load(mesh_data, force='mesh')
+                elif isinstance(mesh_data, dict) and 'vertices' in mesh_data:
+                    # It's vertex/face data
+                    vertices = np.array(mesh_data['vertices'])
+                    faces = np.array(mesh_data['faces'])
+                    mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+                else:
+                    raise ValueError(f"Invalid mesh data format at index {i}")
+                loaded_meshes.append(mesh)
+            
+            if len(loaded_meshes) < 2:
+                raise ValueError("Need at least 2 meshes for boolean operation")
+            
+            # Perform boolean operation
+            result_mesh = None
+            if operation == 'union':
+                result_mesh = trimesh.boolean.union(loaded_meshes, engine='blender')
+            elif operation == 'difference':
+                result_mesh = trimesh.boolean.difference(loaded_meshes, engine='blender')
+            elif operation == 'intersection':
+                result_mesh = trimesh.boolean.intersection(loaded_meshes, engine='blender')
+            else:
+                raise ValueError(f"Unknown boolean operation: {operation}")
+            
+            # Return mesh data
+            return {
+                'vertices': result_mesh.vertices.tolist(),
+                'faces': result_mesh.faces.tolist(),
+                'vertex_normals': result_mesh.vertex_normals.tolist() if result_mesh.vertex_normals is not None else None
+            }
+            
+        except ImportError:
+            # Fallback: return first mesh
+            print("[Bridge] trimesh not available, returning first mesh")
+            if meshes and isinstance(meshes[0], dict):
+                return meshes[0]
+            return {'vertices': [], 'faces': []}
+        except Exception as e:
+            print(f"[Bridge] Boolean operation failed: {e}")
+            raise
+    
+    async def mesh_subdivide(self, mesh_data: dict, levels: int = 2) -> dict:
+        """
+        Subdivide mesh for higher fidelity
+        
+        Args:
+            mesh_data: Mesh with vertices and faces
+            levels: Number of subdivision levels
+            
+        Returns:
+            Subdivided mesh data
+        """
+        print(f"[Bridge] Subdividing mesh with {levels} levels")
+        
+        try:
+            import trimesh
+            import numpy as np
+            
+            # Create mesh from data
+            vertices = np.array(mesh_data.get('vertices', []))
+            faces = np.array(mesh_data.get('faces', []))
+            mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+            
+            # Subdivide using loop subdivision or simple midpoint
+            for _ in range(levels):
+                # Simple midpoint subdivision
+                new_vertices = []
+                new_faces = []
+                
+                # For each face, create 4 new faces
+                vertex_count = len(mesh.vertices)
+                edge_midpoints = {}
+                
+                for face in mesh.faces:
+                    # Get edge midpoints
+                    mid_indices = []
+                    for i in range(3):
+                        edge = tuple(sorted([face[i], face[(i+1)%3]]))
+                        if edge not in edge_midpoints:
+                            # Create new vertex at edge midpoint
+                            v1 = mesh.vertices[face[i]]
+                            v2 = mesh.vertices[face[(i+1)%3]]
+                            midpoint = (v1 + v2) / 2
+                            edge_midpoints[edge] = vertex_count + len(new_vertices)
+                            new_vertices.append(midpoint)
+                        mid_indices.append(edge_midpoints[edge])
+                    
+                    # Create 4 new triangles
+                    f0, f1, f2 = face
+                    m0, m1, m2 = mid_indices
+                    
+                    new_faces.extend([
+                        [f0, m0, m2],
+                        [f1, m1, m0],
+                        [f2, m2, m1],
+                        [m0, m1, m2]
+                    ])
+                
+                # Update mesh
+                all_vertices = np.vstack([mesh.vertices, np.array(new_vertices)])
+                mesh = trimesh.Trimesh(vertices=all_vertices, faces=np.array(new_faces))
+            
+            return {
+                'vertices': mesh.vertices.tolist(),
+                'faces': mesh.faces.tolist(),
+                'vertex_normals': mesh.vertex_normals.tolist() if mesh.vertex_normals is not None else None
+            }
+            
+        except ImportError:
+            print("[Bridge] trimesh not available, returning original mesh")
+            return mesh_data
+        except Exception as e:
+            print(f"[Bridge] Subdivision failed: {e}")
+            raise
+    
+    async def export_mjcf(self, config: dict) -> str:
+        """
+        Export scene to MJCF (MuJoCo XML) format
+        
+        Args:
+            config: Physics configuration with objects, joints, etc.
+            
+        Returns:
+            Path to exported MJCF file or XML string
+        """
+        print(f"[Bridge] Exporting MJCF with {len(config.get('objects', []))} objects")
+        
+        try:
+            import xml.etree.ElementTree as ET
+            import os
+            
+            # Create MJCF structure
+            mjcf = ET.Element('mujoco', model=config.get('name', 'infinigen_scene'))
+            ET.SubElement(mjcf, 'compiler', angle='radian', coordinate='local')
+            
+            # Add worldbody
+            worldbody = ET.SubElement(mjcf, 'worldbody')
+            
+            # Add objects
+            for obj in config.get('objects', []):
+                body = ET.SubElement(worldbody, 'body', name=obj.get('id', 'obj'))
+                
+                # Position and rotation
+                pos = obj.get('position', [0, 0, 0])
+                quat = obj.get('quaternion', [1, 0, 0, 0])
+                
+                # Add geom based on type
+                geom_type = obj.get('geometry', 'box')
+                size = obj.get('size', [0.5, 0.5, 0.5])
+                
+                geom = ET.SubElement(body, 'geom', 
+                                    type=geom_type,
+                                    size=' '.join(map(str, size)),
+                                    pos=' '.join(map(str, pos)),
+                                    quat=' '.join(map(str, quat)))
+                
+                # Add joint if specified
+                if obj.get('joint'):
+                    joint = obj['joint']
+                    ET.SubElement(body, 'joint', 
+                                 type=joint.get('type', 'hinge'),
+                                 axis=' '.join(map(str, joint.get('axis', [0, 0, 1]))))
+            
+            # Convert to string
+            xml_str = ET.tostring(mjcf, encoding='unicode')
+            
+            # Optionally save to file
+            if config.get('output_path'):
+                output_path = config['output_path']
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, 'w') as f:
+                    f.write(xml_str)
+                return output_path
+            
+            return xml_str
+            
+        except Exception as e:
+            print(f"[Bridge] MJCF export failed: {e}")
+            raise
+    
+    async def generate_procedural(self, gen_type: str, params: dict) -> dict:
+        """
+        Generate procedural geometry (terrain, vegetation, buildings)
+        
+        Args:
+            gen_type: Type of generation ('terrain', 'vegetation', 'building')
+            params: Generation parameters
+            
+        Returns:
+            Generated mesh data
+        """
+        print(f"[Bridge] Generating procedural {gen_type}")
+        
+        try:
+            import trimesh
+            import numpy as np
+            
+            if gen_type == 'terrain':
+                # Heightmap-based terrain
+                width = params.get('width', 100)
+                depth = params.get('depth', 100)
+                resolution = params.get('resolution', 64)
+                height_scale = params.get('height_scale', 10)
+                
+                # Create grid
+                x = np.linspace(-width/2, width/2, resolution)
+                z = np.linspace(-depth/2, depth/2, resolution)
+                X, Z = np.meshgrid(x, z)
+                
+                # Generate heightmap using Perlin-like noise
+                frequency = params.get('frequency', 0.1)
+                Y = np.sin(X * frequency) * np.cos(Z * frequency) * height_scale
+                
+                # Create mesh from heightmap
+                vertices = np.column_stack([X.flatten(), Y.flatten(), Z.flatten()])
+                
+                # Create faces
+                faces = []
+                for i in range(resolution - 1):
+                    for j in range(resolution - 1):
+                        idx = i * resolution + j
+                        faces.append([idx, idx + 1, idx + resolution])
+                        faces.append([idx + 1, idx + resolution + 1, idx + resolution])
+                
+                mesh = trimesh.Trimesh(vertices=vertices, faces=np.array(faces))
+                
+            elif gen_type == 'vegetation':
+                # Simple tree generation
+                trunk_height = params.get('trunk_height', 2)
+                trunk_radius = params.get('trunk_radius', 0.2)
+                crown_radius = params.get('crown_radius', 1.5)
+                
+                # Trunk (cylinder)
+                trunk = trimesh.creation.cylinder(radius=trunk_radius, height=trunk_height)
+                
+                # Crown (sphere)
+                crown = trimesh.creation.icosphere(radius=crown_radius)
+                crown.apply_translation([0, trunk_height + crown_radius, 0])
+                
+                # Combine
+                mesh = trimesh.util.concatenate([trunk, crown])
+                
+            elif gen_type == 'building':
+                # Simple box building
+                width = params.get('width', 10)
+                height = params.get('height', 20)
+                depth = params.get('depth', 10)
+                
+                mesh = trimesh.creation.box(extents=[width, height, depth])
+                mesh.apply_translation([0, height/2, 0])
+                
+            else:
+                raise ValueError(f"Unknown generation type: {gen_type}")
+            
+            return {
+                'vertices': mesh.vertices.tolist(),
+                'faces': mesh.faces.tolist(),
+                'vertex_normals': mesh.vertex_normals.tolist() if mesh.vertex_normals is not None else None
+            }
+            
+        except ImportError:
+            print("[Bridge] trimesh not available, returning placeholder")
+            return {'vertices': [[0, 0, 0]], 'faces': [[0, 0, 0]]}
+        except Exception as e:
+            print(f"[Bridge] Procedural generation failed: {e}")
+            raise
+    
+    async def raycast_batch(self, rays: list) -> list:
+        """
+        Perform batch raycasting for visibility/collision checks
+        
+        Args:
+            rays: List of {origin: [x,y,z], dir: [dx,dy,dz]} 
+            
+        Returns:
+            List of distances (Infinity if no hit)
+        """
+        print(f"[Bridge] Batch raycasting {len(rays)} rays")
+        
+        try:
+            import trimesh
+            import numpy as np
+            
+            # Get current scene state
+            if not hasattr(self, 'current_state') or not self.current_state:
+                # No scene loaded, return all infinity
+                return [float('inf')] * len(rays)
+            
+            # Build scene from state
+            scene = trimesh.Scene()
+            
+            for obj in self.current_state.get('objects', []):
+                pose = obj.get('pose', {})
+                position = pose.get('position', [0, 0, 0])
+                
+                # Create simple collision mesh (box approximation)
+                size = obj.get('size', [1, 1, 1])
+                box = trimesh.creation.box(extents=size)
+                box.apply_translation(position)
+                scene.add_geometry(box)
+            
+            # Cast rays using trimesh.ray module
+            results = []
+            
+            # Import ray casting utilities
+            from trimesh.ray import ray_pyembree as ray_util
+            
+            for ray in rays:
+                origin = np.array(ray.get('origin', [0, 0, 0]))
+                direction = np.array(ray.get('dir', [0, 0, -1]))
+                direction = direction / np.linalg.norm(direction)
+                
+                # Use scene's raycaster
+                locations, index_ray, index_tri = scene.ray.intersects_location(
+                    ray_origins=[origin],
+                    ray_directions=[direction]
+                )
+                
+                if len(locations) > 0:
+                    # Calculate distance to first hit
+                    dist = np.linalg.norm(locations[0] - origin)
+                    results.append(dist)
+                else:
+                    results.append(float('inf'))
+            
+            return results
+            
+        except ImportError as e:
+            print(f"[Bridge] trimesh/ray not available, returning infinity: {e}")
+            return [float('inf')] * len(rays)
+        except AttributeError as e:
+            # Fallback: simple bounding box intersection test
+            print(f"[Bridge] Using fallback raycast: {e}")
+            return self._raycast_fallback(rays)
+        except Exception as e:
+            print(f"[Bridge] Raycast failed: {e}")
+            return [float('inf')] * len(rays)
+    
+    def _raycast_fallback(self, rays: list) -> list:
+        """Simple AABB raycast fallback"""
+        import numpy as np
+        
+        results = []
+        
+        for ray in rays:
+            origin = np.array(ray.get('origin', [0, 0, 0]))
+            direction = np.array(ray.get('dir', [0, 0, -1]))
+            direction = direction / np.linalg.norm(direction)
+            
+            min_dist = float('inf')
+            
+            # Check against each object's bounding box
+            for obj in self.current_state.get('objects', []):
+                pose = obj.get('pose', {})
+                position = np.array(pose.get('position', [0, 0, 0]))
+                size = np.array(obj.get('size', [1, 1, 1]))
+                
+                # AABB bounds
+                bbox_min = position - size / 2
+                bbox_max = position + size / 2
+                
+                # Slab method for ray-AABB intersection
+                tmin = (bbox_min - origin) / (direction + 1e-10)
+                tmax = (bbox_max - origin) / (direction + 1e-10)
+                
+                t1 = np.minimum(tmin, tmax)
+                t2 = np.maximum(tmin, tmax)
+                
+                tnear = np.max(t1)
+                tfar = np.min(t2)
+                
+                if tnear <= tfar and tfar > 0:
+                    hit_dist = max(0, tnear)
+                    min_dist = min(min_dist, hit_dist)
+            
+            results.append(min_dist)
+        
+        return results
         
     async def send_error(self, websocket: WebSocketServerProtocol, error_msg: str):
         """Send error response to client"""

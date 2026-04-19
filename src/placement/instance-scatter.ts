@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { BBox } from '../math/bbox.js';
-import { Tag } from '../tags/tags.js';
+import { Tag } from '../tags/index.js';
 import { DensityFunction } from './density.js';
 
 /**
