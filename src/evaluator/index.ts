@@ -1,6 +1,6 @@
 /**
  * Evaluator Module - Constraint Evaluation Engine
- * 
+ *
  * Exports all evaluator components for constraint satisfaction checking.
  */
 
@@ -35,3 +35,26 @@ export {
   BVHCacheEntry,
   poseAffectsScore
 } from './state.js';
+
+// Node implementations for geometry-based relations
+export {
+  nodeImpls,
+  registerNodeImpl,
+  registerGeometryNodeImpls,
+  defaultHandler
+} from './node-impl/index.js';
+
+// Geometry relation evaluators
+export {
+  evaluateDistance,
+  evaluateTouching,
+  evaluateSupportedBy,
+  evaluateStableAgainst,
+  evaluateCoverage,
+  evaluateCoPlanar,
+  evaluateFacing,
+  evaluateAccessibleFrom,
+  evaluateVisible,
+  evaluateHidden,
+  geometryNodeImpls
+} from './node-impl/trimesh-geometry.js';

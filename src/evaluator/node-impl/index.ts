@@ -9,6 +9,8 @@
 import { Node } from '../../constraint-language/types.js';
 import { State } from '../state.js';
 import { Relation } from '../../constraint-language/relations.js';
+import { geometryNodeImpls } from './trimesh-geometry.js';
+import { symmetryNodeImpls } from './symmetry.js';
 
 // Registry of node implementation functions
 export const nodeImpls = new Map<typeof Node, Function>();
@@ -27,10 +29,48 @@ function defaultHandler(node: Node, state: State, childVals: Map<string, any>, k
   throw new Error(`No implementation registered for node type: ${node.constructor.name}`);
 }
 
+// Auto-register geometry-based relations on module load
+export function registerGeometryNodeImpls(): void {
+  // Dynamic import to avoid circular dependencies
+  import('../../constraint-language/geometry.js').then(({ Distance }) => {
+    import('../../constraint-language/relations.js').then(({ Touching, SupportedBy, StableAgainst, Coverage, CoPlanar, Facing, AccessibleFrom, Visible, Hidden }) => {
+      if (Distance) registerNodeImpl(Distance, geometryNodeImpls.Distance);
+      if (Touching) registerNodeImpl(Touching, geometryNodeImpls.Touching);
+      if (SupportedBy) registerNodeImpl(SupportedBy, geometryNodeImpls.SupportedBy);
+      if (StableAgainst) registerNodeImpl(StableAgainst, geometryNodeImpls.StableAgainst);
+      if (Coverage) registerNodeImpl(Coverage, geometryNodeImpls.Coverage);
+      if (CoPlanar) registerNodeImpl(CoPlanar, geometryNodeImpls.CoPlanar);
+      if (Facing) registerNodeImpl(Facing, geometryNodeImpls.Facing);
+      if (AccessibleFrom) registerNodeImpl(AccessibleFrom, geometryNodeImpls.AccessibleFrom);
+      if (Visible) registerNodeImpl(Visible, geometryNodeImpls.Visible);
+      if (Hidden) registerNodeImpl(Hidden, geometryNodeImpls.Hidden);
+    }).catch(err => console.warn('Could not auto-register relation node impls:', err));
+  }).catch(err => console.warn('Could not auto-register geometry node impls:', err));
+}
+
+// Auto-register symmetry-based relations
+export function registerSymmetryNodeImpls(): void {
+  import('../../constraint-language/relations.js').then(({ Symmetric, Aligned, Distributed }) => {
+    if (Symmetric && symmetryNodeImpls.has('Symmetric')) {
+      registerNodeImpl(Symmetric, symmetryNodeImpls.get('Symmetric')!);
+    }
+    if (Aligned && symmetryNodeImpls.has('Aligned')) {
+      registerNodeImpl(Aligned, symmetryNodeImpls.get('Aligned')!);
+    }
+    if (Distributed && symmetryNodeImpls.has('Distributed')) {
+      registerNodeImpl(Distributed, symmetryNodeImpls.get('Distributed')!);
+    }
+  }).catch(err => console.warn('Could not auto-register symmetry node impls:', err));
+}
+
+// Combined registration function
+export function registerAllNodeImpls(): void {
+  registerGeometryNodeImpls();
+  registerSymmetryNodeImpls();
+}
+
 // Export registration functions for specific node types
 // These will be implemented in separate files:
-// - trimesh-geometry.ts: Distance, Touching, SupportedBy, etc.
-// - symmetry.ts: Symmetry constraints
 // - rooms.ts: Room-specific constraints
 // - impl-bindings.ts: Binding and assignment constraints
 
