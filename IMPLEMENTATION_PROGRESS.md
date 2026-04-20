@@ -2257,3 +2257,149 @@ Original InfiniGen files for comparison:
 
 ---
 
+
+## ✅ Phase 4D: Reptiles & Amphibians (COMPLETE)
+
+**File:** `reptiles-amphibians.ts` (1,085 lines)  
+**Date Completed:** April 20, 2024
+
+### Implemented Creature Types (6 base types):
+
+#### 1. Snake Generator
+- **Features:** Segmented body with sinuous curve, forked tongue, heat-sensing pits
+- **Parameters:** bodyLength (0.5-2.0m), bodySegments (20-40), tailRatio, headSize, snoutLength
+- **Special:** Motion phase for slithering animation, tapered tail
+- **Semantic Tags:** serpent, limbless, venomous
+
+#### 2. Lizard Generator
+- **Features:** Four legs, curved tail, optional frill and crest
+- **Parameters:** bodyLength (0.15-0.4m), tailLength (0.8-1.5x body), legCount, hasFrill, hasCrest
+- **Special:** Frilled neck display, dorsal crest, larger back legs
+- **Semantic Tags:** saurian, climbing, frilled, crested
+
+#### 3. Frog Generator
+- **Features:** Flattened body, large jumping legs, prominent eyes
+- **Parameters:** bodySize (0.03-0.15m), leg proportions
+- **Special:** Multi-segment back legs for jumping, eyes on top of head
+- **Semantic Tags:** amphibian, jumping, aquatic
+
+#### 4. Salamander Generator
+- **Features:** Slender body, long tail, external gills, four small legs
+- **Parameters:** bodyLength (0.1-0.3m), tailLength (1.2x body)
+- **Special:** Feathery external gills, laterally compressed tail
+- **Semantic Tags:** amphibian, tailed
+
+#### 5. Turtle Generator
+- **Features:** Domed shell with scute patterns, four stubby legs, small tail
+- **Parameters:** shellSize (0.1-0.5m), shellHeight (0.3-0.6x size)
+- **Special:** Shell pattern rings, retractable head position
+- **Semantic Tags:** chelonian, shelled, aquatic
+
+#### 6. Crocodile Generator
+- **Features:** Elongated body, powerful swimming tail, long snout with teeth, osteoderms
+- **Parameters:** bodyLength (0.5-3.0m), snoutLength, hasSpikes, spikeCount
+- **Special:** Laterally compressed tail, bony ridge along back, visible teeth, nostrils on top
+- **Semantic Tags:** crocodilian, predator, aquatic, large
+
+### Technical Features:
+- **Parametric Controls:** Body proportions, segment counts, limb configurations, skin patterns
+- **Procedural Animation Support:** Motion phases for slithering, swimming, hopping
+- **Material Zones:** Different materials for body, shell, eyes, tongue, teeth
+- **LOD Generation:** Automatic LOD levels for performance optimization
+- **Collision Geometry:** Appropriate collision shapes (capsule, box, sphere)
+- **Semantic Tagging:** Full constraint system integration with type-specific tags
+
+### Implementation Details:
+
+**Base Class:** `ReptileGenerator`
+- Static type array for validation
+- Unified generate() method with type switching
+- Shared utility methods for materials, eyes, tags
+
+**Specialized Generators:**
+- `SnakeGenerator` - Limbless serpents
+- `LizardGenerator` - Four-legged saurians with optional frills/crests
+- `FrogGenerator` - Jumping amphibians
+- `SalamanderGenerator` - Tailed amphibians with gills
+- `TurtleGenerator` - Shelled reptiles
+- `CrocodileGenerator` - Large aquatic predators
+
+**Geometry Techniques:**
+- TubeGeometry with CatmullRomCurve3 for segmented bodies and tails
+- CapsuleGeometry for limbs and body segments
+- SphereGeometry with scaling for heads and shells
+- ConeGeometry for tails, spikes, and teeth
+- Custom vertex manipulation for tapering and shaping
+
+**Animation Integration:**
+- Motion phase parameter for procedural animation cycles
+- Pre-configured for IK solver integration
+- Joint hierarchy ready for rigging
+
+### Usage Examples:
+
+```typescript
+import { SnakeGenerator, LizardGenerator, TurtleGenerator } from './assets/objects';
+
+// Generate a cobra
+const cobra = new SnakeGenerator().generate({
+  bodyLength: 1.5,
+  bodySegments: 30,
+  headSize: 0.15,
+  snoutLength: 0.4,
+  baseColor: new THREE.Color(0x2d5a27),
+  seed: 42
+});
+
+// Generate a frilled lizard
+const frilledLizard = new LizardGenerator().generate({
+  bodyLength: 0.3,
+  tailLength: 1.2,
+  hasFrill: true,
+  hasCrest: false,
+  baseColor: new THREE.Color(0x8b7355),
+  seed: 123
+});
+
+// Generate a sea turtle
+const seaTurtle = new TurtleGenerator().generate({
+  shellSize: 0.4,
+  shellHeight: 0.35,
+  baseColor: new THREE.Color(0x3d5c3d),
+  seed: 456
+});
+
+// Generate an alligator
+const alligator = new CrocodileGenerator().generate({
+  bodyLength: 2.5,
+  snoutLength: 0.6,
+  hasSpikes: true,
+  spikeCount: 20,
+  baseColor: new THREE.Color(0x2f4f2f),
+  seed: 789
+});
+```
+
+### Progress Metrics:
+- **Total Asset Files:** 21 files
+- **Total Lines of Code:** ~31,685 lines
+- **Generators Implemented:** 44 base generators
+- **Asset Types:** 206+ procedural types
+- **Phase 4 Progress:** 48% complete (29/60 creature types)
+  - Phase 4A: Basic Invertebrates ✅ (6 types)
+  - Phase 4B: Fish & Aquatic Vertebrates ✅ (20+ types)
+  - Phase 4C: Insects & Arthropods ✅ (30+ types)
+  - Phase 4D: Reptiles & Amphibians ✅ (6 types)
+
+### Next Steps (Phase 4E):
+**Birds & Avian Creatures** - Implement bird generators including:
+- Basic bird structure (body, wings, tail, beak, legs)
+- Beak variations (hooked, conical, probing, filtering)
+- Wing types (soaring, flapping, hovering, swimming)
+- Tail configurations (forked, rounded, squared, graduated)
+- Specialized species: parrots, raptors, songbirds, waterfowl, flightless birds
+- Flight animation support
+- Feather systems
+
+---
+
