@@ -53,3 +53,4 @@ export * from './birds';
 
 // Future exports (to be implemented)
 // export * from './lighting';
+export * from './mammals';

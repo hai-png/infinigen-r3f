@@ -2672,3 +2672,67 @@ eagle, hawk, falcon, owl, parrot, hummingbird, crow, raven, dove, pigeon, pelica
 **Mammals** - Implement mammal generators including carnivores, herbivores, primates, marine mammals, small mammals, and exotic species.
 
 ---
+
+## Phase 4F: Mammals & Mammalian Creatures ✅ COMPLETED
+
+**Status:** COMPLETE
+**Date:** 2024
+**Files Created:** `mammals.ts` (920 lines)
+
+### Overview
+Implemented comprehensive mammal generation system with anatomically accurate models, fur simulation support, and species-specific variations.
+
+### Implemented Features
+
+#### Mammal Generator (`MammalGenerator`)
+- **4 Body types:** quadruped, biped, aquatic, flying
+- **Parametric proportions:** body length (0.3-15m), height (0.2-8m), neck, tail
+- **Head variations:** snout length, 4 ear types, horns/antlers systems
+- **5 Limb configurations:** digitigrade, plantigrade, unguligrade, flipper, wing
+- **6 Tail types:** bushy, prehensile, fluke, tufted, short, long
+- **4 Coat types:** fur, hair, blubber, skin
+- **6 Pattern systems:** solid, striped, spotted, gradient, rosette, patched
+- **Special features:** mane, trunk, pouch, quills, wings
+- **LOD generation:** 3 levels with geometry simplification
+- **Collision geometry:** Automatic generation
+
+#### Specialized Generators (8)
+1. **CatGenerator** - Lions, tigers, leopards, domestic cats
+2. **DogGenerator** - Various breeds with configurable features
+3. **HorseGenerator** - Equines with mane and hooves
+4. **ElephantGenerator** - Trunk, large ears, tusks
+5. **GiraffeGenerator** - Long neck, ossicones, patched pattern
+6. **PrimateGenerator** - Bipedal, prehensile tail option
+7. **MarineMammalGenerator** - Whales, dolphins, orcas with flukes
+8. **SmallMammalGenerator** - Rabbits, squirrels, rodents
+
+#### Species Presets (40+ types)
+- **Cats:** lion, tiger, leopard, cheetah, jaguar, domestic cat
+- **Dogs:** wolf, fox, german shepherd, labrador, beagle
+- **Equines:** horse, zebra, donkey
+- **Large mammals:** elephant, giraffe, rhino, hippo
+- **Primates:** human, chimpanzee, gorilla, monkey
+- **Marine:** blue whale, dolphin, orca, seal, walrus
+- **Small:** rabbit, squirrel, mouse, rat, hamster
+
+### Progress Metrics
+- **Total Asset Files:** 23 files
+- **Total Lines of Code:** ~33,544 lines (+920)
+- **Generators Implemented:** 57 base generators (+8)
+- **Asset Types:** 275+ procedural types (+40)
+- **Phase 4 Progress:** 75% complete (45/60 creature types)
+  - Phase 4A: Basic Invertebrates ✅ (6 types)
+  - Phase 4B: Fish & Aquatic Vertebrates ✅ (20+ types)
+  - Phase 4C: Insects & Arthropods ✅ (30+ types)
+  - Phase 4D: Reptiles & Amphibians ✅ (6 types)
+  - Phase 4E: Birds & Avian Creatures ✅ (29 types)
+  - Phase 4F: Mammals & Mammalian Creatures ✅ (40+ types)
+
+### Next Steps (Phase 4G)
+**Creature Completion** - Final creature types including:
+- Mythical creatures (dragons, unicorns)
+- Hybrid creatures
+- Additional exotic species
+- Creature animation integration testing
+
+---
