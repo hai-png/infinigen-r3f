@@ -1,35 +1,65 @@
-*.log
-*.tmp
-*.swp
-*.pyc
-__pycache__/
-*.class
-*.o
-*.exe
-*.dll
-*.so
-*.a
-*.obj
-*.out
+```
+# Dependencies
 node_modules/
-venv/
-.venv/
-.mypy_cache/
-.pytest_cache/
+
+# Build artifacts
 dist/
 build/
 target/
-.gradle/
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-.env
-.env.local
-*.env.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py~
+*.py.class
+*.so
+*.o
+*.a
+*.obj
+*.out
+*.dll
+*.exe
+*.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Logs
+*.log
+logs/
+
+# Coverage
 coverage/
 htmlcov/
 .coverage
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.tox/
+.nox/
+
+# Environment variables
+.env
+.env.local
+*.env.*
+.env~
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Compressed files
 *.zip
 *.gz
 *.tar
@@ -52,9 +82,4 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-*.png
-*.jpg
-*.jpeg
-*.bmp
-*.gif
-*.webm
+```
