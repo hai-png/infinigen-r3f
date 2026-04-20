@@ -48,5 +48,8 @@ export * from './insects';
 // Reptiles & Amphibians (Phase 4D)
 export * from './reptiles-amphibians';
 
+// Birds & Avian Creatures (Phase 4E)
+export * from './birds';
+
 // Future exports (to be implemented)
 // export * from './lighting';
