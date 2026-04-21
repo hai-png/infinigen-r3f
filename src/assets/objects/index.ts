@@ -39,5 +39,11 @@ export * from './climbing';
 // Creature Generators (Phase 4A)
 export * from './creatures';
 
+// Weather & Atmospheric Effects (Phase 5)
+export * from './cloud';
+
+// Particle Systems (Phase 5B)
+export * from './particles';
+
 // Future exports (to be implemented)
 // export * from './lighting';
