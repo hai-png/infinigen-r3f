@@ -7,50 +7,50 @@ dist/
 build/
 target/
 
-# Logs
-*.log
+# TypeScript/JavaScript specific
+*.js.map
+*.tsbuildinfo
 
-# Environment variables
+# Environment
 .env
 .env.local
 *.env.*
 
-# Editor/IDE files
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# Logs and temp files
+*.log
 *.tmp
 
-# Python specific
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-
-# Compiled files
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # Coverage reports
 coverage/
 htmlcov/
-.coverage
+*.coverage
+
+# Python cache (if present in project)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # MyPy cache
 .mypy_cache/
 
-# PyTest cache
+# Pytest cache
 .pytest_cache/
 
-# Compressed files
+# Git
+.git/
+
+# Archives
 *.zip
 *.gz
 *.tar
