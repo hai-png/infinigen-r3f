@@ -1,5 +1,5 @@
 /**
- * Terrain Generator Module Exports (Alias to core)
+ * Core Terrain Generator Module Exports
  */
 
 export {
@@ -8,4 +8,4 @@ export {
   type MaskMap,
   type TerrainConfig,
   type TerrainData
-} from '../core/TerrainGenerator';
+} from './TerrainGenerator';

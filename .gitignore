@@ -19,58 +19,39 @@ target/
 # Editors
 .vscode/
 .idea/
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Temporary files
+*.tmp
 *.swp
 *.swo
-
-# Logs and temp files
-*.log
-*.tmp
 
 # OS generated files
 .DS_Store
 Thumbs.db
 
-# Coverage reports
-coverage/
-htmlcov/
-*.coverage
-
-# Python cache (if present in project)
+# Python (if mixed project)
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
 
-# MyPy cache
+# Testing
 .mypy_cache/
-
-# Pytest cache
 .pytest_cache/
-
-# Git
-.git/
-
-# Archives
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+.nyc_output/
+istanbul/
 ```

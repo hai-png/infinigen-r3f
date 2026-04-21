@@ -2,7 +2,5 @@
  * Terrain Examples Module Exports
  */
 
-export {
-  CompleteTerrainDemo,
-  type CompleteTerrainDemoConfig,
-} from './CompleteTerrainDemo';
+export { CompleteTerrainDemo } from './CompleteTerrainDemo';
+export type { DemoConfig } from './CompleteTerrainDemo';

@@ -98,3 +98,13 @@ export {
 export type {
   ClayParams,
 } from './ClaySurface';
+export { ChunkyRockSurface } from './ChunkyRockSurface';
+export type { ChunkyRockParams } from './ChunkyRockSurface';
+export { SandstoneSurface } from './SandstoneSurface';
+export type { SandstoneParams } from './SandstoneSurface';
+export { CrackedGroundSurface } from './CrackedGroundSurface';
+export type { CrackedGroundParams } from './CrackedGroundSurface';
+export { SoilSurface } from './SoilSurface';
+export type { SoilParams } from './SoilSurface';
+export { CobblestoneSurface } from './CobblestoneSurface';
+export type { CobblestoneParams } from './CobblestoneSurface';
