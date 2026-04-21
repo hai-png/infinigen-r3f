@@ -66,3 +66,9 @@ export * from './clothes';
 // Lamp Generators (NEW)
 export * from './lamps';
 export * from './specialized-lamps';
+
+// Outdoor Furniture (NEW)
+export * from './outdoor-furniture';
+
+// Niche Decoratives (NEW)
+export * from './niche-decoratives';
