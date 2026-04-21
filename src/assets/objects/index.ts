@@ -57,3 +57,6 @@ export * from './mammals';
 
 // Fruits Generator (NEW)
 export * from './fruits';
+
+// Clothes Generator (NEW)
+export * from './clothes';
