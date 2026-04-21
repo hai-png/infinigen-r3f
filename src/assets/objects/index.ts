@@ -23,9 +23,11 @@ export * from './architectural';
 
 // Appliances & Bathroom Fixtures (Phase 2D)
 export * from './appliances';
+export * from './bathroom-fixtures';
 
 // Plant Generators (Phase 3A)
 export * from './plants';
+export * from './decorative-plants';
 
 // Grassland & Ground Cover (Phase 3B)
 export * from './grassland';
@@ -60,3 +62,7 @@ export * from './fruits';
 
 // Clothes Generator (NEW)
 export * from './clothes';
+
+// Lamp Generators (NEW)
+export * from './lamps';
+export * from './specialized-lamps';

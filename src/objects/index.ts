@@ -1,11 +1,8 @@
 /**
  * Objects Module Index
  * 
- * Re-exports all object generators from both assets/objects and categories.
+ * Re-exports all object generators from assets/objects.
  */
 
-// Core object generators from assets
+// All object generators consolidated in assets/objects
 export * from '../../assets/objects';
-
-// Specialized category generators
-export * from './categories';
