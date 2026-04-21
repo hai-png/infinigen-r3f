@@ -66,3 +66,35 @@ export {
 export type {
   MudParams,
 } from './MudSurface';
+
+export {
+  GrassSurface,
+} from './GrassSurface';
+
+export type {
+  GrassParams,
+} from './GrassSurface';
+
+export {
+  LavaSurface,
+} from './LavaSurface';
+
+export type {
+  LavaParams,
+} from './LavaSurface';
+
+export {
+  AsphaltSurface,
+} from './AsphaltSurface';
+
+export type {
+  AsphaltParams,
+} from './AsphaltSurface';
+
+export {
+  ClaySurface,
+} from './ClaySurface';
+
+export type {
+  ClayParams,
+} from './ClaySurface';
