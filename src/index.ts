@@ -108,3 +108,13 @@ export type {
   PathFinder,
   DensityFunction
 } from './placement/index.js';
+
+
+// Pipeline & Export Systems (Phase 5)
+export * from './pipeline/SceneExporter.js';
+export * from './pipeline/AnnotationGenerator.js';
+export * from './pipeline/DataPipeline.js';
+export * from './pipeline/GroundTruthGenerator.js';
+export * from './pipeline/JobManager.js';
+export * from './pipeline/BatchProcessor.js';
+export * from './pipeline/types.js';

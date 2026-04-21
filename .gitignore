@@ -7,52 +7,55 @@ dist/
 build/
 target/
 
-# Python
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
+
+# Virtual environments
 venv/
 .venv/
-.venv*/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.tmp
+env/
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+
+# Temporary files
+*.tmp
+*.swp
 
 # Environment variables
 .env
 .env.local
 .env.*
 
-# IDE
+# IDE specific
 .vscode/
 .idea/
-*.swp
-*.swo
+*.iml
+*.ipr
+*.iws
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# Testing
+# Coverage reports
 coverage/
 htmlcov/
-.pytest_cache/
-.mypy_cache/
+.coverage
+
+# TypeScript/JavaScript build output
+*.js.map
+*.tsbuildinfo
+
+# Testing
+.nyc_output/
+.mocha.opts
+
+# Package manager caches
+.npm/
+.yarn/
+.pnpm-store/
 ```
