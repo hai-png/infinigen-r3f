@@ -1,28 +1,27 @@
 /**
- * Infinigen R3F Port - Phase 2: Advanced Terrain Features
- * Main Module Exports for Advanced Features
+ * Infinigen R3F Port - Terrain Features Index
+ * Exports all advanced terrain feature generators
  */
 
-// Cave System
-export { 
-  CaveGenerator, 
-  type CaveConfig, 
-  type CavePoint, 
-  type CaveSystem, 
-  type CaveDecoration 
-} from './CaveGenerator';
+export { CaveGenerator } from './CaveGenerator';
+export { ErosionSystem } from './ErosionSystem';
+export { OceanSystem } from './OceanSystem';
+export { TiledTerrainGenerator, LandTileType, type TiledTerrainConfig, type TerrainChunk } from './LandTilesGenerator';
+export { InvertedTerrainGenerator, UpsidedownMountains, type InvertedTerrainConfig } from './InvertedTerrainGenerator';
+export { VoronoiRocksGenerator, type VoronoiRocksParams } from './VoronoiRocksGenerator';
+export { WarpedRocksGenerator, type WarpedRocksParams } from './WarpedRocksGenerator';
+export { UpsidedownMountainsGenerator, type UpsidedownMountainsParams, type MountainAsset } from './UpsidedownMountainsGenerator';
 
-// Erosion System
-export { 
-  ErosionSystem, 
-  type ErosionConfig, 
-  type ErosionData 
-} from './ErosionSystem';
+// Future exports (to be implemented):
+// export { MountainEnhancement } from './MountainEnhancement';
 
-// Ocean System
-export { 
-  OceanSystem, 
-  type OceanConfig, 
-  type WaveData, 
-  type OceanState 
-} from './OceanSystem';
+export default {
+  CaveGenerator,
+  ErosionSystem,
+  OceanSystem,
+  TiledTerrainGenerator,
+  InvertedTerrainGenerator,
+  VoronoiRocksGenerator,
+  WarpedRocksGenerator,
+  UpsidedownMountainsGenerator,
+};
