@@ -12,6 +12,35 @@ export {
   type TerrainData 
 } from './core/TerrainGenerator';
 
+// Advanced Features (Phase 2)
+export {
+  CaveGenerator,
+  type CaveConfig,
+  type CavePoint,
+  type CaveSystem,
+  type CaveDecoration,
+  ErosionSystem,
+  type ErosionConfig,
+  type ErosionData,
+  OceanSystem,
+  type OceanConfig,
+  type WaveData,
+  type OceanState,
+} from './features';
+
+// Scatter Systems (Phase 3)
+export {
+  GroundCoverScatter,
+  type GroundCoverType,
+  type GroundCoverConfig,
+  type GroundCoverInstance,
+  ClimbingPlantGenerator,
+  type ClimbingPlantType,
+  type ClimbingPlantConfig,
+  type ClimbingSegment,
+  type ClimbingPlantInstance,
+} from './scatter';
+
 // Mesher
 export { 
   TerrainMesher, 
