@@ -1,687 +1,449 @@
 /**
- * Ground Debris Scatter Generator
- * 
- * Generates natural ground debris including:
- * - Leaves (various types and decay states)
- * - Twigs and small branches
- * - Pine needles
- * - Small stones and pebbles
- * - Organic matter
- * 
- * @module GroundDebrisScatter
+ * Ground Debris Scatter System
+ * Generates natural ground debris including leaves, twigs, pinecones, and organic matter
+ * with biome-specific variations and decay states
  */
 
 import * as THREE from 'three';
-import { ScatterGenerator, ScatterOptions, ScatterInstance } from '../../terrain/scatter/ScatterGenerator';
-import { TerrainSurface } from '../../terrain/TerrainSurface';
-import { DensityVolume } from '../../placement/DensityVolume';
+import type { ScatterParams, ScatterResult } from './types';
 
-/**
- * Configuration for ground debris scatter
- */
-export interface GroundDebrisOptions extends ScatterOptions {
-  /** Density of debris per square meter (default: 2.0) */
-  density?: number;
-  
-  /** Mix of leaf types: 'deciduous', 'coniferous', 'mixed' (default: 'mixed') */
-  leafType?: 'deciduous' | 'coniferous' | 'mixed';
-  
-  /** Decay state: 'fresh', 'drying', 'decayed', 'mixed' (default: 'mixed') */
-  decayState?: 'fresh' | 'drying' | 'decayed' | 'mixed';
-  
-  /** Include twigs and small branches (default: true) */
-  includeTwigs?: boolean;
-  
-  /** Include pine needles (default: false) */
-  includePineNeedles?: boolean;
-  
-  /** Include small stones/pebbles (default: true) */
-  includeStones?: boolean;
-  
-  /** Size variation multiplier (default: 0.3) */
-  sizeVariation?: number;
-  
-  /** Rotation randomness in radians (default: Math.PI) */
-  rotationRandomness?: number;
-  
-  /** Cluster tendency 0-1 (default: 0.4) */
-  clusterFactor?: number;
-  
-  /** Minimum distance between instances (default: 0.05) */
-  minSpacing?: number;
+export interface GroundDebrisParams extends ScatterParams {
+  /** Number of debris items to scatter (default: 100) */
+  count?: number;
+  /** Debris types to include (default: all) */
+  debrisTypes?: Array<'leaf' | 'twig' | 'pinecone' | 'acorn' | 'bark' | 'seed'>;
+  /** Biome affects debris selection: forest, desert, grassland, autumn (default: 'forest') */
+  biome?: 'forest' | 'desert' | 'grassland' | 'autumn';
+  /** Decay state: fresh, decaying, decomposed, mixed (default: 'mixed') */
+  decayState?: 'fresh' | 'decaying' | 'decomposed' | 'mixed';
+  /** Scale variation multiplier (0-1, default: 0.7) */
+  scaleVariation?: number;
+  /** Clustering factor (0=random, 1=highly clustered, default: 0.5) */
+  clustering?: number;
+  /** Include very small particles (default: true) */
+  includeMicro?: boolean;
 }
 
-/**
- * Leaf geometry types
- */
-type LeafShape = 'oval' | 'lanceolate' | 'cordate' | 'palmate' | 'needle';
-
-/**
- * Ground debris instance data
- */
-interface DebrisInstance extends ScatterInstance {
-  shape: LeafShape;
-  decayLevel: number;
-  colorVariation: THREE.Color;
+interface DebrisType {
+  name: string;
+  baseSize: number;
+  shape: 'leaf' | 'stick' | 'round' | 'irregular';
+  biomes: Array<'forest' | 'desert' | 'grassland' | 'autumn'>;
+  colors: {
+    fresh: string;
+    decaying: string;
+    decomposed: string;
+  };
 }
 
+const DEBRIS_TYPES: Record<string, DebrisType> = {
+  leaf: {
+    name: 'Leaf',
+    baseSize: 0.08,
+    shape: 'leaf',
+    biomes: ['forest', 'grassland', 'autumn'],
+    colors: {
+      fresh: '#228B22',
+      decaying: '#DAA520',
+      decomposed: '#8B4513',
+    },
+  },
+  twig: {
+    name: 'Twig',
+    baseSize: 0.12,
+    shape: 'stick',
+    biomes: ['forest', 'grassland', 'autumn'],
+    colors: {
+      fresh: '#8B4513',
+      decaying: '#A0522D',
+      decomposed: '#696969',
+    },
+  },
+  pinecone: {
+    name: 'Pinecone',
+    baseSize: 0.06,
+    shape: 'round',
+    biomes: ['forest'],
+    colors: {
+      fresh: '#8B4513',
+      decaying: '#A0522D',
+      decomposed: '#696969',
+    },
+  },
+  acorn: {
+    name: 'Acorn',
+    baseSize: 0.04,
+    shape: 'round',
+    biomes: ['forest', 'autumn'],
+    colors: {
+      fresh: '#8B4513',
+      decaying: '#A0522D',
+      decomposed: '#696969',
+    },
+  },
+  bark: {
+    name: 'Bark',
+    baseSize: 0.1,
+    shape: 'irregular',
+    biomes: ['forest'],
+    colors: {
+      fresh: '#654321',
+      decaying: '#8B7355',
+      decomposed: '#696969',
+    },
+  },
+  seed: {
+    name: 'Seed',
+    baseSize: 0.02,
+    shape: 'round',
+    biomes: ['forest', 'grassland', 'autumn'],
+    colors: {
+      fresh: '#DAA520',
+      decaying: '#8B7355',
+      decomposed: '#696969',
+    },
+  },
+};
+
 /**
- * Ground Debris Scatter Generator
- * 
- * Creates realistic ground cover from natural debris materials.
- * Optimized for forest floors, garden beds, and natural landscapes.
+ * Creates leaf geometry with varied shapes
  */
-export class GroundDebrisScatter extends ScatterGenerator<GroundDebrisOptions> {
-  private leafGeometries: Map<LeafShape, THREE.BufferGeometry>;
-  private twigGeometries: THREE.BufferGeometry[];
-  private stoneGeometries: THREE.BufferGeometry[];
-  private needleGeometry: THREE.BufferGeometry;
+function createLeafGeometry(shape: 'maple' | 'oak' | 'pine' | 'generic'): THREE.ShapeGeometry {
+  const leafShape = new THREE.Shape();
   
-  constructor(options: GroundDebrisOptions = {}) {
-    super(options);
-    
-    this.leafGeometries = new Map();
-    this.twigGeometries = [];
-    this.stoneGeometries = [];
-    this.needleGeometry = new THREE.BufferGeometry();
-    
-    this.initializeGeometries();
-  }
-  
-  /**
-   * Initialize procedural geometries for debris types
-   */
-  private initializeGeometries(): void {
-    // Generate leaf geometries
-    const shapes: LeafShape[] = ['oval', 'lanceolate', 'cordate', 'palmate'];
-    shapes.forEach(shape => {
-      this.leafGeometries.set(shape, this.createLeafGeometry(shape));
-    });
-    
-    // Generate twig geometries
-    for (let i = 0; i < 5; i++) {
-      this.twigGeometries.push(this.createTwigGeometry(i));
-    }
-    
-    // Generate stone geometries
-    for (let i = 0; i < 4; i++) {
-      this.stoneGeometries.push(this.createStoneGeometry(i));
-    }
-    
-    // Generate pine needle geometry
-    this.needleGeometry = this.createPineNeedleGeometry();
-  }
-  
-  /**
-   * Create procedural leaf geometry based on shape type
-   */
-  private createLeafGeometry(shape: LeafShape): THREE.BufferGeometry {
-    const geometry = new THREE.BufferGeometry();
-    
-    let vertices: number[] = [];
-    const uv: number[] = [];
-    
-    switch (shape) {
-      case 'oval':
-        // Oval leaf (like oak or beech)
-        vertices = this.generateOvalLeaf();
-        break;
-      case 'lanceolate':
-        // Lance-shaped leaf (like willow)
-        vertices = this.generateLanceolateLeaf();
-        break;
-      case 'cordate':
-        // Heart-shaped leaf (like linden)
-        vertices = this.generateCordateLeaf();
-        break;
-      case 'palmate':
-        // Palmate leaf (like maple)
-        vertices = this.generatePalmateLeaf();
-        break;
-      case 'needle':
-        // Pine needle
-        vertices = this.generatePineNeedle();
-        break;
-    }
-    
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    geometry.computeVertexNormals();
-    
-    return geometry;
-  }
-  
-  /**
-   * Generate oval leaf vertices
-   */
-  private generateOvalLeaf(): number[] {
-    const segments = 8;
-    const width = 0.03;
-    const length = 0.06;
-    const vertices: number[] = [];
-    
-    // Center vertex
-    vertices.push(0, 0, 0);
-    
-    // Outer ring
-    for (let i = 0; i < segments; i++) {
-      const t = i / segments;
-      const angle = t * Math.PI * 2;
+  switch (shape) {
+    case 'maple':
+      // Maple leaf shape (simplified)
+      leafShape.moveTo(0, 0);
+      leafShape.lineTo(-0.3, 0.2);
+      leafShape.lineTo(-0.5, 0.1);
+      leafShape.lineTo(-0.3, 0.5);
+      leafShape.lineTo(0, 0.8);
+      leafShape.lineTo(0.3, 0.5);
+      leafShape.lineTo(0.5, 0.1);
+      leafShape.lineTo(0.3, 0.2);
+      leafShape.lineTo(0, 0);
+      break;
       
-      // Elliptical shape with pointed ends
-      const x = Math.cos(angle) * width * (1 + 0.3 * Math.sin(angle * 2));
-      const y = Math.sin(angle) * length;
-      const z = 0.001 * Math.sin(angle * 3); // Slight curvature
-      
-      vertices.push(x, y, z);
-    }
-    
-    // Generate triangles from center
-    const indices: number[] = [];
-    for (let i = 0; i < segments; i++) {
-      indices.push(0, i + 1, ((i + 1) % segments) + 1);
-    }
-    
-    return vertices;
-  }
-  
-  /**
-   * Generate lanceolate leaf vertices
-   */
-  private generateLanceolateLeaf(): number[] {
-    const segments = 6;
-    const width = 0.015;
-    const length = 0.08;
-    const vertices: number[] = [];
-    
-    // Center line
-    vertices.push(0, 0, 0);
-    vertices.push(0, length * 0.5, 0);
-    vertices.push(0, -length * 0.5, 0);
-    
-    // Side points
-    for (let i = 1; i < segments; i++) {
-      const t = i / segments;
-      const y = (t - 0.5) * length;
-      const taper = Math.sin(t * Math.PI);
-      const x = width * taper;
-      const z = 0.001 * taper * Math.sin(t * Math.PI * 2);
-      
-      vertices.push(x, y, z);
-      vertices.push(-x, y, z);
-    }
-    
-    return vertices;
-  }
-  
-  /**
-   * Generate cordate (heart-shaped) leaf vertices
-   */
-  private generateCordateLeaf(): number[] {
-    const segments = 10;
-    const size = 0.05;
-    const vertices: number[] = [];
-    
-    // Center
-    vertices.push(0, 0, 0);
-    
-    // Heart shape using parametric equation
-    for (let i = 0; i < segments; i++) {
-      const t = (i / segments) * Math.PI * 2;
-      
-      // Heart curve parametric equations
-      const x = size * 0.6 * Math.sin(t);
-      const y = size * (Math.cos(t) - 0.5 * Math.cos(2 * t) - 0.3);
-      const z = 0.002 * Math.sin(t * 3);
-      
-      vertices.push(x, y, z);
-    }
-    
-    return vertices;
-  }
-  
-  /**
-   * Generate palmate (maple-like) leaf vertices
-   */
-  private generatePalmateLeaf(): number[] {
-    const lobes = 5;
-    const size = 0.06;
-    const vertices: number[] = [];
-    
-    // Center
-    vertices.push(0, 0, 0);
-    
-    // Generate points for each lobe
-    for (let lobe = 0; lobe < lobes; lobe++) {
-      const baseAngle = (lobe / lobes) * Math.PI * 2 - Math.PI / 2;
-      const pointsPerLobe = 4;
-      
-      for (let p = 0; p < pointsPerLobe; p++) {
-        const t = p / pointsPerLobe;
-        const angle = baseAngle + (t - 0.5) * 0.6;
-        
-        // Lobe extends outward with tapering
-        const dist = size * (0.3 + 0.7 * Math.cos((t - 0.5) * Math.PI));
-        const x = Math.cos(angle) * dist;
-        const y = Math.sin(angle) * dist;
-        const z = 0.002 * Math.sin(t * Math.PI) * Math.cos(lobe);
-        
-        vertices.push(x, y, z);
+    case 'oak':
+      // Oak leaf shape (lobed)
+      leafShape.moveTo(0, 0);
+      for (let i = 0; i <= 1; i += 0.1) {
+        const x = -0.5 + i;
+        const y = Math.sin(i * Math.PI * 3) * 0.2 + 0.3 * i;
+        if (i === 0) leafShape.moveTo(x, y);
+        else leafShape.lineTo(x, y);
       }
-    }
-    
-    return vertices;
+      leafShape.lineTo(0, 0);
+      break;
+      
+    case 'pine':
+      // Pine needle (thin rectangle)
+      leafShape.moveTo(-0.02, 0);
+      leafShape.lineTo(0.02, 0);
+      leafShape.lineTo(0.01, 1);
+      leafShape.lineTo(-0.01, 1);
+      leafShape.lineTo(-0.02, 0);
+      break;
+      
+    case 'generic':
+    default:
+      // Simple oval leaf
+      leafShape.moveTo(0, 0);
+      leafShape.quadraticCurveTo(-0.3, 0.3, 0, 0.6);
+      leafShape.quadraticCurveTo(0.3, 0.3, 0, 0);
+      break;
   }
   
-  /**
-   * Generate single pine needle
-   */
-  private generatePineNeedle(): number[] {
-    const length = 0.04;
-    const radius = 0.002;
-    const vertices: number[] = [];
+  return new THREE.ShapeGeometry(leafShape);
+}
+
+/**
+ * Creates twig/stick geometry
+ */
+function createTwigGeometry(length: number): THREE.CylinderGeometry {
+  const radiusTop = length * 0.03;
+  const radiusBottom = length * 0.05;
+  return new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 6);
+}
+
+/**
+ * Creates pinecone/acorn geometry
+ */
+function createRoundDebrisGeometry(size: number, type: 'pinecone' | 'acorn'): THREE.Geometry {
+  if (type === 'pinecone') {
+    // Elongated sphere for pinecone
+    const geometry = new THREE.SphereGeometry(size, 8, 8);
+    geometry.scale(1, 1.5, 1);
+    return geometry;
+  } else {
+    // Acorn shape (sphere with cap)
+    const group = new THREE.Group();
     
-    // Simple quad for needle
-    vertices.push(-radius, -length, 0);
-    vertices.push(radius, -length, 0);
-    vertices.push(radius, length, 0);
-    vertices.push(-radius, length, 0);
+    const nutGeometry = new THREE.SphereGeometry(size, 8, 8);
+    const nutMaterial = new THREE.MeshStandardMaterial({ color: '#8B4513' });
+    const nut = new THREE.Mesh(nutGeometry, nutMaterial);
+    group.add(nut);
     
-    return vertices;
+    const capGeometry = new THREE.SphereGeometry(size * 0.9, 8, 8);
+    capGeometry.scale(1, 0.5, 1);
+    const capMaterial = new THREE.MeshStandardMaterial({ color: '#654321' });
+    const cap = new THREE.Mesh(capGeometry, capMaterial);
+    cap.position.y = size * 0.5;
+    group.add(cap);
+    
+    return group as any;
   }
+}
+
+/**
+ * Selects debris types based on biome
+ */
+function selectDebrisForBiome(
+  availableTypes: string[],
+  biome: 'forest' | 'desert' | 'grassland' | 'autumn'
+): string[] {
+  return availableTypes.filter(typeKey => {
+    const debris = DEBRIS_TYPES[typeKey];
+    return debris.biomes.includes(biome);
+  });
+}
+
+/**
+ * Determines color based on decay state
+ */
+function getDecayColor(debris: DebrisType, decayState: 'fresh' | 'decaying' | 'decomposed'): string {
+  return debris.colors[decayState];
+}
+
+/**
+ * Main ground debris scatter function
+ */
+export async function GroundDebrisScatter(params: GroundDebrisParams = {}): Promise<ScatterResult> {
+  const {
+    count = 100,
+    debrisTypes = Object.keys(DEBRIS_TYPES),
+    biome = 'forest',
+    decayState = 'mixed',
+    scaleVariation = 0.7,
+    clustering = 0.5,
+    includeMicro = true,
+    surface,
+    bounds,
+  } = params;
+
+  // Filter debris by biome
+  const biomeApplicable = selectDebrisForBiome(debrisTypes, biome);
+  const finalTypes = biomeApplicable.length > 0 ? biomeApplicable : debrisTypes;
+
+  // Determine decay states to use
+  let decayStates: Array<'fresh' | 'decaying' | 'decomposed'>;
+  switch (decayState) {
+    case 'fresh':
+      decayStates = ['fresh'];
+      break;
+    case 'decaying':
+      decayStates = ['decaying'];
+      break;
+    case 'decomposed':
+      decayStates = ['decomposed'];
+      break;
+    case 'mixed':
+    default:
+      decayStates = ['fresh', 'decaying', 'decomposed'];
+  }
+
+  // Generate positions with clustering
+  const defaultBounds = new THREE.Box3(
+    new THREE.Vector3(-5, 0, -5),
+    new THREE.Vector3(5, 0.1, 5)
+  );
+  const effectiveBounds = bounds || defaultBounds;
   
-  /**
-   * Create twig geometry
-   */
-  private createTwigGeometry(variant: number): THREE.BufferGeometry {
-    const geometry = new THREE.CylinderGeometry(
-      0.002 + variant * 0.001,
-      0.001 + variant * 0.0005,
-      0.05 + variant * 0.02,
-      6
+  const positions = generateClusteredPositions(count, clustering, effectiveBounds);
+
+  // Create debris instances
+  const debrisObjects: THREE.Group[] = [];
+  
+  for (const position of positions) {
+    // Select random debris type
+    const typeKey = finalTypes[Math.floor(Math.random() * finalTypes.length)];
+    const debrisData = DEBRIS_TYPES[typeKey];
+    
+    // Select decay state
+    const currentDecay = decayStates[Math.floor(Math.random() * decayStates.length)];
+    
+    // Determine size with variation
+    const baseSize = debrisData.baseSize;
+    const variation = 0.5 + Math.random() * scaleVariation;
+    const size = baseSize * variation;
+    
+    // Create debris geometry
+    const debris = createDebrisMesh(debrisData, size, currentDecay);
+    
+    // Position
+    debris.position.copy(position);
+    
+    // Random rotation
+    debris.rotation.set(
+      (Math.random() - 0.5) * Math.PI,
+      Math.random() * Math.PI * 2,
+      (Math.random() - 0.5) * Math.PI
     );
     
-    // Add some bending
-    const positions = geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      const y = positions[i + 1];
-      const bend = Math.sin(y * 2) * 0.01 * variant;
-      positions[i] += bend;
+    // Ensure it's lying on the ground
+    if (debrisData.shape !== 'stick') {
+      debris.rotation.x = Math.PI / 2;
     }
     
-    geometry.computeVertexNormals();
-    return geometry;
+    debrisObjects.push(debris);
   }
-  
-  /**
-   * Create small stone/pebble geometry
-   */
-  private createStoneGeometry(variant: number): THREE.BufferGeometry {
-    const geometry = new THREE.DodecahedronGeometry(
-      0.01 + variant * 0.005,
-      0
-    );
-    
-    // Add irregularity
-    const positions = geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      const noise = (Math.random() - 0.5) * 0.3;
-      positions[i] *= (1 + noise);
-      positions[i + 1] *= (1 + noise);
-      positions[i + 2] *= (1 + noise);
-    }
-    
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-  
-  /**
-   * Create pine needle cluster geometry
-   */
-  private createPineNeedleGeometry(): THREE.BufferGeometry {
-    const group = new THREE.BufferGeometry();
-    const needles: THREE.BufferGeometry[] = [];
-    
-    // Create cluster of 3-5 needles
-    const count = 3 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < count; i++) {
-      const needle = this.generatePineNeedleGeometry();
-      needle.translate(
-        (Math.random() - 0.5) * 0.005,
-        (Math.random() - 0.5) * 0.01,
-        (Math.random() - 0.5) * 0.005
+
+  // Add micro debris if enabled
+  if (includeMicro) {
+    const microCount = Math.floor(count * 0.3);
+    for (let i = 0; i < microCount; i++) {
+      const micro = createMicroDebris();
+      const x = effectiveBounds.min.x + Math.random() * (effectiveBounds.max.x - effectiveBounds.min.x);
+      const z = effectiveBounds.min.z + Math.random() * (effectiveBounds.max.z - effectiveBounds.min.z);
+      micro.position.set(x, effectiveBounds.min.y, z);
+      micro.rotation.set(
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2
       );
-      needle.rotateZ((Math.random() - 0.5) * 0.3);
-      needles.push(needle);
+      debrisObjects.push(micro);
     }
-    
-    // Merge geometries
-    return THREE.BufferGeometryUtils ? 
-      THREE.BufferGeometryUtils.mergeBufferGeometries(needles) : 
-      needles[0];
   }
-  
-  /**
-   * Get debris color based on decay state and type
-   */
-  private getDebrisColor(
-    decayState: GroundDebrisOptions['decayState'],
-    leafType: GroundDebrisOptions['leafType']
-  ): THREE.Color {
-    const colors: Record<string, THREE.Color[]> = {
-      fresh: [
-        new THREE.Color(0x2d5a27), // Dark green
-        new THREE.Color(0x3d7a37), // Medium green
-        new THREE.Color(0x4a8a47), // Light green
-      ],
-      drying: [
-        new THREE.Color(0x5a7a27), // Yellow-green
-        new THREE.Color(0x7a8a37), // Yellow
-        new THREE.Color(0x8a7a47), // Brown-yellow
-      ],
-      decayed: [
-        new THREE.Color(0x5a4a27), // Brown
-        new THREE.Color(0x4a3a17), // Dark brown
-        new THREE.Color(0x3a2a07), // Very dark brown
-      ],
-    };
-    
-    let palette: THREE.Color[];
-    if (decayState === 'mixed') {
-      const keys = Object.keys(colors) as Array<keyof typeof colors>;
-      const randomKey = keys[Math.floor(Math.random() * keys.length)];
-      palette = colors[randomKey];
-    } else {
-      palette = colors[decayState] || colors.fresh;
-    }
-    
-    return palette[Math.floor(Math.random() * palette.length)].clone();
-  }
-  
-  /**
-   * Generate scatter instances
-   */
-  async generate(
-    surface: TerrainSurface,
-    options: GroundDebrisOptions = {}
-  ): Promise<ScatterInstance[]> {
-    const config: Required<GroundDebrisOptions> = {
-      density: 2.0,
-      leafType: 'mixed',
-      decayState: 'mixed',
-      includeTwigs: true,
-      includePineNeedles: false,
-      includeStones: true,
-      sizeVariation: 0.3,
-      rotationRandomness: Math.PI,
-      clusterFactor: 0.4,
-      minSpacing: 0.05,
-      ...options,
-    };
-    
-    const instances: DebrisInstance[] = [];
-    const area = surface.getArea();
-    const targetCount = Math.floor(area * config.density);
-    
-    // Get sampling points from surface
-    const points = surface.samplePoints(targetCount, config.minSpacing);
-    
-    for (const point of points) {
-      const position = new THREE.Vector3(point.x, point.y, point.z);
-      const normal = surface.getNormal(point.x, point.z);
-      
-      // Determine debris type at this position
-      const rand = Math.random();
-      let debrisType: 'leaf' | 'twig' | 'stone' | 'needle';
-      
-      if (config.includePineNeedles && config.leafType === 'coniferous') {
-        debrisType = rand < 0.7 ? 'needle' : rand < 0.85 ? 'twig' : 'stone';
-      } else {
-        if (rand < 0.6) {
-          debrisType = 'leaf';
-        } else if (config.includeTwigs && rand < 0.8) {
-          debrisType = 'twig';
-        } else if (config.includeStones && rand < 0.9) {
-          debrisType = 'stone';
-        } else {
-          debrisType = 'leaf';
-        }
-      }
-      
-      // Create instance based on type
-      let instance: DebrisInstance;
-      
-      switch (debrisType) {
-        case 'leaf':
-          instance = this.createLeafInstance(position, normal, config);
-          break;
-        case 'twig':
-          instance = this.createTwigInstance(position, normal, config);
-          break;
-        case 'stone':
-          instance = this.createStoneInstance(position, normal, config);
-          break;
-        case 'needle':
-          instance = this.createNeedleInstance(position, normal, config);
-          break;
-      }
-      
-      instances.push(instance);
-    }
-    
-    // Apply clustering if enabled
-    if (config.clusterFactor > 0) {
-      this.applyClustering(instances, config.clusterFactor);
-    }
-    
-    return instances;
-  }
-  
-  /**
-   * Create leaf instance
-   */
-  private createLeafInstance(
-    position: THREE.Vector3,
-    normal: THREE.Vector3,
-    config: Required<GroundDebrisOptions>
-  ): DebrisInstance {
-    const shapes = Object.keys(this.leafGeometries) as LeafShape[];
-    const shape = config.leafType === 'mixed' 
-      ? shapes[Math.floor(Math.random() * shapes.length)]
-      : (config.leafType === 'coniferous' ? 'needle' : shapes[0]);
-    
-    const geometry = this.leafGeometries.get(shape) || this.leafGeometries.get('oval')!;
-    const color = this.getDebrisColor(config.decayState, config.leafType);
-    
-    const scale = 1 + (Math.random() - 0.5) * config.sizeVariation;
-    const rotationY = Math.random() * config.rotationRandomness;
-    
-    return {
-      position: position.clone(),
-      rotation: new THREE.Euler(
-        -normal.x * 0.2,
-        rotationY,
-        -normal.z * 0.2
-      ),
-      scale: new THREE.Vector3(scale, scale, scale),
-      geometry: geometry,
-      material: this.createDebrisMaterial(color),
+
+  // Group all debris
+  const scatterObject = new THREE.Group();
+  debrisObjects.forEach(obj => scatterObject.add(obj));
+
+  return {
+    scatterObject,
+    instances: debrisObjects.map((obj, i) => ({
+      id: `debris_${i}`,
+      position: obj.position.clone(),
+      rotation: obj.rotation.clone(),
+      scale: obj.scale.clone(),
       metadata: {
-        shape,
-        decayLevel: config.decayState === 'decayed' ? 1 : config.decayState === 'drying' ? 0.5 : 0,
-        colorVariation: color,
+        type: 'ground_debris',
+        debrisType: finalTypes[Math.floor(Math.random() * finalTypes.length)],
+        biome,
+        decayState,
       },
-    };
-  }
-  
-  /**
-   * Create twig instance
-   */
-  private createTwigInstance(
-    position: THREE.Vector3,
-    normal: THREE.Vector3,
-    config: Required<GroundDebrisOptions>
-  ): DebrisInstance {
-    const geometry = this.twigGeometries[Math.floor(Math.random() * this.twigGeometries.length)];
-    const color = new THREE.Color(0x4a3a27); // Brown
-    
-    const scale = 1 + (Math.random() - 0.5) * config.sizeVariation;
-    const rotationY = Math.random() * config.rotationRandomness;
-    
-    return {
-      position: position.clone(),
-      rotation: new THREE.Euler(
-        -normal.x * 0.3,
-        rotationY,
-        -normal.z * 0.3
-      ),
-      scale: new THREE.Vector3(scale, scale, scale),
-      geometry: geometry,
-      material: this.createDebrisMaterial(color),
-      metadata: {
-        shape: 'lanceolate' as LeafShape,
-        decayLevel: 0.3,
-        colorVariation: color,
-      },
-    };
-  }
-  
-  /**
-   * Create stone instance
-   */
-  private createStoneInstance(
-    position: THREE.Vector3,
-    normal: THREE.Vector3,
-    config: Required<GroundDebrisOptions>
-  ): DebrisInstance {
-    const geometry = this.stoneGeometries[Math.floor(Math.random() * this.stoneGeometries.length)];
-    const grayValue = 0.3 + Math.random() * 0.4;
-    const color = new THREE.Color(grayValue, grayValue, grayValue * 0.95);
-    
-    const scale = 0.5 + Math.random() * 1.0;
-    const rotationY = Math.random() * config.rotationRandomness;
-    
-    return {
-      position: position.clone(),
-      rotation: new THREE.Euler(
-        -normal.x * 0.1,
-        rotationY,
-        -normal.z * 0.1
-      ),
-      scale: new THREE.Vector3(scale, scale, scale),
-      geometry: geometry,
-      material: this.createDebrisMaterial(color, 0.8),
-      metadata: {
-        shape: 'oval' as LeafShape,
-        decayLevel: 0,
-        colorVariation: color,
-      },
-    };
-  }
-  
-  /**
-   * Create pine needle cluster instance
-   */
-  private createNeedleInstance(
-    position: THREE.Vector3,
-    normal: THREE.Vector3,
-    config: Required<GroundDebrisOptions>
-  ): DebrisInstance {
-    const geometry = this.needleGeometry;
-    const color = this.getDebrisColor(config.decayState, 'coniferous');
-    
-    const scale = 1 + (Math.random() - 0.5) * config.sizeVariation;
-    const rotationY = Math.random() * config.rotationRandomness;
-    
-    return {
-      position: position.clone(),
-      rotation: new THREE.Euler(
-        -normal.x * 0.2,
-        rotationY,
-        -normal.z * 0.2
-      ),
-      scale: new THREE.Vector3(scale, scale, scale),
-      geometry: geometry,
-      material: this.createDebrisMaterial(color),
-      metadata: {
-        shape: 'needle' as LeafShape,
-        decayLevel: config.decayState === 'decayed' ? 1 : 0,
-        colorVariation: color,
-      },
-    };
-  }
-  
-  /**
-   * Create material for debris
-   */
-  private createDebrisMaterial(color: THREE.Color, roughness: number = 0.9): THREE.MeshStandardMaterial {
-    return new THREE.MeshStandardMaterial({
-      color: color,
-      roughness: roughness,
-      metalness: 0.0,
-      side: THREE.DoubleSide,
-    });
-  }
-  
-  /**
-   * Apply clustering to instances
-   */
-  private applyClustering(
-    instances: DebrisInstance[],
-    clusterFactor: number
-  ): void {
-    if (clusterFactor <= 0 || instances.length < 10) return;
-    
-    // Simple clustering: move some instances closer together
-    const numClusters = Math.max(3, Math.floor(instances.length * 0.1));
-    const clusterCenters: THREE.Vector3[] = [];
-    
-    // Create cluster centers
-    for (let i = 0; i < numClusters; i++) {
-      const randomIndex = Math.floor(Math.random() * instances.length);
-      clusterCenters.push(instances[randomIndex].position.clone());
-    }
-    
-    // Move instances toward nearest cluster
-    for (const instance of instances) {
-      if (Math.random() > clusterFactor) continue;
-      
-      let nearestCenter = clusterCenters[0];
-      let nearestDist = instance.position.distanceTo(nearestCenter);
-      
-      for (const center of clusterCenters) {
-        const dist = instance.position.distanceTo(center);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestCenter = center;
-        }
-      }
-      
-      // Move 30% toward cluster center
-      const direction = new THREE.Vector3().subVectors(nearestCenter, instance.position);
-      direction.multiplyScalar(0.3);
-      instance.position.add(direction);
-    }
-  }
-  
-  /**
-   * Get recommended density for different biomes
-   */
-  static getBiomeDensity(biome: string): number {
-    const densities: Record<string, number> = {
-      'temperate_forest': 3.0,
-      'tropical_rainforest': 4.0,
-      'boreal_forest': 2.5,
-      'deciduous_forest': 3.5,
-      'grassland': 0.5,
-      'savanna': 0.3,
-      'desert': 0.1,
-      'urban': 0.2,
-      'garden': 2.0,
-    };
-    
-    return densities[biome] || 2.0;
-  }
+    })),
+    bounds: effectiveBounds,
+    count: debrisObjects.length,
+  };
 }
 
-export default GroundDebrisScatter;
+/**
+ * Creates a debris mesh based on type and decay
+ */
+function createDebrisMesh(
+  debris: DebrisType,
+  size: number,
+  decayState: 'fresh' | 'decaying' | 'decomposed'
+): THREE.Mesh {
+  const color = getDecayColor(debris, decayState);
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.8,
+    metalness: 0.1,
+  });
+
+  let geometry: THREE.BufferGeometry;
+
+  switch (debris.shape) {
+    case 'leaf':
+      const leafShapes: Array<'maple' | 'oak' | 'pine' | 'generic'> = ['maple', 'oak', 'pine', 'generic'];
+      const leafShape = leafShapes[Math.floor(Math.random() * leafShapes.length)];
+      geometry = createLeafGeometry(leafShape);
+      break;
+      
+    case 'stick':
+      const length = size * 2;
+      geometry = createTwigGeometry(length);
+      break;
+      
+    case 'round':
+      const type = debris.name.toLowerCase() as 'pinecone' | 'acorn';
+      const roundGeom = createRoundDebrisGeometry(size, type);
+      if ((roundGeom as any).isGroup) {
+        const group = new THREE.Group();
+        (roundGeom as any).children.forEach((child: THREE.Mesh) => {
+          child.material = material;
+          group.add(child);
+        });
+        return group as any;
+      }
+      geometry = roundGeom;
+      break;
+      
+    case 'irregular':
+    default:
+      geometry = new THREE.DodecahedronGeometry(size, 0);
+      geometry.scale(1, 0.3, 1);
+      break;
+  }
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.scale.set(size / debris.baseSize, size / debris.baseSize, size / debris.baseSize);
+  
+  return mesh;
+}
+
+/**
+ * Creates micro debris particles
+ */
+function createMicroDebris(): THREE.Mesh {
+  const size = 0.005 + Math.random() * 0.01;
+  const geometry = new THREE.BoxGeometry(size, size * 0.2, size);
+  const material = new THREE.MeshStandardMaterial({
+    color: Math.random() > 0.5 ? '#8B7355' : '#696969',
+    roughness: 0.9,
+  });
+  return new THREE.Mesh(geometry, material);
+}
+
+/**
+ * Generates clustered positions
+ */
+function generateClusteredPositions(
+  count: number,
+  clustering: number,
+  bounds: THREE.Box3
+): THREE.Vector3[] {
+  const positions: THREE.Vector3[] = [];
+  const clusterCenters: THREE.Vector3[] = [];
+  const numClusters = Math.max(3, Math.floor(count * (1 - clustering) / 3));
+
+  // Generate cluster centers
+  for (let i = 0; i < numClusters; i++) {
+    const center = new THREE.Vector3(
+      bounds.min.x + Math.random() * (bounds.max.x - bounds.min.x),
+      bounds.min.y,
+      bounds.min.z + Math.random() * (bounds.max.z - bounds.min.z)
+    );
+    clusterCenters.push(center);
+  }
+
+  // Generate points around clusters
+  for (let i = 0; i < count; i++) {
+    const clusterIndex = Math.floor(Math.random() * clusterCenters.length);
+    const center = clusterCenters[clusterIndex];
+    const spread = (bounds.max.x - bounds.min.x) * 0.2 * (1 - clustering);
+    
+    const position = new THREE.Vector3(
+      center.x + (Math.random() - 0.5) * spread,
+      bounds.min.y,
+      center.z + (Math.random() - 0.5) * spread
+    );
+    
+    positions.push(position);
+  }
+
+  return positions;
+}
