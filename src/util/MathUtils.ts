@@ -423,3 +423,141 @@ export function clampRgb(color: RGB): RGB {
     b: Math.max(0, Math.min(1, color.b))
   };
 }
+
+// ============================================================================
+// Noise Functions (Simplex/Perlin-style)
+// ============================================================================
+
+/**
+ * Simple 3D noise function using gradient hashing
+ * Based on classic Perlin noise algorithm
+ * @param x - X coordinate
+ * @param y - Y coordinate  
+ * @param z - Z coordinate
+ * @param scale - Noise scale/frequency multiplier
+ * @returns Noise value in range [-1, 1]
+ */
+export function noise3D(x: number, y: number, z: number, scale: number = 1.0): number {
+  const X = Math.floor(x * scale) & 255;
+  const Y = Math.floor(y * scale) & 255;
+  const Z = Math.floor(z * scale) & 255;
+
+  x -= Math.floor(x * scale);
+  y -= Math.floor(y * scale);
+  z -= Math.floor(z * scale);
+
+  // Fade curves for smooth interpolation
+  const u = fade(x);
+  const v = fade(y);
+  const w = fade(z);
+
+  // Hash coordinates of cube corners
+  const A = p[X] + Y;
+  const AA = p[A] + Z;
+  const AB = p[A + 1] + Z;
+  const B = p[X + 1] + Y;
+  const BA = p[B] + Z;
+  const BB = p[B + 1] + Z;
+
+  // Gradient contributions
+  const result = lerp(
+    w,
+    lerp(
+      v,
+      lerp(u, grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z)),
+      lerp(u, grad(p[AB], x, y - 1, z), grad(p[BB], x - 1, y - 1, z))
+    ),
+    lerp(
+      v,
+      lerp(u, grad(p[AA + 1], x, y, z - 1), grad(p[BA + 1], x - 1, y, z - 1)),
+      lerp(u, grad(p[AB + 1], x, y - 1, z - 1), grad(p[BB + 1], x - 1, y - 1, z - 1))
+    )
+  );
+
+  return result;
+}
+
+/**
+ * 2D Voronoi noise function
+ * Returns distance to nearest feature point
+ * @param x - X coordinate
+ * @param y - Y coordinate
+ * @param scale - Scale factor for cell size
+ * @returns Distance to nearest point (normalized)
+ */
+export function voronoi2D(x: number, y: number, scale: number = 1.0): number {
+  const cellX = Math.floor(x * scale);
+  const cellY = Math.floor(y * scale);
+  
+  let minDist = Infinity;
+
+  // Check neighboring cells
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const neighborX = cellX + dx;
+      const neighborY = cellY + dy;
+      
+      // Hash to get feature point position within cell
+      const hash = hash2D(neighborX, neighborY);
+      const featureX = neighborX + (hash % 1000) / 1000;
+      const featureY = neighborY + ((Math.floor(hash / 1000)) % 1000) / 1000;
+      
+      // Distance to this feature point
+      const distX = (x * scale) - featureX;
+      const distY = (y * scale) - featureY;
+      const dist = Math.sqrt(distX * distX + distY * distY);
+      
+      minDist = Math.min(minDist, dist);
+    }
+  }
+
+  return minDist;
+}
+
+// Permutation table for noise
+const p: number[] = [];
+for (let i = 0; i < 256; i++) {
+  p[i] = i;
+}
+// Shuffle permutation table
+for (let i = 255; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [p[i], p[j]] = [p[j], p[i]];
+}
+// Duplicate for overflow handling
+for (let i = 0; i < 256; i++) {
+  p[256 + i] = p[i];
+}
+
+/**
+ * Fade curve function (Perlin's smoothstep variant)
+ */
+function fade(t: number): number {
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+/**
+ * Linear interpolation
+ */
+function lerp(t: number, a: number, b: number): number {
+  return a + t * (b - a);
+}
+
+/**
+ * Gradient dot product for noise
+ */
+function grad(hash: number, x: number, y: number, z: number): number {
+  const h = hash & 15;
+  const u = h < 8 ? x : y;
+  const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+  return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+}
+
+/**
+ * 2D hash function
+ */
+function hash2D(x: number, y: number): number {
+  let h = (x * 374761393 + y * 668265263) | 0;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return Math.abs(h & 0x7fffffff);
+}

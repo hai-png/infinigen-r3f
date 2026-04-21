@@ -12,6 +12,13 @@ export {
   type TerrainData 
 } from './core/TerrainGenerator';
 
+// GPU Compute (Phase 1.2)
+export {
+  MarchingCubesCompute,
+  type GPUComputeConfig,
+  type MarchingCubesResult,
+} from './gpu';
+
 // Advanced Features (Phase 2)
 export {
   CaveGenerator,
