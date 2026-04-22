@@ -1,0 +1,474 @@
+/**
+ * Basic Composition Rules for Infinigen
+ * 
+ * Implements fundamental spatial relationships and aesthetic principles.
+ */
+
+import { Vector3, Quaternion, Matrix4, Box3 } from 'three';
+import type { CompositionRule, CompositionContext, CompositionResult } from '../CompositionEngine';
+import { SpatialRelation, AestheticPrinciple } from '../CompositionEngine';
+
+/**
+ * Rule: Center object in bounds
+ */
+export const centerObjectRule: CompositionRule = {
+  id: 'center_object',
+  name: 'Center Object',
+  description: 'Centers the primary object in the scene bounds',
+  relation: SpatialRelation.CENTERED,
+  principles: [AestheticPrinciple.BALANCE, AestheticPrinciple.UNITY],
+  priority: 90,
+  parameters: {
+    axis: 'xz', // 'x', 'y', 'z', 'xz', 'xy', 'yz', 'xyz'
+    offset: { x: 0, y: 0, z: 0 },
+  },
+  validator: (context: CompositionContext) => {
+    return context.existingObjects.length > 0;
+  },
+  applier: (context: CompositionContext): CompositionResult => {
+    const result: CompositionResult = {
+      success: true,
+      transformations: [],
+      conflicts: [],
+      score: 0,
+      metrics: { 
+        balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
+        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+      },
+    };
+
+    if (context.existingObjects.length === 0) return result;
+
+    const primaryObject = context.existingObjects[0];
+    const center = context.center.clone();
+    
+    // Apply axis-specific centering
+    const axis = this.parameters.axis || 'xz';
+    if (axis.includes('x')) center.x += this.parameters.offset.x || 0;
+    if (axis.includes('y')) center.y += this.parameters.offset.y || 0;
+    if (axis.includes('z')) center.z += this.parameters.offset.z || 0;
+
+    const targetPosition = center.clone().sub(primaryObject.center).add(
+      primaryObject.bounds.getCenter(new Vector3())
+    );
+
+    result.transformations.push({
+      nodeId: primaryObject.nodeId,
+      position: targetPosition,
+    });
+
+    return result;
+  },
+};
+
+/**
+ * Rule: Align objects along an axis
+ */
+export const alignObjectsRule: CompositionRule = {
+  id: 'align_objects',
+  name: 'Align Objects',
+  description: 'Aligns multiple objects along a specified axis',
+  relation: SpatialRelation.ALIGNED,
+  principles: [AestheticPrinciple.RHYTHM, AestheticPrinciple.HARMONY],
+  priority: 80,
+  parameters: {
+    axis: 'x', // 'x', 'y', or 'z'
+    spacing: 1.0, // Distance between objects
+    startOffset: 0,
+    alignTo: 'center', // 'min', 'center', 'max' of bounding box
+  },
+  validator: (context: CompositionContext) => {
+    return context.existingObjects.length >= 2;
+  },
+  applier: (context: CompositionContext): CompositionResult => {
+    const result: CompositionResult = {
+      success: true,
+      transformations: [],
+      conflicts: [],
+      score: 0,
+      metrics: { 
+        balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
+        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+      },
+    };
+
+    if (context.existingObjects.length < 2) return result;
+
+    const axis = this.parameters.axis || 'x';
+    const spacing = this.parameters.spacing || 1.0;
+    const alignTo = this.parameters.alignTo || 'center';
+    const startOffset = this.parameters.startOffset || 0;
+
+    // Sort objects by their current position on the axis
+    const sorted = [...context.existingObjects].sort((a, b) => {
+      const aPos = a.bounds.getCenter(new Vector3())[axis];
+      const bPos = b.bounds.getCenter(new Vector3())[axis];
+      return aPos - bPos;
+    });
+
+    // Calculate starting position
+    let currentPosition = startOffset;
+    if (alignTo === 'center') {
+      const totalLength = (sorted.length - 1) * spacing;
+      currentPosition = -totalLength / 2;
+    }
+
+    for (const obj of sorted) {
+      const center = obj.bounds.getCenter(new Vector3());
+      const newPosition = center.clone();
+      newPosition[axis] = currentPosition;
+
+      // Adjust for alignment type
+      if (alignTo === 'min') {
+        newPosition[axis] += obj.bounds.getSize(new Vector3())[axis] / 2;
+      } else if (alignTo === 'max') {
+        newPosition[axis] -= obj.bounds.getSize(new Vector3())[axis] / 2;
+      }
+
+      result.transformations.push({
+        nodeId: obj.nodeId,
+        position: newPosition,
+      });
+
+      currentPosition += spacing;
+    }
+
+    return result;
+  },
+};
+
+/**
+ * Rule: Distribute objects in a grid pattern
+ */
+export const gridDistributionRule: CompositionRule = {
+  id: 'grid_distribution',
+  name: 'Grid Distribution',
+  description: 'Arranges objects in a regular grid pattern',
+  relation: SpatialRelation.GRID,
+  principles: [AestheticPrinciple.RHYTHM, AestheticPrinciple.HARMONY],
+  priority: 75,
+  parameters: {
+    columns: 3,
+    rows: 3,
+    xSpacing: 1.0,
+    ySpacing: 1.0,
+    zSpacing: 0,
+    centerGrid: true,
+  },
+  validator: (context: CompositionContext) => {
+    return context.existingObjects.length > 0;
+  },
+  applier: (context: CompositionContext): CompositionResult => {
+    const result: CompositionResult = {
+      success: true,
+      transformations: [],
+      conflicts: [],
+      score: 0,
+      metrics: { 
+        balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
+        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+      },
+    };
+
+    const columns = this.parameters.columns || 3;
+    const rows = this.parameters.rows || 3;
+    const xSpacing = this.parameters.xSpacing || 1.0;
+    const ySpacing = this.parameters.ySpacing || 1.0;
+    const zSpacing = this.parameters.zSpacing || 0;
+    const centerGrid = this.parameters.centerGrid !== false;
+
+    const totalObjects = Math.min(context.existingObjects.length, columns * rows);
+    
+    // Calculate grid offset for centering
+    const xOffset = centerGrid ? -((columns - 1) * xSpacing) / 2 : 0;
+    const yOffset = centerGrid ? -((rows - 1) * ySpacing) / 2 : 0;
+
+    for (let i = 0; i < totalObjects; i++) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      
+      const obj = context.existingObjects[i];
+      const center = obj.bounds.getCenter(new Vector3());
+      
+      const newPosition = new Vector3(
+        xOffset + col * xSpacing,
+        yOffset + row * ySpacing,
+        center.z + (Math.floor(i / (columns * rows)) * zSpacing)
+      );
+
+      // Add center offset
+      if (centerGrid) {
+        newPosition.add(context.center);
+      }
+
+      result.transformations.push({
+        nodeId: obj.nodeId,
+        position: newPosition,
+      });
+    }
+
+    return result;
+  },
+};
+
+/**
+ * Rule: Arrange objects radially around a center point
+ */
+export const radialArrangementRule: CompositionRule = {
+  id: 'radial_arrangement',
+  name: 'Radial Arrangement',
+  description: 'Arranges objects in a circular/radial pattern',
+  relation: SpatialRelation.RADIAL,
+  principles: [AestheticPrinciple.BALANCE, AestheticPrinciple.HARMONY],
+  priority: 70,
+  parameters: {
+    radius: 2.0,
+    startAngle: 0, // In radians
+    endAngle: Math.PI * 2, // Full circle by default
+    axis: 'y', // Axis to rotate around
+    faceCenter: true, // Rotate objects to face center
+  },
+  validator: (context: CompositionContext) => {
+    return context.existingObjects.length >= 2;
+  },
+  applier: (context: CompositionContext): CompositionResult => {
+    const result: CompositionResult = {
+      success: true,
+      transformations: [],
+      conflicts: [],
+      score: 0,
+      metrics: { 
+        balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
+        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+      },
+    };
+
+    if (context.existingObjects.length < 2) return result;
+
+    const radius = this.parameters.radius || 2.0;
+    const startAngle = this.parameters.startAngle || 0;
+    const endAngle = this.parameters.endAngle || Math.PI * 2;
+    const axis = this.parameters.axis || 'y';
+    const faceCenter = this.parameters.faceCenter !== false;
+
+    const angleStep = (endAngle - startAngle) / (context.existingObjects.length - 1);
+    const center = context.center;
+
+    for (let i = 0; i < context.existingObjects.length; i++) {
+      const obj = context.existingObjects[i];
+      const angle = startAngle + i * angleStep;
+      
+      // Calculate position based on axis
+      let position: Vector3;
+      if (axis === 'y') {
+        position = new Vector3(
+          center.x + Math.cos(angle) * radius,
+          center.y,
+          center.z + Math.sin(angle) * radius
+        );
+      } else if (axis === 'x') {
+        position = new Vector3(
+          center.x,
+          center.y + Math.cos(angle) * radius,
+          center.z + Math.sin(angle) * radius
+        );
+      } else { // z
+        position = new Vector3(
+          center.x + Math.cos(angle) * radius,
+          center.y + Math.sin(angle) * radius,
+          center.z
+        );
+      }
+
+      const transformation: any = {
+        nodeId: obj.nodeId,
+        position,
+      };
+
+      // Rotate to face center if requested
+      if (faceCenter) {
+        const direction = center.clone().sub(position).normalize();
+        const rotation = new Quaternion().setFromUnitVectors(
+          new Vector3(0, 0, 1), // Assuming forward is +Z
+          direction
+        );
+        transformation.rotation = rotation;
+      }
+
+      result.transformations.push(transformation);
+    }
+
+    return result;
+  },
+};
+
+/**
+ * Rule: Maintain minimum distance between objects
+ */
+export const separationRule: CompositionRule = {
+  id: 'separation',
+  name: 'Separation',
+  description: 'Ensures objects maintain minimum distance from each other',
+  relation: SpatialRelation.DISTRIBUTED,
+  principles: [AestheticPrinciple.HARMONY],
+  priority: 85,
+  parameters: {
+    minDistance: 0.5,
+    maxIterations: 10,
+    relaxationFactor: 0.3,
+  },
+  validator: (context: CompositionContext) => {
+    return context.existingObjects.length >= 2;
+  },
+  applier: (context: CompositionContext): CompositionResult => {
+    const result: CompositionResult = {
+      success: true,
+      transformations: [],
+      conflicts: [],
+      score: 0,
+      metrics: { 
+        balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
+        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+      },
+    };
+
+    if (context.existingObjects.length < 2) return result;
+
+    const minDistance = this.parameters.minDistance || 0.5;
+    const maxIterations = this.parameters.maxIterations || 10;
+    const relaxationFactor = this.parameters.relaxationFactor || 0.3;
+
+    // Create working copies of positions
+    const positions = context.existingObjects.map(obj => 
+      obj.bounds.getCenter(new Vector3())
+    );
+
+    // Iteratively resolve overlaps
+    for (let iter = 0; iter < maxIterations; iter++) {
+      let moved = false;
+
+      for (let i = 0; i < positions.length; i++) {
+        for (let j = i + 1; j < positions.length; j++) {
+          const delta = positions[j].clone().sub(positions[i]);
+          const distance = delta.length();
+
+          if (distance < minDistance && distance > 0) {
+            moved = true;
+            
+            // Calculate push direction
+            const direction = delta.normalize();
+            const overlap = (minDistance - distance) / 2;
+            
+            // Move both objects apart
+            const adjustment = direction.multiplyScalar(overlap * relaxationFactor);
+            positions[i].sub(adjustment);
+            positions[j].add(adjustment);
+          }
+        }
+      }
+
+      if (!moved) break;
+    }
+
+    // Generate transformations
+    for (let i = 0; i < context.existingObjects.length; i++) {
+      result.transformations.push({
+        nodeId: context.existingObjects[i].nodeId,
+        position: positions[i],
+      });
+    }
+
+    return result;
+  },
+};
+
+/**
+ * Rule: Symmetrical arrangement
+ */
+export const symmetryRule: CompositionRule = {
+  id: 'symmetry',
+  name: 'Symmetry',
+  description: 'Arranges objects symmetrically around an axis',
+  relation: SpatialRelation.SYMMETRICAL,
+  principles: [AestheticPrinciple.BALANCE, AestheticPrinciple.HARMONY],
+  priority: 75,
+  parameters: {
+    axis: 'x', // 'x', 'y', or 'z'
+    plane: 'yz', // Plane of symmetry
+    pairs: true, // Create pairs or mirror all
+  },
+  validator: (context: CompositionContext) => {
+    return context.existingObjects.length >= 2;
+  },
+  applier: (context: CompositionContext): CompositionResult => {
+    const result: CompositionResult = {
+      success: true,
+      transformations: [],
+      conflicts: [],
+      score: 0,
+      metrics: { 
+        balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
+        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+      },
+    };
+
+    if (context.existingObjects.length < 2) return result;
+
+    const axis = this.parameters.axis || 'x';
+    const center = context.center;
+
+    // Group objects into pairs
+    const objects = [...context.existingObjects];
+    const pairs: Array<[any, any]> = [];
+
+    if (this.parameters.pairs) {
+      while (objects.length >= 2) {
+        pairs.push([objects.pop()!, objects.pop()!]);
+      }
+    } else {
+      // Mirror each object
+      for (const obj of objects) {
+        const mirrored = { ...obj, nodeId: `${obj.nodeId}_mirror` };
+        pairs.push([obj, mirrored]);
+      }
+    }
+
+    // Arrange each pair symmetrically
+    for (const [obj1, obj2] of pairs) {
+      const center1 = obj1.bounds.getCenter(new Vector3());
+      const center2 = obj2.bounds.getCenter(new Vector3());
+      
+      // Calculate midpoint
+      const midpoint = center1.clone().add(center2).multiplyScalar(0.5);
+      
+      // Project midpoint onto symmetry plane
+      const symmetricMidpoint = midpoint.clone();
+      symmetricMidpoint[axis] = center[axis];
+
+      // Calculate offsets from midpoint
+      const offset1 = center1.sub(midpoint);
+      const offset2 = center2.sub(midpoint);
+
+      // Apply symmetric positions
+      const pos1 = symmetricMidpoint.clone().add(offset1);
+      const pos2 = symmetricMidpoint.clone().add(offset2);
+
+      result.transformations.push(
+        { nodeId: obj1.nodeId, position: pos1 },
+        { nodeId: obj2.nodeId, position: pos2 }
+      );
+    }
+
+    return result;
+  },
+};
+
+// Export all basic rules
+export const basicRules: CompositionRule[] = [
+  centerObjectRule,
+  alignObjectsRule,
+  gridDistributionRule,
+  radialArrangementRule,
+  separationRule,
+  symmetryRule,
+];
