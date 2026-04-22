@@ -1,5 +1,52 @@
-The input shows only a directory being added (`infinigen_original/`) with no specific file extensions or build artifacts listed. Since there's no indication of compiled files, dependencies, or other ignorable items in the change list, and the directory addition alone doesn't warrant adding ignore rules, no changes to .gitignore are needed.
+```
+# Build outputs
+dist/
+build/
+target/
 
-However, since the current .gitignore is empty and there are no files that match common ignore patterns in the changes provided, the result should remain empty.
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-(empty)
+# Compiled JavaScript
+*.js.map
+*.ts.map
+*.tsx.map
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Python related (if any Python in project)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+```
