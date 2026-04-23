@@ -4,9 +4,17 @@
 
 This document provides a detailed analysis of feature parity between the ongoing React Three Fiber (R3F) TypeScript port of Infinigen and the original Python/Blender-based Infinigen from Princeton VL. The analysis identifies gaps, prioritizes implementation tasks, and provides a systematic roadmap for achieving full feature parity.
 
-**Current State:**
-- **Original Infinigen**: 812 Python files, comprehensive procedural generation system built on Blender
-- **R3F Port**: 397 TypeScript files, modular architecture with core systems partially implemented
+**Current State (Updated Analysis):**
+- **Original Infinigen**: 876 Python files, comprehensive procedural generation system built on Blender
+- **R3F Port**: 436 TypeScript files, modular architecture with core systems significantly advanced
+- **Overall Feature Parity**: ~54% (updated from 49%)
+
+**Key Corrections from Previous Analysis:**
+- ✅ **Tags System**: Now 90% complete (was incorrectly marked as "minimal")
+- ✅ **Rendering**: Now 60% complete with AOV system implemented (was understated at 40%)
+- ✅ **Water/Ocean**: Now 40% complete with LakeGenerator, RiverNetwork, WaterBody (was marked as "not started")
+- ✅ **Constraint Language**: Now 60% complete with full module structure matching original (was marked as "missing")
+- ✅ **Reasoning**: Now 50% complete with core modules ported (was marked as "missing")
 
 ---
 
@@ -275,19 +283,20 @@ src/
 - Denoising
 - Multi-view rendering
 
-**R3F Port Status:** ⚠️ BASIC (40% complete)
+**R3F Port Status:** ✅ GOOD (60% complete) - UPDATED
 - ✅ Render task management
 - ✅ Post-processing chain
 - ✅ Effects: Bloom, Blur, Chromatic Aberration, Vignette, Film Grain, Color Grading
 - ✅ Shader compiler
-- ❌ Missing: AOV system
-- ❌ Missing: Denoising
+- ✅ AOV system implemented (`src/render/aov-system.ts` - 15KB)
+- ✅ Multi-pass renderer (`src/render/multi-pass-renderer.ts` - 23KB)
+- ❌ Missing: Denoising (NLM, OIDN integration)
 - ❌ Missing: Multi-view rendering
 - ❌ Missing: Render resampling
 - ❌ Missing: Path tracing backend
 
 **Implementation Tasks:**
-1. [ ] Implement AOV system (depth, normal, albedo, etc.)
+1. [x] Implement AOV system (depth, normal, albedo, etc.) - COMPLETED
 2. [ ] Add denoising (NLM, OIDN integration)
 3. [ ] Build multi-view rendering
 4. [ ] Create render resampling utilities

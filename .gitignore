@@ -1,24 +1,12 @@
 ```
-# Dependencies
-node_modules/
-
-# Build artifacts
+# TypeScript/JavaScript build artifacts
+*.js.map
+*.tsbuildinfo
 dist/
 build/
-target/
 
-# TypeScript/JavaScript transpilation
-*.tsbuildinfo
-*.js.map
-
-# Test coverage
-coverage/
-.nyc_output/
-
-# Environment variables
-.env
-.env.local
-*.env.*
+# Dependencies
+node_modules/
 
 # IDE files
 .vscode/
@@ -29,21 +17,16 @@ coverage/
 # Logs
 *.log
 
-# Temp files
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Temporary files
 *.tmp
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Python cache (if any Python files exist in the project)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Package manager caches
-.npm/
-.yarn/
-.pnpm-store/
 ```
