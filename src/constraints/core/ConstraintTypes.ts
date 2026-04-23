@@ -41,6 +41,15 @@ export enum ConstraintType {
   DISTRIBUTE_ALONG = 'distribute_along',
 }
 
+export type ConstraintOperator = 
+  | '==' | '!=' | '===' | '!=='
+  | '<' | '>' | '<=' | '>='
+  | '+' | '-' | '*' | '/' | '%'
+  | '&&' | '||'
+  | '=' | '+=' | '-=' | '*=' | '/=' | '%=';
+
+export type DomainType = 'point' | 'edge' | 'face' | 'face_corner' | 'spline' | 'instance';
+
 export interface Constraint {
   id: string;
   type: ConstraintType;

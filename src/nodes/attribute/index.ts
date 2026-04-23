@@ -1,0 +1,60 @@
+/**
+ * Attribute Nodes Module Export
+ */
+
+export {
+  // Node Classes
+  StoreNamedAttributeNode,
+  CaptureAttributeNode,
+  RemoveAttributeNode,
+  NamedAttributeNode,
+  AttributeStatisticNode,
+  SetPositionNode,
+  PositionInputNode,
+  NormalInputNode,
+  TangentInputNode,
+  UVMapInputNode,
+  ColorInputNode,
+  RadiusInputNode,
+  IdInputNode,
+  IndexInputNode,
+  
+  // Type Definitions
+  type AttributeNodeBase,
+  type StoreNamedAttributeInputs,
+  type StoreNamedAttributeOutputs,
+  type CaptureAttributeInputs,
+  type CaptureAttributeOutputs,
+  type RemoveAttributeInputs,
+  type RemoveAttributeOutputs,
+  type NamedAttributeInputs,
+  type NamedAttributeOutputs,
+  type AttributeStatisticInputs,
+  type AttributeStatisticOutputs,
+  type SetPositionInputs,
+  type SetPositionOutputs,
+  type PositionInputNodeOutputs,
+  type NormalInputNodeOutputs,
+  type TangentInputNodeOutputs,
+  type UVMapInputNodeOutputs,
+  type ColorInputNodeOutputs,
+  type RadiusInputNodeOutputs,
+  type IdInputNodeOutputs,
+  type IndexInputNodeOutputs,
+  
+  // Factory Functions
+  createStoreNamedAttributeNode,
+  createCaptureAttributeNode,
+  createRemoveAttributeNode,
+  createNamedAttributeNode,
+  createAttributeStatisticNode,
+  createSetPositionNode,
+  createPositionInputNode,
+  createNormalInputNode,
+  createTangentInputNode,
+  createUVMapInputNode,
+  createColorInputNode,
+  createRadiusInputNode,
+  createIdInputNode,
+  createIndexInputNode,
+} from './AttributeNodes';
