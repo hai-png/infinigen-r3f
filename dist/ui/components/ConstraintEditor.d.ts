@@ -5,7 +5,7 @@
  * editing relations, and managing constraint sets.
  */
 import React from 'react';
-import type { NamedConstraint, RelationType } from '../constraint-language/types';
+import type { NamedConstraint, RelationType } from '../constraints/language/types';
 export interface ConstraintEditorProps {
     /** Initial constraints */
     constraints?: NamedConstraint[];

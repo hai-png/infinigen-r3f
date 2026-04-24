@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import * as THREE from 'three';
-import type { BVHNode } from '../evaluator/state';
+import type { BVHNode } from '../constraints/evaluator/state';
 export interface BVHViewerProps {
     /** BVH root node to visualize */
     bvhRoot?: BVHNode | null;

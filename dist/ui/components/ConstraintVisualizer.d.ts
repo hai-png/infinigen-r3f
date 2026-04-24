@@ -1,5 +1,5 @@
 import React from 'react';
-import { Problem } from '../../constraint-language/types';
+import { Problem } from '../../constraints/language/types';
 import { ConstraintVisualizationConfig } from '../types';
 interface ConstraintVisualizerProps {
     problem?: Problem;

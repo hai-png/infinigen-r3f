@@ -1,4 +1,4 @@
-import { SolverState } from '../../solver/moves';
+import { SolverState } from '../../constraints/solver/moves';
 interface UseSolverControlsOptions {
     initialState?: Partial<SolverState>;
     autoStart?: boolean;

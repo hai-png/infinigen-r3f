@@ -9,7 +9,7 @@
  * 2. Heavy tasks (Geo Gen, Sim, Render) are offloaded to Python via HTTP/WebSocket.
  * 3. Python returns GLB/GLTF assets or state updates.
  */
-import { SolverState } from '../solver/state';
+import { SolverState } from '../constraints/solver/state';
 export interface BridgeConfig {
     endpoint: string;
     timeoutMs: number;

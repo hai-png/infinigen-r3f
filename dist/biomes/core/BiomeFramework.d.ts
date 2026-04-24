@@ -4,7 +4,7 @@
  * Part of Phase 3: Assets & Materials - 100% Completion
  */
 import * as THREE from 'three';
-import type { BiomeDefinition, BiomeBlend } from '../biomes/BiomeSystem';
+import type { BiomeDefinition, BiomeBlend } from './BiomeSystem';
 import type { AssetMetadata } from '../assets/core/AssetTypes';
 export interface BiomeTransitionZone {
     startBiome: string;

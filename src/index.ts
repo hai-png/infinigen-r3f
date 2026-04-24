@@ -1,110 +1,55 @@
 /**
- * Infinigen R3F - Main Entry Point
+ * Infinigen R3F - Procedural Generation Engine for React Three Fiber
  * 
- * A complete TypeScript port of Infinigen's constraint-based procedural generation system
- * for React Three Fiber. This library enables real-time constraint-based scene composition
- * in the browser.
+ * A TypeScript port of the Infinigen procedural generation system,
+ * adapted for use with React Three Fiber and the React ecosystem.
  * 
  * @packageDocumentation
  */
 
-// Tag System
-export * from './tags/index.js';
+// Core Engine Systems
+export * from './core';
 
-// Consolidated Constraint System (all submodules unified)
-export * from './constraints/index.js';
+// Asset Library
+export * from './assets';
 
-// Math Utilities
-export * from './math/index.js';
+// Terrain Generation
+export * from './terrain';
 
-// Placement Algorithms
-export * from './placement/index.js';
+// Simulation System
+export * from './sim';
 
-// SIM Module - Physics & Kinematics (NEW - Sprint 3)
-export * from './sim/index.js';
+// Data Generation (placeholder)
+export * from './datagen';
 
-// Hybrid Bridge (NEW - Sprint 4)
-export * from './bridge/index.js';
+// Utility Tools (placeholder)
+export * from './tools';
 
-// Room Decoration System (NEW - Sprint 5)
-export * from './decorate/index.js';
+// GPL Module (placeholder)
+export * from './infinigen_gpl';
 
-// Animation Policy System (NEW - Sprint 6)
-export * from './animation/index.js';
+// R3F-Specific Modules
+export * from './ui';
+export * from './editor';
+export * from './integration';
+export * from './pipeline';
+export * from './streaming';
+export * from './lod';
+export * from './solidifier';
 
-// Node System (NEW - Phase 1)
-export * from './nodes/index.js';
+// Additional Systems
+export * from './animation';
+export * from './particles';
+export * from './tags';
+export * from './math';
+export * from './io';
+export * from './optimization';
+export * from './debug';
+export * from './decorate';
+export * from './factory';
+export * from './bridge';
+export * from './shaders';
+export * from './examples';
 
-// Shared Types
-export * from './types.js';
-
-// Re-export commonly used types
-export type {
-  Node,
-  Variable,
-  Domain,
-  ObjectSetDomain,
-  NumericDomain,
-  PoseDomain,
-  BBoxDomain,
-  BooleanDomain
-} from './constraints/language/types.js';
-
-export type {
-  Relation,
-  AnyRelation,
-  Touching,
-  SupportedBy,
-  CoPlanar,
-  StableAgainst,
-  Facing,
-  Between,
-  AccessibleFrom,
-  ReachableFrom,
-  InFrontOf,
-  Aligned,
-  Hidden,
-  Visible,
-  Grouped,
-  Distributed,
-  Coverage,
-  SupportCoverage,
-  Stability,
-  Containment,
-  Proximity
-} from './constraints/language/relations.js';
-
-export type {
-  Tag,
-  TagSet,
-  SemanticsTag,
-  MaterialTag,
-  SurfaceTag,
-  RoomTag,
-  FunctionTag,
-  SizeTag,
-  StyleTag
-} from './tags/index.js';
-
-export type {
-  Move,
-  SolverState,
-  SimulatedAnnealingSolver,
-  GreedySolver
-} from './constraints/solver/index.js';
-
-export type { BBox } from './math/index.js';
-
-export type {
-  PathFinder,
-  DensityFunction
-} from './placement/index.js';
-
-// Pipeline & Export Systems (Phase 5)
-export * from './pipeline/SceneExporter.js';
-export * from './pipeline/AnnotationGenerator.js';
-export * from './pipeline/DataPipeline.js';
-export * from './pipeline/GroundTruthGenerator.js';
-export * from './pipeline/JobManager.js';
-export * from './pipeline/BatchProcessor.js';
-export * from './pipeline/types.js';
+// Types
+export type * from './types';

@@ -3,7 +3,7 @@
  * Visualizes constraint violations in the scene
  */
 import React from 'react';
-import { ViolationReport, ConstraintNode } from '../constraint-language/types';
+import { ViolationReport, ConstraintNode } from '../constraints/language/types';
 interface ViolationDebuggerProps {
     violations: ViolationReport[];
     constraints: ConstraintNode[];

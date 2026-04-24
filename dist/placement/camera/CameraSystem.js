@@ -4,10 +4,10 @@
  * Complete camera placement, cinematography, and trajectory system.
  * Ported from: placement/camera.py (30.7KB)
  */
-import { item } from '../../constraint-language/constants';
-import { Visible, Proximity, InFrontOf, Facing, } from '../../constraint-language/relations';
-import { FilterObjects, TagCondition, ForAll } from '../../constraint-language/set-reasoning';
-import { SCENE } from '../../constraint-language/constants';
+import { item } from '../../constraints/language/constants';
+import { Visible, Proximity, InFrontOf, Facing, } from '../../constraints/language/relations';
+import { FilterObjects, TagCondition, ForAll } from '../../constraints/language/set-reasoning';
+import { SCENE } from '../../constraints/language/constants';
 /**
  * Default camera properties by type
  */

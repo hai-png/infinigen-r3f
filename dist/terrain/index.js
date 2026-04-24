@@ -13,7 +13,7 @@ export { GroundCoverScatter, ClimbingPlantGenerator, } from './scatter';
 // Mesher
 export { TerrainMesher } from './mesher/TerrainMesher';
 // Biomes
-export { BiomeSystem } from './biomes/BiomeSystem';
+export { BiomeSystem } from '../biomes/core/BiomeSystem';
 // Vegetation
 export { VegetationScatter } from './vegetation/VegetationScatter';
 // Utilities
