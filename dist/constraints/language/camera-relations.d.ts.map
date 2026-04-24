@@ -1,0 +1,1 @@
+{"version":3,"file":"camera-relations.d.ts","sourceRoot":"","sources":["../../../src/constraints/language/camera-relations.ts"],"names":[],"mappings":"AAAA,eAAO,MAAM,eAAe;;;;CAAiG,CAAC;AAC9H,wBAAgB,MAAM,CAAC,MAAM,EAAE,GAAG,EAAE,OAAO,EAAE,GAAG,GAAG,GAAG,CAAgD;AACtG,wBAAgB,cAAc,CAAC,MAAM,EAAE,GAAG,EAAE,OAAO,EAAE,GAAG,GAAG,GAAG,CAAwD;AACtH,eAAe,eAAe,CAAC"}
