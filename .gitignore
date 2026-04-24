@@ -1,2 +1,32 @@
-# Documentation
-FINAL_ARCHITECTURE_AUDIT.md
+```
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Dependencies
+node_modules/
+.jest/
+.nyc_output/
+coverage/
+
+# Build artifacts
+dist/
+build/
+*.js.map
+*.ts.map
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+```

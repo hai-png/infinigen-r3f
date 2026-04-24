@@ -14,7 +14,7 @@ import {
   HybridProposalGenerator as HybridProposer
 } from './proposals/ProposalStrategies';
 import { SimulatedAnnealingSolver } from './sa-solver';
-import { bridge } from '../bridge/hybrid-bridge';
+import { bridge } from './bridge';
 import { SolverState, Proposal } from '../types';
 
 export interface SolverConfig {

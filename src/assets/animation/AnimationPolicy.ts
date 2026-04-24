@@ -10,7 +10,7 @@
  */
 
 import { Vector3 } from 'three';
-import { HybridBridge } from '../bridge/hybrid-bridge';
+import { HybridBridge } from '../../integration/bridge/hybrid-bridge';
 
 export interface AnimationClip {
   /** Unique identifier */
