@@ -1,10 +1,20 @@
 /**
- * Assets Index - Export all asset generation modules
+ * Asset Library
+ *
+ * Comprehensive asset generation system including:
+ * - Materials: Procedural material library
+ * - Objects: 3D object generators (furniture, decor, plants, creatures)
+ * - Composition: Scene composition rules and templates
+ * - Scatters: Scattering systems for vegetation, rocks, etc.
+ * - Weather: Atmospheric and weather effects
+ * - Lighting: Lighting setups and configurations
  */
-export * from './core/surface';
-export { AutoTag, tagSystem, printTagSummary, createTagAttribute, extractTagMask, combineTagMasks, type TagEntry, type ExtractedTags } from './core/AutoTag';
-export * from './lighting/index';
-export { BoulderFactory, BoulderConfig } from './geometries/boulder-factory';
-export { SimplePlantFactory, PlantConfig } from './geometries/plant-factory';
-export { TerrainFactory, TerrainConfig } from './geometries/terrain-factory';
+export * from './materials';
+export * from './objects';
+export * from './composition';
+export * from './scatters';
+export * from './weather';
+export * from './lighting';
+export * from './loaders';
+export * from './utils';
 //# sourceMappingURL=index.d.ts.map

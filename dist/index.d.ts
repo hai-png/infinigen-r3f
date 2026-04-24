@@ -1,33 +1,36 @@
 /**
- * Infinigen R3F - Main Entry Point
+ * Infinigen R3F - Procedural Generation Engine for React Three Fiber
  *
- * A complete TypeScript port of Infinigen's constraint-based procedural generation system
- * for React Three Fiber. This library enables real-time constraint-based scene composition
- * in the browser.
+ * A TypeScript port of the Infinigen procedural generation system,
+ * adapted for use with React Three Fiber and the React ecosystem.
  *
  * @packageDocumentation
  */
-export * from './tags/index.js';
-export * from './constraints/index.js';
-export * from './math/index.js';
-export * from './placement/index.js';
-export * from './sim/index.js';
-export * from './bridge/index.js';
-export * from './decorate/index.js';
-export * from './animation/index.js';
-export * from './nodes/index.js';
-export * from './types.js';
-export type { Node, Variable, Domain, ObjectSetDomain, NumericDomain, PoseDomain, BBoxDomain, BooleanDomain } from './constraints/language/types.js';
-export type { Relation, AnyRelation, Touching, SupportedBy, CoPlanar, StableAgainst, Facing, Between, AccessibleFrom, ReachableFrom, InFrontOf, Aligned, Hidden, Visible, Grouped, Distributed, Coverage, SupportCoverage, Stability, Containment, Proximity } from './constraints/language/relations.js';
-export type { Tag, TagSet, SemanticsTag, MaterialTag, SurfaceTag, RoomTag, FunctionTag, SizeTag, StyleTag } from './tags/index.js';
-export type { Move, SolverState, SimulatedAnnealingSolver, GreedySolver } from './constraints/solver/index.js';
-export type { BBox } from './math/index.js';
-export type { PathFinder, DensityFunction } from './placement/index.js';
-export * from './pipeline/SceneExporter.js';
-export * from './pipeline/AnnotationGenerator.js';
-export * from './pipeline/DataPipeline.js';
-export * from './pipeline/GroundTruthGenerator.js';
-export * from './pipeline/JobManager.js';
-export * from './pipeline/BatchProcessor.js';
-export * from './pipeline/types.js';
+export * from './core';
+export * from './assets';
+export * from './terrain';
+export * from './sim';
+export * from './datagen';
+export * from './tools';
+export * from './infinigen_gpl';
+export * from './ui';
+export * from './editor';
+export * from './integration';
+export * from './pipeline';
+export * from './streaming';
+export * from './lod';
+export * from './solidifier';
+export * from './animation';
+export * from './particles';
+export * from './tags';
+export * from './math';
+export * from './io';
+export * from './optimization';
+export * from './debug';
+export * from './decorate';
+export * from './factory';
+export * from './bridge';
+export * from './shaders';
+export * from './examples';
+export type * from './types';
 //# sourceMappingURL=index.d.ts.map

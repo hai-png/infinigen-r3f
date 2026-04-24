@@ -1,5 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
+import { SimulatedAnnealingSolver } from '../index';
 /**
  * React hook for running the Infinigen constraint solver.
  *

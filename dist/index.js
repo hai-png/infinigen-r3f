@@ -1,38 +1,44 @@
 /**
- * Infinigen R3F - Main Entry Point
+ * Infinigen R3F - Procedural Generation Engine for React Three Fiber
  *
- * A complete TypeScript port of Infinigen's constraint-based procedural generation system
- * for React Three Fiber. This library enables real-time constraint-based scene composition
- * in the browser.
+ * A TypeScript port of the Infinigen procedural generation system,
+ * adapted for use with React Three Fiber and the React ecosystem.
  *
  * @packageDocumentation
  */
-// Tag System
-export * from './tags/index.js';
-// Consolidated Constraint System (all submodules unified)
-export * from './constraints/index.js';
-// Math Utilities
-export * from './math/index.js';
-// Placement Algorithms
-export * from './placement/index.js';
-// SIM Module - Physics & Kinematics (NEW - Sprint 3)
-export * from './sim/index.js';
-// Hybrid Bridge (NEW - Sprint 4)
-export * from './bridge/index.js';
-// Room Decoration System (NEW - Sprint 5)
-export * from './decorate/index.js';
-// Animation Policy System (NEW - Sprint 6)
-export * from './animation/index.js';
-// Node System (NEW - Phase 1)
-export * from './nodes/index.js';
-// Shared Types
-export * from './types.js';
-// Pipeline & Export Systems (Phase 5)
-export * from './pipeline/SceneExporter.js';
-export * from './pipeline/AnnotationGenerator.js';
-export * from './pipeline/DataPipeline.js';
-export * from './pipeline/GroundTruthGenerator.js';
-export * from './pipeline/JobManager.js';
-export * from './pipeline/BatchProcessor.js';
-export * from './pipeline/types.js';
+// Core Engine Systems
+export * from './core';
+// Asset Library
+export * from './assets';
+// Terrain Generation
+export * from './terrain';
+// Simulation System
+export * from './sim';
+// Data Generation (placeholder)
+export * from './datagen';
+// Utility Tools (placeholder)
+export * from './tools';
+// GPL Module (placeholder)
+export * from './infinigen_gpl';
+// R3F-Specific Modules
+export * from './ui';
+export * from './editor';
+export * from './integration';
+export * from './pipeline';
+export * from './streaming';
+export * from './lod';
+export * from './solidifier';
+// Additional Systems
+export * from './animation';
+export * from './particles';
+export * from './tags';
+export * from './math';
+export * from './io';
+export * from './optimization';
+export * from './debug';
+export * from './decorate';
+export * from './factory';
+export * from './bridge';
+export * from './shaders';
+export * from './examples';
 //# sourceMappingURL=index.js.map
