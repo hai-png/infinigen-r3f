@@ -9,6 +9,7 @@ export * from './types';
 export { JobManager, type JobManagerOptions } from './JobManager';
 export { BatchProcessor, type BatchProcessorOptions } from './BatchProcessor';
 export { GroundTruthGenerator, type GroundTruthOptions, type GroundTruthResult } from './GroundTruthGenerator';
+export { ConfigParser, type SceneConfig } from './SceneConfigSystem';
 
 // Task Execution Framework (Sprint 2.1)
 export {

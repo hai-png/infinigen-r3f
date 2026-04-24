@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
-import { SeededRandom } from '../../../math/distributions';
+import { SeededRandom } from '../../../core/util/math/distributions';
 export class CabinetGenerator extends BaseObjectGenerator {
     getDefaultParams() {
         return {

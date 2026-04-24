@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 export class CupGenerator extends BaseObjectGenerator {
     constructor() {
         super(...arguments);

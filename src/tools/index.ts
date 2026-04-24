@@ -1,11 +1,25 @@
 /**
  * Utility Tools
- * 
+ *
  * Development and debugging tools for Infinigen.
- * Currently a placeholder - to be implemented.
+ * Based on Infinigen's tools/ module.
  */
 
-// TODO: Implement utility tools matching original Infinigen
-// Reference: infinigen/tools/ in original repository
+// Export toolkit for scene and asset export
+export { ExportToolkit, createExportToolkit } from './ExportToolkit';
+export type {
+  ExportFormat,
+  ExportOptions,
+  ExportResult,
+  ExportTransform,
+  LODSettings,
+  TextureExportSettings,
+} from './ExportToolkit';
 
-export const TOOLS_VERSION = '0.1.0';
+// Version info
+export const TOOLS_VERSION = '0.2.0';
+
+export default {
+  ExportToolkit,
+  createExportToolkit,
+};

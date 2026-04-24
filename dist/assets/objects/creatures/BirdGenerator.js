@@ -4,7 +4,7 @@
  */
 import { Group, Mesh } from 'three';
 import { CreatureBase, CreatureType } from './CreatureBase';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 import { WingGenerator } from './parts/WingGenerator';
 import { LegGenerator } from './parts/LegGenerator';
 import { BeakGenerator } from './parts/MouthGenerator';

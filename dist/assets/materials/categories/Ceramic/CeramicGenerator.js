@@ -4,8 +4,8 @@
  */
 import { Color, CanvasTexture } from 'three';
 import { BaseMaterialGenerator } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../../math/utils';
-import { Noise3D } from '../../../math/noise';
+import { FixedSeed } from '../../../core/util/math/utils';
+import { Noise3D } from '../../../core/util/math/noise';
 export class CeramicGenerator extends BaseMaterialGenerator {
     constructor() {
         super();

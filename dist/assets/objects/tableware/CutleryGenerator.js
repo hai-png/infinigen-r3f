@@ -62,7 +62,7 @@ var __disposeResources = (this && this.__disposeResources) || (function (Suppres
 });
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 export class CutleryGenerator extends BaseObjectGenerator {
     constructor() {
         super(...arguments);

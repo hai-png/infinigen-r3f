@@ -2,7 +2,7 @@
  * Decal Application System - Logo placement, labels, projected decals
  */
 import { CanvasTexture, Color, Vector3 } from 'three';
-import { FixedSeed } from '../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 export class DecalSystem {
     generateDecal(params, seed) {
         const rng = new FixedSeed(seed);

@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
+import { SeededRandom } from '../../../../core/util/MathUtils';
 export class GroundCoverGenerator extends BaseObjectGenerator {
     getDefaultConfig() {
         return { coverage: 1.0, density: 500, coverType: 'mixed', color: 0x8b7355 };

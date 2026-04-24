@@ -5,6 +5,15 @@
 
 export * from './types';
 export * from './utils/wind';
+export { InstanceScatterSystem } from './InstanceScatterSystem';
+export type {
+  ScatterInstance,
+  ScatterObject,
+  ScatterRules,
+  ScatterConfig,
+  ScatterResult,
+  Biome
+} from './InstanceScatterSystem';
 
 // Scatter registry for easy access
 import { FlowerScatter } from './types/FlowerScatter';

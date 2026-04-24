@@ -2,7 +2,7 @@
  * CreatureBase - Abstract base class for all creature generators
  * Provides framework for procedural creature generation with anatomy, materials, and animation hooks
  */
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
 export class CreatureBase extends BaseObjectGenerator {
     constructor(params = {}) {

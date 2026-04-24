@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
+import { SeededRandom } from '../../../../core/util/math/distributions';
 export class FruitTreeGenerator extends BaseObjectGenerator {
     getDefaultConfig() {
         return { height: 4.0, crownRadius: 2.0, fruitCount: 30, fruitType: 'apple' };

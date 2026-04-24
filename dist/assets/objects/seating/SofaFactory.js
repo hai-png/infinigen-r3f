@@ -6,8 +6,7 @@
  */
 import * as THREE from 'three';
 import { AssetFactory } from '../../utils/AssetFactory';
-import { SeededRandom } from '../../../../math/distributions';
-import { weightedSample } from '../../../../math/utils';
+import { SeededRandom, weightedSample } from '../../../../core/util/MathUtils';
 import { MeshUtils } from '../../utils/mesh';
 export class SofaFactory extends AssetFactory {
     constructor(factorySeed, coarse = false) {

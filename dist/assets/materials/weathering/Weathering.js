@@ -2,8 +2,8 @@
  * Weathering Effects - Rust, oxidation, moss, water stains, UV damage
  */
 import { CanvasTexture } from 'three';
-import { FixedSeed } from '../../math/utils';
-import { Noise3D } from '../../math/noise';
+import { FixedSeed } from '../../../core/util/math/utils';
+import { Noise3D } from '../../../core/util/math/noise';
 export class WeatheringGenerator {
     generate(params, seed) {
         const rng = new FixedSeed(seed);

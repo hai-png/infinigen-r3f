@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
+import { SeededRandom } from '../../../../core/util/math/distributions';
 export class FlowerGenerator extends BaseObjectGenerator {
     getDefaultConfig() {
         return { petalCount: 8, petalSize: 0.05, stemHeight: 0.3, flowerType: 'daisy', color: 0xffffff };

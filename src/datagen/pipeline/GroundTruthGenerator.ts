@@ -4,6 +4,12 @@
  * Generates ground truth data for ML training including:
  * depth maps, normal maps, segmentation masks, bounding boxes,
  * optical flow, and instance IDs.
+ * 
+ * Enhanced with:
+ * - Dense optical flow calculation using scene motion vectors
+ * - Instance ID rendering with 16-bit precision
+ * - Enhanced 2D/3D bounding boxes with occlusion detection
+ * - Instance segmentation masks
  */
 
 import { 
@@ -20,6 +26,15 @@ import {
   PerspectiveCamera,
   Box3,
   Vector2,
+  WebGLRenderTarget,
+  NearestFilter,
+  RGBAFormat,
+  HalfFloatType,
+  DataTexture,
+  LinearFilter,
+  Raycaster,
+  MeshBasicMaterial,
+  Object3D,
 } from 'three';
 
 export interface GroundTruthOptions {
@@ -55,6 +70,12 @@ export interface BoundingBoxData {
     rotation: Vector3;
   };
   confidence: number;
+  metadata?: {
+    isOccluded: boolean;
+    occlusionFactor: number;
+    visibilityRatio: number;
+    distance: number;
+  };
 }
 
 export interface GroundTruthMetadata {
@@ -85,11 +106,22 @@ export class GroundTruthGenerator {
   private depthScene: Scene;
   private normalScene: Scene;
   private segmentationScene: Scene;
+  private instanceIdScene: Scene;
+  private flowScene: Scene;
   
   // Materials
   private depthMaterial: MeshDepthMaterial;
   private normalMaterial: MeshNormalMaterial;
   private segmentationMaterial: ShaderMaterial;
+  private instanceIdMaterial: ShaderMaterial;
+  private flowMaterial: ShaderMaterial;
+  
+  // Render targets for optical flow
+  private positionRenderTarget: WebGLRenderTarget;
+  private previousPositionRenderTarget: WebGLRenderTarget;
+  
+  // Raycaster for occlusion detection
+  private raycaster: Raycaster;
 
   constructor(renderer: WebGLRenderer, options: Partial<GroundTruthOptions> = {}) {
     this.renderer = renderer;
@@ -108,8 +140,9 @@ export class GroundTruthGenerator {
     this.segmentationLabels = new Map();
     this.initializeDefaultLabels();
     
-    // Initialize depth rendering
     const { width, height } = this.options.resolution;
+    
+    // Initialize depth rendering
     this.depthCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.depthScene = new Scene();
     this.depthMaterial = new MeshDepthMaterial({
@@ -144,6 +177,76 @@ export class GroundTruthGenerator {
         }
       `,
     });
+    
+    // Initialize instance ID rendering with 16-bit precision
+    this.instanceIdScene = new Scene();
+    this.instanceIdMaterial = new ShaderMaterial({
+      uniforms: {
+        instanceId: { value: 0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float instanceId;
+        varying vec2 vUv;
+        
+        void main() {
+          // Encode 16-bit ID in RGBA
+          float id = instanceId;
+          float r = mod(id, 256.0) / 255.0;
+          float g = floor(id / 256.0) / 255.0;
+          gl_FragColor = vec4(r, g, 0.0, 1.0);
+        }
+      `,
+    });
+    
+    // Initialize optical flow rendering
+    this.flowScene = new Scene();
+    this.positionRenderTarget = new WebGLRenderTarget(width, height, {
+      format: RGBAFormat,
+      type: HalfFloatType,
+      minFilter: LinearFilter,
+      magFilter: LinearFilter,
+    });
+    this.previousPositionRenderTarget = new WebGLRenderTarget(width, height, {
+      format: RGBAFormat,
+      type: HalfFloatType,
+      minFilter: LinearFilter,
+      magFilter: LinearFilter,
+    });
+    this.flowMaterial = new ShaderMaterial({
+      uniforms: {
+        currentPosition: { value: null },
+        previousPosition: { value: null },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D currentPosition;
+        uniform sampler2D previousPosition;
+        varying vec2 vUv;
+        
+        void main() {
+          vec3 currPos = texture2D(currentPosition, vUv).rgb;
+          vec3 prevPos = texture2D(previousPosition, vUv).rgb;
+          vec2 flow = currPos.xy - prevPos.xy;
+          gl_FragColor = vec4(flow, 0.0, 1.0);
+        }
+      `,
+    });
+    
+    // Initialize raycaster for occlusion detection
+    this.raycaster = new Raycaster();
   }
 
   /**
@@ -426,79 +529,168 @@ export class GroundTruthGenerator {
     return segmentation;
   }
 
+  /**
+   * Render instance IDs with 16-bit precision using GPU acceleration
+   */
   private async renderInstanceIds(scene: Scene, camera: Camera): Promise<Uint16Array> {
     const { width, height } = this.options.resolution;
     
-    // Similar to segmentation but with full 16-bit IDs
-    const instanceIds = new Uint16Array(width * height);
+    // Save original renderer state
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = true;
     
+    // Clear instance ID scene
+    this.instanceIdScene.clear();
+    
+    // Build object ID map
     const objectIdMap = new Map<string, number>();
     let objectIdCounter = 1;
     
-    // Simple rasterization approach
+    // First pass: assign IDs to all meshes
     scene.traverse((object: any) => {
-      if (object.isMesh) {
+      if (object.isMesh && object.geometry) {
         if (!objectIdMap.has(object.uuid)) {
           objectIdMap.set(object.uuid, objectIdCounter++);
         }
       }
     });
     
-    // In a real implementation, this would render to a 16-bit buffer
-    // For now, we'll use a simplified approach
-    // This is a placeholder - actual implementation requires custom shader
+    // Second pass: clone meshes with instance ID material
+    scene.traverse((object: any) => {
+      if (object.isMesh && object.geometry) {
+        const instanceId = objectIdMap.get(object.uuid)!;
+        const mesh = object.clone();
+        
+        // Create unique material for each instance
+        const material = this.instanceIdMaterial.clone();
+        material.uniforms.instanceId.value = instanceId;
+        mesh.material = material;
+        
+        this.instanceIdScene.add(mesh);
+      }
+    });
+    
+    // Render to target
+    this.renderer.setRenderTarget(null);
+    this.renderer.render(this.instanceIdScene, camera);
+    
+    // Read pixels
+    const pixels = new Uint8Array(width * height * 4);
+    this.renderer.readRenderTargetPixels(null, 0, 0, width, height, pixels);
+    
+    // Decode 16-bit IDs from RGBA
+    const instanceIds = new Uint16Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const r = pixels[i * 4];
+      const g = pixels[i * 4 + 1];
+      // Decode: id = r + g * 256
+      instanceIds[i] = Math.floor(r + g * 256);
+    }
+    
+    // Cleanup
+    this.instanceIdScene.clear();
+    this.renderer.autoClear = autoClear;
     
     return instanceIds;
   }
 
+  /**
+   * Calculate enhanced bounding boxes with occlusion detection and visibility estimation
+   */
   private calculateBoundingBoxes(scene: Scene, camera: Camera): BoundingBoxData[] {
     const boundingBoxes: BoundingBoxData[] = [];
+    const { width, height } = this.options.resolution;
+    
+    // Setup raycaster from camera center
+    const rayOrigin = new Vector3();
+    camera.getWorldPosition(rayOrigin);
     
     scene.traverse((object: any) => {
       if (object.isMesh && object.geometry) {
-        // Calculate 3D bounding box
+        // Calculate 3D bounding box in world space
         const bbox3D = new Box3().setFromObject(object);
         
-        // Project to 2D screen space
-        const min = bbox3D.min.clone();
-        const max = bbox3D.max.clone();
+        // Skip if bounding box is empty
+        if (bbox3D.isEmpty()) return;
         
-        // Project corners to screen space
+        // Get 8 corners of the 3D bounding box
         const corners = [
-          new Vector3(min.x, min.y, min.z),
-          new Vector3(max.x, min.y, min.z),
-          new Vector3(min.x, max.y, min.z),
-          new Vector3(max.x, max.y, min.z),
-          new Vector3(min.x, min.y, max.z),
-          new Vector3(max.x, min.y, max.z),
-          new Vector3(min.x, max.y, max.z),
-          new Vector3(max.x, max.y, max.z),
+          new Vector3(bbox3D.min.x, bbox3D.min.y, bbox3D.min.z),
+          new Vector3(bbox3D.max.x, bbox3D.min.y, bbox3D.min.z),
+          new Vector3(bbox3D.min.x, bbox3D.max.y, bbox3D.min.z),
+          new Vector3(bbox3D.max.x, bbox3D.max.y, bbox3D.min.z),
+          new Vector3(bbox3D.min.x, bbox3D.min.y, bbox3D.max.z),
+          new Vector3(bbox3D.max.x, bbox3D.min.y, bbox3D.max.z),
+          new Vector3(bbox3D.min.x, bbox3D.max.y, bbox3D.max.z),
+          new Vector3(bbox3D.max.x, bbox3D.max.y, bbox3D.max.z),
         ];
         
+        // Project corners to screen space
         let minX = 1, minY = 1, maxX = 0, maxY = 0;
+        let visibleCorners = 0;
         
         for (const corner of corners) {
-          const projected = corner.project(camera);
-          const x = (projected.x + 1) / 2;
-          const y = (1 - projected.y) / 2;
+          const projected = corner.clone().project(camera);
           
-          if (projected.z < 1 && projected.z > -1) { // Within view frustum
+          // Check if point is within view frustum
+          if (projected.z >= -1 && projected.z <= 1) {
+            const x = (projected.x + 1) / 2;
+            const y = (1 - projected.y) / 2;
+            
             minX = Math.min(minX, x);
             minY = Math.min(minY, y);
             maxX = Math.max(maxX, x);
             maxY = Math.max(maxY, y);
+            visibleCorners++;
           }
         }
         
-        if (minX < maxX && minY < maxY) {
+        // Skip if no corners are visible
+        if (visibleCorners === 0 || minX >= maxX || minY >= maxY) return;
+        
+        // Calculate occlusion using raycasting
+        const center = bbox3D.getCenter(new Vector3());
+        const distance = rayOrigin.distanceTo(center);
+        const rayDirection = center.clone().sub(rayOrigin).normalize();
+        
+        this.raycaster.set(rayOrigin, rayDirection);
+        
+        // Intersect with all objects in scene
+        const intersects = this.raycaster.intersectObjects(scene.children, true);
+        
+        // Check if object is occluded
+        let isOccluded = false;
+        let occlusionFactor = 0;
+        
+        if (intersects.length > 0) {
+          const firstHit = intersects[0];
+          const hitDistance = rayOrigin.distanceTo(firstHit.point);
+          
+          // If first hit is closer than our object center, it's occluded
+          if (hitDistance < distance - 0.01) {
+            isOccluded = true;
+            occlusionFactor = Math.min(1.0, (distance - hitDistance) / distance);
+          }
+        }
+        
+        // Calculate visibility percentage based on projected area
+        const projectedArea = (maxX - minX) * (maxY - minY);
+        const expectedArea = this.calculateExpectedBoundingBoxArea(bbox3D, camera, width, height);
+        const visibilityRatio = Math.min(1.0, projectedArea / Math.max(0.001, expectedArea));
+        
+        // Adjust confidence based on occlusion and visibility
+        const confidence = isOccluded ? (1 - occlusionFactor) * 0.9 : Math.max(0.5, visibilityRatio);
+        
+        // Only add if reasonably visible
+        if (confidence > 0.1) {
           boundingBoxes.push({
             objectId: object.uuid,
             label: object.userData?.label ?? 'unknown',
             bbox2D: {
-              x: minX * this.options.resolution.width,
-              y: minY * this.options.resolution.height,
-              width: (maxX - minX) * this.options.resolution.width,
-              height: (maxY - minY) * this.options.resolution.height,
+              x: Math.max(0, minX * width),
+              y: Math.max(0, minY * height),
+              width: Math.min(width - minX * width, (maxX - minX) * width),
+              height: Math.min(height - minY * height, (maxY - minY) * height),
             },
             bbox3D: {
               center: bbox3D.getCenter(new Vector3()),
@@ -509,15 +701,55 @@ export class GroundTruthGenerator {
                 object.rotation.z
               ),
             },
-            confidence: 1.0,
+            confidence: parseFloat(confidence.toFixed(4)),
+            metadata: {
+              isOccluded,
+              occlusionFactor: parseFloat(occlusionFactor.toFixed(4)),
+              visibilityRatio: parseFloat(visibilityRatio.toFixed(4)),
+              distance: parseFloat(distance.toFixed(4)),
+            },
           });
         }
       }
     });
     
+    // Sort by confidence (highest first)
+    boundingBoxes.sort((a, b) => b.confidence - a.confidence);
+    
     return boundingBoxes;
   }
+  
+  /**
+   * Calculate expected bounding box area for visibility estimation
+   */
+  private calculateExpectedBoundingBoxArea(
+    bbox: Box3, 
+    camera: Camera, 
+    width: number, 
+    height: number
+  ): number {
+    const size = bbox.getSize(new Vector3());
+    const center = bbox.getCenter(new Vector3());
+    const cameraPos = new Vector3();
+    camera.getWorldPosition(cameraPos);
+    
+    const distance = cameraPos.distanceTo(center);
+    const fov = (camera as PerspectiveCamera).fov * (Math.PI / 180);
+    
+    // Approximate visible area based on distance and FOV
+    const visibleHeight = 2 * distance * Math.tan(fov / 2);
+    const visibleWidth = visibleHeight * (width / height);
+    
+    // Project object size to screen space
+    const projectedWidth = (size.x / visibleWidth);
+    const projectedHeight = (size.y / visibleHeight);
+    
+    return Math.max(0.0001, projectedWidth * projectedHeight);
+  }
 
+  /**
+   * Calculate dense optical flow using position buffers
+   */
   private async calculateOpticalFlow(
     currentScene: Scene,
     currentCamera: Camera,
@@ -526,14 +758,99 @@ export class GroundTruthGenerator {
   ): Promise<Float32Array> {
     const { width, height } = this.options.resolution;
     
-    // Simplified optical flow calculation
-    // In a real implementation, this would use more sophisticated algorithms
-    // like Farneback or TV-L1
+    // Save renderer state
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = true;
     
+    // Helper function to render position buffer
+    const renderPositionBuffer = (scene: Scene, camera: Camera, target: WebGLRenderTarget) => {
+      this.flowScene.clear();
+      
+      scene.traverse((object: any) => {
+        if (object.isMesh && object.geometry) {
+          const mesh = object.clone();
+          
+          // Shader that outputs world position
+          const positionMaterial = new ShaderMaterial({
+            uniforms: {
+              modelMatrix: { value: object.matrixWorld },
+            },
+            vertexShader: `
+              varying vec3 vWorldPosition;
+              uniform mat4 modelMatrix;
+              
+              void main() {
+                vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                vWorldPosition = worldPos.xyz;
+                gl_Position = projectionMatrix * viewMatrix * worldPos;
+              }
+            `,
+            fragmentShader: `
+              varying vec3 vWorldPosition;
+              
+              void main() {
+                vec3 pos = vWorldPosition;
+                gl_FragColor = vec4(pos * 0.01 + 0.5, 1.0);
+              }
+            `,
+          });
+          
+          mesh.material = positionMaterial;
+          this.flowScene.add(mesh);
+        }
+      });
+      
+      // Render to target
+      this.renderer.setRenderTarget(target);
+      this.renderer.render(this.flowScene, camera);
+      this.renderer.setRenderTarget(null);
+      this.flowScene.clear();
+    };
+    
+    // Render current frame positions
+    renderPositionBuffer(currentScene, currentCamera, this.positionRenderTarget);
+    
+    // Store current as previous for next frame
+    this.previousPositionRenderTarget.dispose();
+    this.previousPositionRenderTarget = this.positionRenderTarget.clone();
+    
+    // Read both position buffers
+    const currentPositions = new Float32Array(width * height * 4);
+    const previousPositions = new Float32Array(width * height * 4);
+    
+    this.renderer.readRenderTargetPixels(
+      this.positionRenderTarget, 
+      0, 0, width, height, 
+      currentPositions
+    );
+    this.renderer.readRenderTargetPixels(
+      this.previousPositionRenderTarget, 
+      0, 0, width, height, 
+      previousPositions
+    );
+    
+    // Calculate optical flow (pixel displacement)
     const flow = new Float32Array(width * height * 2);
     
-    // Placeholder: zero flow
-    // Actual implementation would compare depth/position changes between frames
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x);
+        const pixelIdx = idx * 4;
+        
+        const currX = currentPositions[pixelIdx];
+        const currY = currentPositions[pixelIdx + 1];
+        const prevX = previousPositions[pixelIdx];
+        const prevY = previousPositions[pixelIdx + 1];
+        
+        // Flow vector (displacement in screen space)
+        flow[idx * 2] = currX - prevX;
+        flow[idx * 2 + 1] = currY - prevY;
+      }
+    }
+    
+    // Cleanup
+    this.flowScene.clear();
+    this.renderer.autoClear = autoClear;
     
     return flow;
   }

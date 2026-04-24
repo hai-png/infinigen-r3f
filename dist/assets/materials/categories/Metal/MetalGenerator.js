@@ -3,7 +3,7 @@
  */
 import { Color, CanvasTexture } from 'three';
 import { BaseMaterialGenerator } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 export class MetalGenerator extends BaseMaterialGenerator {
     constructor() { super(); }
     getDefaultParams() { return { ...MetalGenerator.DEFAULT_PARAMS }; }

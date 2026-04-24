@@ -2,7 +2,7 @@
  * Procedural Pattern Generator - Stripes, checks, dots, geometric, organic
  */
 import { CanvasTexture, Color } from 'three';
-import { FixedSeed } from '../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 export class PatternGenerator {
     generate(params, seed) {
         const rng = new FixedSeed(seed);

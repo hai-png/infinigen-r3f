@@ -2,8 +2,8 @@
  * Material Blending System - Multi-material mixing, gradient blends, mask-based blending
  */
 import { CanvasTexture } from 'three';
-import { FixedSeed } from '../../math/utils';
-import { Noise3D } from '../../math/noise';
+import { FixedSeed } from '../../../core/util/math/utils';
+import { Noise3D } from '../../../core/util/math/noise';
 export class MaterialBlender {
     blend(params, seed) {
         const rng = new FixedSeed(seed);

@@ -3,7 +3,7 @@
  * Generates various window types: casement, double-hung, bay, skylights
  */
 import { Group, BoxGeometry, MeshStandardMaterial, Color } from 'three';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 import { BaseObjectGenerator } from './BaseObjectGenerator';
 export class WindowGenerator extends BaseObjectGenerator {
     getDefaultParams() {

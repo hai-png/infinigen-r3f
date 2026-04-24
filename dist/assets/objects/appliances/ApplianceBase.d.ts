@@ -10,7 +10,7 @@
  */
 import { Object3D, Group, Mesh } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { BBox } from '../../math/transforms';
+import { BBox } from '../../../core/util/math/transforms';
 export interface ApplianceParams {
     width: number;
     height: number;

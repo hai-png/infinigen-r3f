@@ -6,7 +6,7 @@
  */
 import { Group, Mesh } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { BBox } from '../../math/transforms';
+import { BBox } from '../../../core/util/math/transforms';
 export interface WallDecorParams {
     decorType: 'picture' | 'mirror' | 'art' | 'clock' | 'shelf';
     style: 'modern' | 'traditional' | 'minimal' | 'industrial' | 'bohemian';

@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
+import { SeededRandom } from '../../../../core/util/math/distributions';
 export class DeadWoodGenerator extends BaseObjectGenerator {
     getDefaultConfig() {
         return { length: 3.0, radius: 0.3, woodType: 'fallen_log', decay: 0.2 };
