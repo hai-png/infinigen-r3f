@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { Vector3 } from '../../math/vector';
+import { Vector3 } from '../../../core/util/math/vector';
 
 // ============================================================================
 // Type Definitions

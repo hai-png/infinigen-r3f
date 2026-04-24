@@ -3,26 +3,21 @@
  * Based on Infinigen's placement system
  */
 
-export { AssetFactory, createAssetCollection } from './factory';
+// Advanced placement and scattering
+export { ScatterSystem } from './advanced/ScatterSystem';
+export type { ScatterConfig, ScatteredInstance } from './advanced/ScatterSystem';
+
+// Asset factory for procedural generation
+export { AssetFactory } from './utils/AssetFactory';
 export type { 
-  FactoryConfig, 
-  AssetParameters, 
-  AssetFactoryInterface 
-} from './factory';
+  AssetFactoryOptions,
+  AssetDescription
+} from './utils/AssetFactory';
 
-// Instance scattering with Poisson disk sampling
-export { InstanceScatter } from './instance-scatter';
-export type { ScatterConfig, ScatterPoint, ScatterResult } from './instance-scatter';
-
-// To be implemented:
-// export * from './detail';
-// export * from './density';
-// export * from './path-finding';
-// export * from './split-in-view';
-// export * from './animation-policy';
+// Domain types
+export type { ConstraintGraph, Node, Edge } from './domain/types';
 
 export default {
+  ScatterSystem,
   AssetFactory,
-  createAssetCollection,
-  InstanceScatter,
 };

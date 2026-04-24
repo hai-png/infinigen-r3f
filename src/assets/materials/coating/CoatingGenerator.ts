@@ -3,7 +3,7 @@
  */
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 
 export interface CoatingParams {
   type: 'varnish' | 'lacquer' | 'paint' | 'powder' | 'anodized';

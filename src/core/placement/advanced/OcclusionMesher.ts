@@ -8,7 +8,7 @@
  */
 
 import { Vector3, Box3, Mesh, BufferGeometry } from 'three';
-import { BBox } from '../math/bbox';
+import { BBox } from '../util/math/bbox';
 
 // ============================================================================
 // Configuration Types

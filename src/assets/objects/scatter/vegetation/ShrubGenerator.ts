@@ -3,8 +3,8 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
-import { Noise3D } from '../../../../math/noise';
+import { SeededRandom } from '../../../../core/util/math/distributions';
+import { Noise3D } from '../../../../core/util/math/noise';
 
 export type ShrubType = 'boxwood' | 'hydrangea' | 'lavender' | 'juniper' | 'rhododendron';
 export interface ShrubConfig {

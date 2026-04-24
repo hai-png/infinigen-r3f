@@ -3,8 +3,8 @@
  */
 import { Color, Texture, CanvasTexture } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../../math/utils';
-import { Noise3D } from '../../../math/noise';
+import { FixedSeed } from '../../../core/util/math/utils';
+import { Noise3D } from '../../../core/util/math/noise';
 
 export interface LeatherParams {
   type: 'full-grain' | 'top-grain' | 'suede' | 'distressed' | 'patent';

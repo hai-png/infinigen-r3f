@@ -13,7 +13,7 @@
 import { Node, RelationNode, Variable } from '../../language/types.js';
 import { State } from '../state.js';
 import * as THREE from 'three';
-import { BBox } from '../../../math/bbox.js';
+import { BBox } from '../../../core/util/math/bbox';
 
 /**
  * Symmetry constraint result

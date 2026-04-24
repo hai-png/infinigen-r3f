@@ -10,7 +10,7 @@
  */
 
 import { Vector3, Raycaster, Mesh, BufferGeometry, Matrix4 } from 'three';
-import { BBox } from '../math/bbox';
+import { BBox } from '../util/math/bbox';
 import { TagQuery } from '../tags';
 
 // ============================================================================

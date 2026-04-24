@@ -199,7 +199,13 @@ export function intervalMidpoint(i: Interval): number {
 /**
  * Simple Mulberry32 PRNG for seeded randomness.
  */
-export class SeededRandom {
+export interface RandomGenerator {
+  next(): number;
+  nextInt(min: number, max: number): number;
+  nextFloat(min: number, max: number): number;
+}
+
+export class SeededRandom implements RandomGenerator {
   private seed: number;
 
   constructor(seed: number) {
@@ -275,6 +281,32 @@ export function randomInt(min: number, max: number): number {
 
 export function randomChoice<T>(array: T[]): T {
   return globalRng.choice(array);
+}
+
+/**
+ * Weighted random sample from an array.
+ * If weights are provided, uses them for selection probability.
+ * Otherwise falls back to uniform random choice.
+ */
+export function weightedSample<T>(items: T[], rng?: SeededRandom, weights?: number[]): T {
+  const random = rng || globalRng;
+  
+  if (!weights || weights.length === 0) {
+    return random.choice(items);
+  }
+  
+  // Normalize weights
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let r = random.uniform() * total;
+  
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i];
+    if (r <= 0) {
+      return items[i];
+    }
+  }
+  
+  return items[items.length - 1];
 }
 
 // ============================================================================
@@ -622,4 +654,52 @@ function hash2D(x: number, y: number): number {
   let h = (x * 374761393 + y * 668265263) | 0;
   h = (h ^ (h >> 13)) * 1274126177;
   return Math.abs(h & 0x7fffffff);
+}
+
+// ============================================================================
+// Additional Utility Functions (for backward compatibility)
+// ============================================================================
+
+/**
+ * Clamp a value between min and max
+ */
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Linear interpolation between two values
+ */
+export function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/**
+ * Inverse linear interpolation - finds t given value between a and b
+ */
+export function inverseLerp(a: number, b: number, value: number): number {
+  if (Math.abs(b - a) < 0.0001) return 0;
+  return (value - a) / (b - a);
+}
+
+/**
+ * Map a value from one range to another
+ */
+export function mapRange(value: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
+  const t = inverseLerp(inMin, inMax, value);
+  return lerp(outMin, outMax, t);
+}
+
+/**
+ * Convert degrees to radians
+ */
+export function degToRad(degrees: number): number {
+  return degrees * (Math.PI / 180);
+}
+
+/**
+ * Convert radians to degrees
+ */
+export function radToDeg(radians: number): number {
+  return radians * (180 / Math.PI);
 }

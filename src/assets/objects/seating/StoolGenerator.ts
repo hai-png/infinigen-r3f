@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator, ObjectStylePreset } from './BaseObjectGenerator';
 import { ObjectRegistry } from './ObjectRegistry';
-import { SeededRandom } from '../../math/distributions';
+import { SeededRandom } from '../../../core/util/math/distributions';
 import { extrudeShape } from '../../assets/utils/curves';
 import { mirrorMesh, mergeMeshes } from '../../assets/utils/mesh';
 

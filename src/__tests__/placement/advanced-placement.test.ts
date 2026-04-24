@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Vector3, BoxGeometry, Mesh } from 'three';
-import { BBox } from '../../math/bbox';
+import { BBox } from '../../../core/util/math/bbox';
 import {
   PoissonDiskSampler,
   RelaxationSolver,

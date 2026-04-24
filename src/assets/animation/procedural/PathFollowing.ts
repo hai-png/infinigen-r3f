@@ -1,5 +1,5 @@
-import { Vector3 } from '../../math/vector';
-import { Quaternion } from '../../math/quaternion';
+import { Vector3 } from '../../../core/util/math/vector';
+import { Quaternion } from '../../../core/util/math/quaternion';
 
 /**
  * Spline Types

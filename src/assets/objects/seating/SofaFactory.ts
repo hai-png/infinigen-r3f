@@ -7,8 +7,7 @@
 
 import * as THREE from 'three';
 import { AssetFactory, AssetParameters } from '../../utils/AssetFactory';
-import { SeededRandom } from '../../../../math/distributions';
-import { weightedSample } from '../../../../math/utils';
+import { SeededRandom, weightedSample } from '../../../../core/util/MathUtils';
 import { MeshUtils } from '../../utils/mesh';
 
 export type SofaStyle = 'modern' | 'traditional' | 'sectional' | 'loveseat';

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SceneObject } from '../../types';
-import { BBox } from '../../../math/bbox';
+import { BBox } from '../../../core/util/math/bbox';
 
 /**
  * Viewpoint selection algorithms for optimal camera placement

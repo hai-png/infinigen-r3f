@@ -1,45 +1,25 @@
 /**
  * Math Utilities Module
- *
- * Exports mathematical utilities including bounding boxes,
- * vector operations, and hash functions.
+ * Centralized math operations for 3D graphics, noise, and random number generation
  */
 
-// Vector types and operations
-export {
-  Vector3,
-  vec3,
-  add,
-  sub,
-  mul,
-  div,
-  dot,
-  cross,
-  length,
-  lengthSq,
-  normalize,
-  distance,
-  distanceSq,
-  lerp,
-  negate,
-  clone,
-  equals,
-  scaleToLength,
-  project,
-  reject,
-  reflect,
-  min as vecMin,
-  max as vecMax,
-  abs as vecAbs,
-  ZERO,
-  UNIT_X,
-  UNIT_Y,
-  UNIT_Z
-} from './vector.js';
+// Re-export everything from MathUtils
+export * from '../MathUtils';
 
-// Bounding box operations
-export {
-  BBox,
-  unionBBoxes,
-  intersectBBoxes
-} from './bbox.js';
+// Re-export sub-modules for organized imports
+export { SeededRandom } from './distributions';
+export type { RandomGenerator } from './distributions';
+
+export { 
+  noise3D, 
+  noise2D, 
+  voronoi2D, 
+  ridgedMultifractal,
+  fbm,
+  Noise3D 
+} from './noise';
+export type { NoiseFunction } from './noise';
+
+export * from './vector';
+export * from './bbox';
+export * from './utils';

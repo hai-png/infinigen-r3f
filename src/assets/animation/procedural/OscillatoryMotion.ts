@@ -1,4 +1,4 @@
-import { Vector3 } from '../../math/vector';
+import { Vector3 } from '../../../core/util/math/vector';
 
 /**
  * Wave Types for oscillatory motion

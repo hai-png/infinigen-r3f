@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
+import { SeededRandom } from '../../../../core/util/MathUtils';
 
 export type GroundCoverType = 'leaves' | 'twigs' | 'pebbles' | 'mixed';
 export interface GroundCoverConfig {

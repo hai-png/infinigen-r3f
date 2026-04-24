@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
+import { SeededRandom } from '../../../../core/util/math/distributions';
 
 export type FruitType = 'apple' | 'orange' | 'cherry' | 'peach' | 'pear';
 export interface FruitTreeConfig {

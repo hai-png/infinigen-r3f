@@ -7,8 +7,8 @@
 
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../math/distributions';
-import { Noise3D } from '../../../../math/noise';
+import { SeededRandom } from '../../../../core/util/math/distributions';
+import { Noise3D } from '../../../../core/util/math/noise';
 
 export type GrassSpecies = 'rye' | 'fescue' | 'bermuda' | 'kentucky_bluegrass' | 'st_augustine' | 'zoysia';
 export type GrassStyle = 'natural' | 'manicured' | 'wild' | 'dry';

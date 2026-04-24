@@ -11,7 +11,7 @@
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, ConeGeometry, TorusGeometry } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { BBox } from '../../math/transforms';
+import { BBox } from '../../../core/util/math/transforms';
 
 export interface LampParams {
   style: 'modern' | 'traditional' | 'industrial' | 'minimal' | 'art-deco';

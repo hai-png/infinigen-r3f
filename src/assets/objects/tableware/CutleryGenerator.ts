@@ -11,7 +11,7 @@
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 
 export interface CutleryParams {
   type: 'fork' | 'knife' | 'spoon';

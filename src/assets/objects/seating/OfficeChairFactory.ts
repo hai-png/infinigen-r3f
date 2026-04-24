@@ -7,8 +7,7 @@
 
 import * as THREE from 'three';
 import { AssetFactory } from '../../utils/AssetFactory';
-import { SeededRandom } from '../../../../math/distributions';
-import { weightedSample } from '../../../../math/utils';
+import { SeededRandom, weightedSample } from '../../../../core/util/MathUtils';
 
 export interface OfficeChairConfig {
   // Dimensions

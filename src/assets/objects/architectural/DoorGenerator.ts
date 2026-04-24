@@ -4,7 +4,7 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, MeshStandardMaterial, Color } from 'three';
-import { FixedSeed } from '../../../math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 import { BaseObjectGenerator } from './BaseObjectGenerator';
 
 export interface DoorParams {
