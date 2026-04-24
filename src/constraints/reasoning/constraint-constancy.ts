@@ -5,7 +5,7 @@
 // Authors: Alexander Raistrick
 // Ported to TypeScript for React Three Fiber
 
-import { Node, ScalarOperatorExpression, BoolOperatorExpression, ScalarConstant, BoolConstant } from '../constraint-language';
+import { Node, ScalarOperatorExpression, BoolOperatorExpression, ScalarConstant, BoolConstant } from '../language';
 
 /**
  * Check if a constraint language node is a constant (can be evaluated without scene state)

@@ -7,9 +7,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 // Mock modules
-jest.mock('../../constraint-language/types', () => ({}));
-jest.mock('../../solver/moves', () => ({}));
-jest.mock('../../evaluator/evaluate', () => ({
+jest.mock('../../constraints/language/types', () => ({}));
+jest.mock('../../constraints/solver/moves', () => ({}));
+jest.mock('../../constraints/evaluator/evaluate', () => ({
   evaluateProblem: jest.fn(() => ({ violations: [] })),
 }));
 

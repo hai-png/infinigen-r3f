@@ -2,8 +2,8 @@
  * UI System Types
  */
 
-import { Constraint, Expression } from '../constraint-language/types';
-import { SolverState } from '../solver/moves';
+import { Constraint, Expression } from '../constraints/language/types';
+import { SolverState } from '../constraints/solver/moves';
 import { SceneObject } from '../types';
 
 export interface UIPanelProps {

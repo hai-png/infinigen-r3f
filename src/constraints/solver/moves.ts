@@ -15,8 +15,8 @@
  */
 
 import { Vector3 } from '../math/index.js';
-import { State, ObjectState } from '../evaluator/state.js';
-import { Problem } from '../constraint-language/constants.js';
+import { State, ObjectState } from '../constraints/evaluator/state.js';
+import { Problem } from '../language/constants.js';
 import { Semantics } from '../tags/index.js';
 
 /**

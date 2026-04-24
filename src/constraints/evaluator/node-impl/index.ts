@@ -6,9 +6,9 @@
  * Implements evaluation logic for specific constraint node types.
  */
 
-import { Node } from '../../constraint-language/types.js';
+import { Node } from '../../language/types.js';
 import { State } from '../state.js';
-import { Relation } from '../../constraint-language/relations.js';
+import { Relation } from '../../language/relations.js';
 import { geometryNodeImpls } from './trimesh-geometry.js';
 import { symmetryNodeImpls } from './symmetry.js';
 
@@ -32,8 +32,8 @@ function defaultHandler(node: Node, state: State, childVals: Map<string, any>, k
 // Auto-register geometry-based relations on module load
 export function registerGeometryNodeImpls(): void {
   // Dynamic import to avoid circular dependencies
-  import('../../constraint-language/geometry.js').then(({ Distance }) => {
-    import('../../constraint-language/relations.js').then(({ Touching, SupportedBy, StableAgainst, Coverage, CoPlanar, Facing, AccessibleFrom, Visible, Hidden }) => {
+  import('../../language/geometry.js').then(({ Distance }) => {
+    import('../../language/relations.js').then(({ Touching, SupportedBy, StableAgainst, Coverage, CoPlanar, Facing, AccessibleFrom, Visible, Hidden }) => {
       if (Distance) registerNodeImpl(Distance, geometryNodeImpls.Distance);
       if (Touching) registerNodeImpl(Touching, geometryNodeImpls.Touching);
       if (SupportedBy) registerNodeImpl(SupportedBy, geometryNodeImpls.SupportedBy);
@@ -50,7 +50,7 @@ export function registerGeometryNodeImpls(): void {
 
 // Auto-register symmetry-based relations
 export function registerSymmetryNodeImpls(): void {
-  import('../../constraint-language/relations.js').then(({ Symmetric, Aligned, Distributed }) => {
+  import('../../language/relations.js').then(({ Symmetric, Aligned, Distributed }) => {
     if (Symmetric && symmetryNodeImpls.has('Symmetric')) {
       registerNodeImpl(Symmetric, symmetryNodeImpls.get('Symmetric')!);
     }

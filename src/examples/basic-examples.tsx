@@ -8,9 +8,9 @@ import {
   ObjectSetVariable,
   Distance,
   Touching
-} from '../constraint-language';
+} from '../constraints/language';
 import { useInfinigenSolver, ConstraintDebugger, ConstraintOverlay } from '../integration';
-import type { ObjectState } from '../evaluator/state';
+import type { ObjectState } from '../constraints/evaluator/state';
 
 /**
  * Example scene demonstrating basic constraint solving.

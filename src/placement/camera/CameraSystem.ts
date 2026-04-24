@@ -6,8 +6,8 @@
  */
 
 import type { Vector3, Euler } from 'three';
-import type { Variable, ConstraintNode } from '../../constraint-language/types';
-import { item } from '../../constraint-language/constants';
+import type { Variable, ConstraintNode } from '../../constraints/language/types';
+import { item } from '../../constraints/language/constants';
 import {
   Visible,
   Proximity,
@@ -15,14 +15,14 @@ import {
   Facing,
   AccessibleFrom,
   ReachableFrom,
-} from '../../constraint-language/relations';
+} from '../../constraints/language/relations';
 import {
   Distance,
   VisibilityScore,
   Angle,
-} from '../../constraint-language/geometry';
-import { FilterObjects, TagCondition, ForAll, Exists } from '../../constraint-language/set-reasoning';
-import { SCENE } from '../../constraint-language/constants';
+} from '../../constraints/language/geometry';
+import { FilterObjects, TagCondition, ForAll, Exists } from '../../constraints/language/set-reasoning';
+import { SCENE } from '../../constraints/language/constants';
 
 /**
  * Camera types supported by the system

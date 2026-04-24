@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SolverDebuggerConfig } from '../types';
-import { SolverState, Move } from '../../solver/moves';
+import { SolverState, Move } from '../../constraints/solver/moves';
 
 interface SolverDebuggerProps {
   solverState?: SolverState;
