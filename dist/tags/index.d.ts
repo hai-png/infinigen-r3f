@@ -2,7 +2,7 @@
  * Tag System for Infinigen R3F
  * Ported from infinigen/core/tags.py
  */
-import { Node } from './constraint-language/types.js';
+import { Node } from '../constraints/language/types.js';
 /**
  * Base class for all tags
  */

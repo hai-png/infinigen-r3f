@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { useThree, useFrame } from '@react-three/fiber';
-import { evaluateProblem } from '../../evaluator/evaluate';
+import { evaluateProblem } from '../../constraints/evaluator/evaluate';
 /**
  * ConstraintVisualizer - 3D visualization of constraints in the scene
  * Shows violations, satisfied constraints, bounds, and relationships

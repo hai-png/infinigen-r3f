@@ -5,7 +5,7 @@
  * Ported from: placement/camera.py (30.7KB)
  */
 import type { Vector3, Euler } from 'three';
-import type { Variable, ConstraintNode } from '../../constraint-language/types';
+import type { Variable, ConstraintNode } from '../../constraints/language/types';
 /**
  * Camera types supported by the system
  */

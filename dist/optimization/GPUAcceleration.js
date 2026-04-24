@@ -4,7 +4,7 @@
  * Provides WebGPU-based parallel constraint evaluation for massive performance gains.
  * Falls back to CPU implementation when WebGPU is unavailable.
  */
-import { evaluateNode } from '../evaluator/evaluate';
+import { evaluateNode } from '../constraints/evaluator/evaluate';
 // ============================================================================
 // GPU Context Management
 // ============================================================================

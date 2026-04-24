@@ -7,24 +7,20 @@
  *
  * @packageDocumentation
  */
-export * from './constraint-language/index.js';
 export * from './tags/index.js';
-export * from './reasoning/index.js';
-export * from './solver/index.js';
+export * from './constraints/index.js';
 export * from './math/index.js';
 export * from './placement/index.js';
-export * from './evaluator/index.js';
-export * from './room-solver/index.js';
 export * from './sim/index.js';
 export * from './bridge/index.js';
 export * from './decorate/index.js';
 export * from './animation/index.js';
 export * from './nodes/index.js';
 export * from './types.js';
-export type { Node, Variable, Domain, ObjectSetDomain, NumericDomain, PoseDomain, BBoxDomain, BooleanDomain } from './constraint-language/types.js';
-export type { Relation, AnyRelation, Touching, SupportedBy, CoPlanar, StableAgainst, Facing, Between, AccessibleFrom, ReachableFrom, InFrontOf, Aligned, Hidden, Visible, Grouped, Distributed, Coverage, SupportCoverage, Stability, Containment, Proximity } from './constraint-language/relations.js';
+export type { Node, Variable, Domain, ObjectSetDomain, NumericDomain, PoseDomain, BBoxDomain, BooleanDomain } from './constraints/language/types.js';
+export type { Relation, AnyRelation, Touching, SupportedBy, CoPlanar, StableAgainst, Facing, Between, AccessibleFrom, ReachableFrom, InFrontOf, Aligned, Hidden, Visible, Grouped, Distributed, Coverage, SupportCoverage, Stability, Containment, Proximity } from './constraints/language/relations.js';
 export type { Tag, TagSet, SemanticsTag, MaterialTag, SurfaceTag, RoomTag, FunctionTag, SizeTag, StyleTag } from './tags/index.js';
-export type { Move, SolverState, SimulatedAnnealingSolver, GreedySolver } from './solver/index.js';
+export type { Move, SolverState, SimulatedAnnealingSolver, GreedySolver } from './constraints/solver/index.js';
 export type { BBox } from './math/index.js';
 export type { PathFinder, DensityFunction } from './placement/index.js';
 export * from './pipeline/SceneExporter.js';

@@ -4,8 +4,8 @@
  * Provides WebGPU-based parallel constraint evaluation for massive performance gains.
  * Falls back to CPU implementation when WebGPU is unavailable.
  */
-import type { Problem } from '../constraint-language/types';
-import type { State } from '../evaluator/state';
+import type { Problem } from '../constraints/language/types';
+import type { State } from '../constraints/evaluator/state';
 export interface GPUContext {
     device: GPUDevice;
     adapter: GPUAdapter;

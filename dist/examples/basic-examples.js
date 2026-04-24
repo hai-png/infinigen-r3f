@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import * as THREE from 'three';
-import { AnyRelation, ScalarConstant, ObjectSetVariable, Distance, Touching } from '../constraint-language';
+import { AnyRelation, ScalarConstant, ObjectSetVariable, Distance, Touching } from '../constraints/language';
 import { useInfinigenSolver, ConstraintDebugger, ConstraintOverlay } from '../integration';
 /**
  * Example scene demonstrating basic constraint solving.

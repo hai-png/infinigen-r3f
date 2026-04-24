@@ -1,6 +1,6 @@
 import React from 'react';
 import { SolverDebuggerConfig } from '../types';
-import { SolverState } from '../../solver/moves';
+import { SolverState } from '../../constraints/solver/moves';
 interface SolverDebuggerProps {
     solverState?: SolverState;
     config?: Partial<SolverDebuggerConfig>;

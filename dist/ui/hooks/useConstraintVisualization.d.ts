@@ -1,5 +1,5 @@
 import { ConstraintVisualizationConfig } from '../types';
-import { Problem } from '../../constraint-language/types';
+import { Problem } from '../../constraints/language/types';
 interface UseConstraintVisualizationOptions {
     problem?: Problem;
     initialConfig?: Partial<ConstraintVisualizationConfig>;

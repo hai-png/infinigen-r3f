@@ -3,7 +3,7 @@
  * Inspects and visualizes variable domains in the constraint system
  */
 import React from 'react';
-import { Domain, Variable } from '../constraint-language/types';
+import { Domain, Variable } from '../constraints/language/types';
 interface DomainInspectorProps {
     variables: Variable[];
     domains: Map<string, Domain>;
