@@ -11,8 +11,8 @@ import {
   BooleanDomain,
   Variable,
   Domain,
-} from '../../constraint-language/types';
-import { item, scalar, bool } from '../../constraint-language/constants';
+} from '../../constraints/language/types';
+import { item, scalar, bool } from '../../constraints/language/constants';
 
 describe('Domain Types', () => {
   describe('ObjectSetDomain', () => {

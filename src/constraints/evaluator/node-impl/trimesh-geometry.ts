@@ -7,7 +7,7 @@
  * Includes: Distance, Touching, SupportedBy, StableAgainst, Coverage, etc.
  */
 
-import { Relation } from '../../constraint-language/relations.js';
+import { Relation } from '../../language/relations.js';
 import { State, ObjectState } from '../state.js';
 import { Vector3, Matrix4 } from 'three';
 import * as THREE from 'three';

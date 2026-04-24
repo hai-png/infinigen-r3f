@@ -11,8 +11,8 @@
  */
 
 import { Scene, Object3D } from 'three';
-import { SolverState } from '../solver/state';
-import { Relation } from '../constraint-language';
+import { SolverState } from '../constraints/solver/state';
+import { Relation } from '../constraints/language';
 
 export interface BridgeConfig {
   endpoint: string;

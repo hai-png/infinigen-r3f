@@ -25,8 +25,8 @@ import {
   Proximity,
   AndRelations,
   OrRelations,
-} from '../../constraint-language/relations';
-import { item } from '../../constraint-language/constants';
+} from '../../constraints/language/relations';
+import { item } from '../../constraints/language/constants';
 
 describe('Spatial Relations', () => {
   const chair = item('chair_1');

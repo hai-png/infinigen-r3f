@@ -12,7 +12,7 @@ export {
   PoseDomain,
   BBoxDomain,
   BooleanDomain
-} from '../constraint-language/types.js';
+} from '../language/types.js';
 
 // Domain extraction from constraints
 export {

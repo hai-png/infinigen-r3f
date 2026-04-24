@@ -7,8 +7,8 @@
  */
 
 import type { ConstraintNode, Problem, Domain } from './types';
-import type { State } from '../evaluator/state';
-import type { Move } from '../solver/moves';
+import type { State } from '../constraints/evaluator/state';
+import type { Move } from '../constraints/solver/moves';
 
 /**
  * Represents the status of a constraint evaluation

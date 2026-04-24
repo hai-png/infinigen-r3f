@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ConstraintVisualizationConfig } from '../types';
-import { Problem, Constraint } from '../../constraint-language/types';
+import { Problem, Constraint } from '../../constraints/language/types';
 
 interface UseConstraintVisualizationOptions {
   problem?: Problem;

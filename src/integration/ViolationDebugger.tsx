@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { ViolationReport, ConstraintNode } from '../constraint-language/types';
+import { ViolationReport, ConstraintNode } from '../constraints/language/types';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';

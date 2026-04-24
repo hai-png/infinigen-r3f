@@ -6,8 +6,8 @@
  * Tests whether objects satisfy domain constraints.
  */
 
-import { NegatedRelation } from '../constraint-language/relations.js';
-import { Domain } from '../reasoning/domain.js';
+import { NegatedRelation } from '../language/relations.js';
+import { Domain } from '../constraints/reasoning/domain.js';
 import { State, ObjectState, RelationState } from './state.js';
 import { satisfies } from '../tags/index.js';
 

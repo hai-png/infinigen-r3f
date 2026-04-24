@@ -15,11 +15,11 @@ import {
   GreedySolver,
   type SimulatedAnnealingConfig,
   type GreedyConfig,
-} from '../../solver/moves';
-import { State, ObjectState } from '../../evaluator/state';
-import { Problem, buildProblem, NamedConstraint } from '../../constraint-language/constants';
-import { Touching, Proximity } from '../../constraint-language/relations';
-import { item } from '../../constraint-language/constants';
+} from '../../constraints/solver/moves';
+import { State, ObjectState } from '../../constraints/evaluator/state';
+import { Problem, buildProblem, NamedConstraint } from '../../constraints/language/constants';
+import { Touching, Proximity } from '../../constraints/language/relations';
+import { item } from '../../constraints/language/constants';
 import { SemanticsTag } from '../../tags';
 
 describe('Move Types', () => {

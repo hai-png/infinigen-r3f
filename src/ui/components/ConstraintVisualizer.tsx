@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { useThree, useFrame } from '@react-three/fiber';
-import { Constraint, Problem } from '../../constraint-language/types';
-import { evaluateProblem } from '../../evaluator/evaluate';
+import { Constraint, Problem } from '../../constraints/language/types';
+import { evaluateProblem } from '../../constraints/evaluator/evaluate';
 import { ConstraintVisualizationConfig } from '../types';
 
 interface ConstraintVisualizerProps {

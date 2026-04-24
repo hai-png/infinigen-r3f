@@ -13,7 +13,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { ObjectState } from '../solver/types';
+import type { ObjectState } from '../constraints/solver/types';
 import type { AssetDescription } from '../domain/types';
 
 export interface AssetFactoryOptions {

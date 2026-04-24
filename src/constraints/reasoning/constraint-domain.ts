@@ -5,13 +5,13 @@
 // Authors: Alexander Raistrick, David Yan
 // Ported to TypeScript for React Three Fiber
 
-import { Node, Domain, ObjectSetDomain, NumericDomain, PoseDomain, BBoxDomain, BooleanDomain } from '../constraint-language/types.js';
-import { ScalarExpression, BoolExpression, ScalarConstant, BoolConstant, ScalarVariable, BoolVariable } from '../constraint-language/expression.js';
-import { ObjectSetExpression, ObjectSetConstant, ObjectSetVariable, FilterObjects, UnionObjects, IntersectionObjects, DifferenceObjects, CountExpression } from '../constraint-language/set-reasoning.js';
-import { Problem, BoolOperatorExpression, ScalarOperatorExpression, ItemExpression, TaggedExpression, SceneExpression } from '../constraint-language/constants.js';
-import { Relation, AnyRelation, NegatedRelation, AndRelations, OrRelations } from '../constraint-language/relations.js';
-import { GeometryPredicate, Distance, Angle, SurfaceArea, Volume, Count } from '../constraint-language/geometry.js';
-import { ForAll, Exists, SumOver, MeanOver, MaxOver, MinOver } from '../constraint-language/set-reasoning.js';
+import { Node, Domain, ObjectSetDomain, NumericDomain, PoseDomain, BBoxDomain, BooleanDomain } from '../language/types.js';
+import { ScalarExpression, BoolExpression, ScalarConstant, BoolConstant, ScalarVariable, BoolVariable } from '../language/expression.js';
+import { ObjectSetExpression, ObjectSetConstant, ObjectSetVariable, FilterObjects, UnionObjects, IntersectionObjects, DifferenceObjects, CountExpression } from '../language/set-reasoning.js';
+import { Problem, BoolOperatorExpression, ScalarOperatorExpression, ItemExpression, TaggedExpression, SceneExpression } from '../language/constants.js';
+import { Relation, AnyRelation, NegatedRelation, AndRelations, OrRelations } from '../language/relations.js';
+import { GeometryPredicate, Distance, Angle, SurfaceArea, Volume, Count } from '../language/geometry.js';
+import { ForAll, Exists, SumOver, MeanOver, MaxOver, MinOver } from '../language/set-reasoning.js';
 
 /**
  * Extract the domain of a constraint language node

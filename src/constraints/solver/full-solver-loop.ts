@@ -5,9 +5,9 @@
  * into a complete solving pipeline.
  */
 
-import { ConstraintSystem } from '../constraint-language/constraint-system';
-import { Variable, Domain } from '../constraint-language/types';
-import { Evaluator } from '../evaluator/evaluator';
+import { ConstraintSystem } from '../language/constraint-system';
+import { Variable, Domain } from '../language/types';
+import { Evaluator } from '../constraints/evaluator/evaluator';
 import { 
   ContinuousProposalGenerator as ContinuousProposer, 
   DiscreteProposalGenerator as DiscreteProposer,

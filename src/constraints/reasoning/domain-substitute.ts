@@ -23,8 +23,8 @@ import {
   ArithmeticOperator,
   BooleanOperator,
   ComparisonOperator,
-} from '../constraint-language/types.js';
-import { Domain, NumericDomain, ObjectSetDomain, PoseDomain } from '../constraint-language/types.js';
+} from '../language/types.js';
+import { Domain, NumericDomain, ObjectSetDomain, PoseDomain } from '../language/types.js';
 import { constraintDomain } from './constraint-domain.js';
 import { isConstant, evaluateConstant } from './constraint-constancy.js';
 
