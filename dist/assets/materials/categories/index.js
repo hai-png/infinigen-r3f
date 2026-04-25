@@ -11,8 +11,19 @@ export { PlasticGenerator } from './Plastic/PlasticGenerator';
 export { GlassGenerator } from './Glass/GlassGenerator';
 export { StoneGenerator } from './Stone/StoneGenerator';
 export { LeatherGenerator } from './Leather/LeatherGenerator';
-// Tile patterns (Sprint 1.4)
-export { TilePatternGenerator, GeometricPatternType, TileMaterialType, TilePresets } from '../TilePatternGenerator';
+// Creature materials (Sprint 1.5)
+export { FurMaterial, FurParams, FurPreset } from './Creature/FurMaterial';
+export { ScaleMaterial, ScaleParams, ScalePreset } from './Creature/ScaleMaterial';
+export { SkinMaterial, SkinParams, SkinPreset } from './Creature/SkinMaterial';
+// Plant materials (Sprint 1.5)
+export { LeafMaterial, LeafParams, LeafPreset } from './Plant/LeafMaterial';
+export { BarkMaterial, BarkParams, BarkPreset } from './Plant/BarkMaterial';
 // Fluid materials (Sprint 1.5)
-export { FluidMaterialGenerator, FluidType, WaterPreset, LavaPreset, FluidPresets } from '../FluidMaterialGenerator';
+export { WaterMaterial, WaterParams, WaterPreset } from './Fluid/WaterMaterial';
+export { LavaMaterial, LavaParams, LavaPreset } from './Fluid/LavaMaterial';
+export { SlimeMaterial, SlimeParams, SlimePreset } from './Fluid/SlimeMaterial';
+// Tile materials (Sprint 1.5)
+export { CeramicTileMaterial, CeramicTileParams, CeramicTilePreset } from './Tile/CeramicTileMaterial';
+export { StoneTileMaterial, StoneTileParams, StoneTilePreset } from './Tile/StoneTileMaterial';
+export { MosaicMaterial, MosaicParams, MosaicPreset } from './Tile/MosaicMaterial';
 //# sourceMappingURL=index.js.map

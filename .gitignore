@@ -1,22 +1,13 @@
 ```
 # Build artifacts
 dist/
-build/
-target/
+*.d.ts
+*.d.ts.map
+*.js
+*.js.map
 
 # Dependencies
 node_modules/
-
-# Compiled files
-*.js
-*.ts
-*.d.ts
-*.js.map
-*.ts.map
-*.d.ts.map
-
-# Logs
-*.log
 
 # Environment
 .env
@@ -27,9 +18,46 @@ node_modules/
 .vscode/
 .idea/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Testing
+.mypy_cache/
+.pytest_cache/
+
+# Java/Gradle
+target/
+.gradle/
+
+# Build systems
+build/
+*.o
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+*.a
 
 # Compressed files
 *.zip
@@ -54,5 +82,4 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-
 ```
