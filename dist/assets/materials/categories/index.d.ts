@@ -11,6 +11,15 @@ export { PlasticGenerator } from './Plastic/PlasticGenerator';
 export { GlassGenerator } from './Glass/GlassGenerator';
 export { StoneGenerator } from './Stone/StoneGenerator';
 export { LeatherGenerator } from './Leather/LeatherGenerator';
-export { TilePatternGenerator, GeometricPatternType, TileMaterialType, TilePresets } from '../TilePatternGenerator';
-export { FluidMaterialGenerator, FluidType, WaterPreset, LavaPreset, FluidPresets } from '../FluidMaterialGenerator';
+export { FurMaterial, FurParams, FurPreset } from './Creature/FurMaterial';
+export { ScaleMaterial, ScaleParams, ScalePreset } from './Creature/ScaleMaterial';
+export { SkinMaterial, SkinParams, SkinPreset } from './Creature/SkinMaterial';
+export { LeafMaterial, LeafParams, LeafPreset } from './Plant/LeafMaterial';
+export { BarkMaterial, BarkParams, BarkPreset } from './Plant/BarkMaterial';
+export { WaterMaterial, WaterParams, WaterPreset } from './Fluid/WaterMaterial';
+export { LavaMaterial, LavaParams, LavaPreset } from './Fluid/LavaMaterial';
+export { SlimeMaterial, SlimeParams, SlimePreset } from './Fluid/SlimeMaterial';
+export { CeramicTileMaterial, CeramicTileParams, CeramicTilePreset } from './Tile/CeramicTileMaterial';
+export { StoneTileMaterial, StoneTileParams, StoneTilePreset } from './Tile/StoneTileMaterial';
+export { MosaicMaterial, MosaicParams, MosaicPreset } from './Tile/MosaicMaterial';
 //# sourceMappingURL=index.d.ts.map
