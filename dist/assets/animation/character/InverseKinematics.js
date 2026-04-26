@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 /**
  * CCD (Cyclic Coordinate Descent) IK Solver
  *

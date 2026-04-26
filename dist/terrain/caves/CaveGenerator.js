@@ -243,15 +243,33 @@ export class CaveGenerator {
         const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
         return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
     }
-}
-{
-    // Initialize permutation table
-    const p = Array.from({ length: 256 }, (_, i) => i);
-    for (let i = 255; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [p[i], p[j]] = [p[j], p[i]];
+    constructor(params = {}) {
+        this.decorations = [];
+        this.perm = [];
+        this.params = {
+            density: 0.3,
+            caveSize: 3.0,
+            complexity: 0.5,
+            enableStalactites: true,
+            enableStalagmites: true,
+            stalactiteDensity: 0.2,
+            stalagmiteDensity: 0.2,
+            enableDecorations: true,
+            decorationDensity: 0.1,
+            enableLighting: true,
+            lightIntensity: 0.5,
+            lightColor: new THREE.Color(0xffaa88),
+            ...params,
+        };
+        this.sdfOps = new SDFOperations();
+        // Initialize permutation table
+        const p = Array.from({ length: 256 }, (_, i) => i);
+        for (let i = 255; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [p[i], p[j]] = [p[j], p[i]];
+        }
+        this.perm = [...p, ...p];
     }
-    this.perm = [...p, ...p];
 }
 export default CaveGenerator;
 //# sourceMappingURL=CaveGenerator.js.map

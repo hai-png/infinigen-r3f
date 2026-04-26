@@ -14,7 +14,7 @@ import {
   Color,
   MathUtils
 } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { NoiseUtils } from '../../utils/NoiseUtils';
 
 export type ClockStyle = 'wall' | 'mantel' | 'grandfather' | 'digital' | 'cuckoo' | 'pendulum' | 'alarm';
@@ -174,7 +174,7 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
 
     // Feet
     const footGeom = new SphereGeometry(0.015 * size, 8, 8);
-    const footMat = new MeshStandardMaterial({ color: 0xgold, metalness: 0.6 });
+    const footMat = new MeshStandardMaterial({ color: 0xFFD700, metalness: 0.6 });
     const positions = [
       [-width / 2 + 0.02, 0, depth / 2 - 0.02],
       [width / 2 - 0.02, 0, depth / 2 - 0.02],
@@ -183,7 +183,7 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
     ];
     positions.forEach(pos => {
       const foot = new Mesh(footGeom, footMat);
-      foot.position.set(...pos);
+      foot.position.set(pos[0], pos[1], pos[2]);
       group.add(foot);
     });
   }
@@ -239,7 +239,7 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
       ];
       columnPositions.forEach(pos => {
         const column = new Mesh(columnGeom, bodyMat);
-        column.position.set(...pos);
+        column.position.set(pos[0], pos[1], pos[2]);
         group.add(column);
       });
     }
@@ -277,7 +277,7 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
     ];
     legPositions.forEach(pos => {
       const leg = new Mesh(legGeom, bodyMat);
-      leg.position.set(...pos);
+      leg.position.set(pos[0], pos[1], pos[2]);
       group.add(leg);
     });
 
@@ -307,17 +307,12 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
     house.position.y = houseHeight * 0.35;
     group.add(house);
 
-    // Roof
+    // Roof - using cone shape for cuckoo clock
     const roofGeom = new CylinderGeometry(
       houseWidth * 0.6,
       houseWidth * 0.6,
       houseDepth * 1.2,
-      3,
-      1,
-      false,
-      0,
-      Math.PI * 2,
-      true
+      4
     );
     const roof = new Mesh(roofGeom, bodyMat);
     roof.rotation.z = Math.PI / 4;
@@ -390,7 +385,7 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
     legPositions.forEach(pos => {
       const leg = new Mesh(legGeom, legMat);
       leg.rotation.x = Math.PI / 6;
-      leg.position.set(...pos);
+      leg.position.set(pos[0], pos[1], pos[2]);
       group.add(leg);
     });
 
@@ -513,23 +508,10 @@ export class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
     return new MeshStandardMaterial(config);
   }
 
-  getVariations(): Params[] {
-    const styles: ClockStyle[] = ['wall', 'mantel', 'grandfather', 'digital', 'cuckoo', 'pendulum', 'alarm'];
-    const materials: ClockMaterialType[] = ['wood', 'metal', 'plastic', 'glass', 'ceramic', 'brass'];
-    const faces: ClockFaceStyle[] = ['analog', 'digital', 'roman', 'minimal', 'ornate'];
-    const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
-
-    return styles.flatMap(style =>
-      materials.map(material => ({
-        style,
-        materialType: material,
-        faceStyle: faces[Math.floor(Math.random() * faces.length)],
-        size: sizes[Math.floor(Math.random() * sizes.length)],
-        hasPendulum: style === 'grandfather' || style === 'pendulum',
-        hasChime: style === 'grandfather' || style === 'cuckoo',
-        ornateLevel: Math.floor(Math.random() * 3),
-        seed: Math.floor(Math.random() * 10000)
-      }))
-    );
+  /**
+   * Get the default configuration for clock generation
+   */
+  getDefaultConfig(): ClockConfig {
+    return { ...this.defaultParams };
   }
 }

@@ -1,15 +1,28 @@
 /**
- * Auto-generated placeholder - to be fully implemented
+ * Book Generator
+ *
+ * Procedural book generation with configurable sizes,
+ * covers, spines, and page details.
  */
-import { Group } from 'three';
+import * as THREE from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-export interface Params {
-    style: string;
+export interface BookConfig {
+    size: 'small' | 'medium' | 'large' | 'folio';
+    coverType: 'hardcover' | 'paperback' | 'leather';
+    coverColor: string;
+    hasDustJacket: boolean;
+    spineStyle: 'flat' | 'rounded' | 'decorative';
+    pageCount: number;
+    thickness: number;
+    condition: 'new' | 'good' | 'worn' | 'ancient';
     seed?: number;
 }
-export declare class Generator extends BaseObjectGenerator<Params> {
-    protected readonly defaultParams: Params;
-    generate(params?: Partial<Params>): Group;
-    getVariations(): Params[];
+export declare class BookGenerator extends BaseObjectGenerator<BookConfig> {
+    protected readonly defaultParams: BookConfig;
+    private readonly sizeDimensions;
+    generate(params?: Partial<BookConfig>): THREE.Group;
+    private getCoverMaterial;
+    private addWearEffects;
+    getVariations(): BookConfig[];
 }
 //# sourceMappingURL=BookGenerator.d.ts.map

@@ -1,1 +1,98 @@
-Nothing needs to be added to .gitignore since only a markdown file (CONSOLIDATION_PLAN.md) was added, which is a source/config file and not a build artifact, dependency, or temporary file.
+```
+# Build artifacts
+dist/
+build/
+*.d.ts
+*.d.ts.map
+*.js
+*.js.map
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+
+# Compression
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# Rust (if applicable)
+target/
+
+# Gradle (if applicable)
+.gradle/
+
+# Maven (if applicable)
+target/
+
+# Go (if applicable)
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.plist
+
+# Temporary files
+*.tmp
+*~
+```

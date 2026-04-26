@@ -2,7 +2,15 @@ import * as THREE from 'three';
 import { NoiseUtils } from '../../../utils/NoiseUtils';
 
 /**
- * Configuration for flower generation
+ * FlowerGenerator - Procedural flower generation with multiple species
+ * 
+ * Features:
+ * - Multiple flower varieties (daisy, tulip, rose, wildflower, mixed)
+ * - Customizable petal count, shape, and colors
+ * - Stem and leaf generation
+ * - Scattering support for meadow creation
+ * 
+ * @module vegetation/plants
  */
 export interface FlowerConfig {
   petalCount: number;

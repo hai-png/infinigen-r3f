@@ -258,311 +258,285 @@ export class CollisionDetectionSystem {
         this.collisionPairs = new Set();
         this.contactCache = new Map();
     }
-}
-/**
- * Register a collider
- */
-registerCollider(collider, ColliderInfo);
-void {
-    this: .colliders.set(collider.id, collider),
-    this: .updateBoundingVolumes(collider)
-};
-/**
- * Unregister a collider
- */
-unregisterCollider(colliderId, string);
-void {
-    this: .colliders.delete(colliderId),
-    : .contactCache.entries()
-};
-{
-    if (key.includes(colliderId)) {
-        this.contactCache.delete(key);
+    /**
+     * Register a collider
+     */
+    registerCollider(collider) {
+        this.colliders.set(collider.id, collider);
+        this.updateBoundingVolumes(collider);
     }
-}
-/**
- * Update collider transform
- */
-updateColliderTransform(colliderId, string, position, Vector3, rotation, Quaternion);
-void {
-    const: collider = this.colliders.get(colliderId),
-    if(, collider) { }, return: ,
-    // Update bounding volumes
-    this: .updateBoundingVolumes(collider, position, rotation)
-};
-updateBoundingVolumes(collider, ColliderInfo, position ?  : Vector3, rotation ?  : Quaternion);
-void {
-    const: pos = position || new Vector3(0, 0, 0),
-    // Compute bounding box
-    collider, : .boundingBox = this.computeBoundingBox(collider.shape, pos),
-    // Compute bounding sphere
-    collider, : .boundingSphere = this.computeBoundingSphere(collider.shape, pos)
-};
-computeBoundingBox(shape, PhysicsShape, position, Vector3);
-Box3;
-{
-    const box = new Box3();
-    switch (shape.type) {
-        case 'box': {
-            const halfExtents = shape.dimensions.clone().multiplyScalar(0.5);
-            box.setFromCenterAndSize(position, shape.dimensions);
-            break;
-        }
-        case 'sphere': {
-            const diameter = shape.radius * 2;
-            box.setFromCenterAndSize(position, new Vector3(diameter, diameter, diameter));
-            break;
-        }
-        case 'capsule': {
-            const width = shape.radius * 2;
-            const height = shape.height + shape.radius * 2;
-            box.setFromCenterAndSize(position, new Vector3(width, height, width));
-            break;
-        }
-        case 'cylinder': {
-            const diameter = shape.radius * 2;
-            box.setFromCenterAndSize(position, new Vector3(diameter, shape.height, diameter));
-            break;
-        }
-        case 'convexHull':
-        case 'trimesh': {
-            if (shape.vertices) {
-                box.setFromPoints(Array.from(shape.vertices).map((_, i) => new Vector3(shape.vertices[i * 3], shape.vertices[i * 3 + 1], shape.vertices[i * 3 + 2]).add(position)));
+    /**
+     * Unregister a collider
+     */
+    unregisterCollider(colliderId) {
+        this.colliders.delete(colliderId);
+        // Clean up contact cache
+        for (const [key] of this.contactCache.entries()) {
+            if (key.includes(colliderId)) {
+                this.contactCache.delete(key);
             }
-            break;
         }
     }
-    return box;
-}
-computeBoundingSphere(shape, PhysicsShape, position, Vector3);
-Sphere;
-{
-    let radius = 0;
-    switch (shape.type) {
-        case 'box':
-            radius = shape.dimensions.length() * 0.5;
-            break;
-        case 'sphere':
-            radius = shape.radius;
-            break;
-        case 'capsule':
-        case 'cylinder':
-            radius = Math.max(shape.radius, shape.height * 0.5);
-            break;
-        case 'convexHull':
-        case 'trimesh':
-            // Compute from vertices
-            if (shape.vertices) {
-                let maxDist = 0;
-                for (let i = 0; i < shape.vertices.length; i += 3) {
-                    const v = new Vector3(shape.vertices[i], shape.vertices[i + 1], shape.vertices[i + 2]);
-                    maxDist = Math.max(maxDist, v.length());
-                }
-                radius = maxDist;
-            }
-            break;
+    /**
+     * Update collider transform
+     */
+    updateColliderTransform(colliderId, position, rotation) {
+        const collider = this.colliders.get(colliderId);
+        if (!collider)
+            return;
+        // Update bounding volumes
+        this.updateBoundingVolumes(collider, position, rotation);
     }
-    return new Sphere(position, radius);
-}
-/**
- * Broad phase collision detection using sweep and prune
- */
-broadPhase();
-string[][];
-{
-    const potentialCollisions = [];
-    const colliderList = Array.from(this.colliders.values());
-    // Sort by min X coordinate (sweep and prune)
-    colliderList.sort((a, b) => a.boundingBox.min.x - b.boundingBox.min.x);
-    // Check overlapping intervals
-    for (let i = 0; i < colliderList.length; i++) {
-        const colliderA = colliderList[i];
-        for (let j = i + 1; j < colliderList.length; j++) {
-            const colliderB = colliderList[j];
-            // Early exit if no overlap in X
-            if (colliderB.boundingBox.min.x > colliderA.boundingBox.max.x) {
+    updateBoundingVolumes(collider, position, rotation) {
+        const pos = position || new Vector3(0, 0, 0);
+        // Compute bounding box
+        collider.boundingBox = this.computeBoundingBox(collider.shape, pos);
+        // Compute bounding sphere
+        collider.boundingSphere = this.computeBoundingSphere(collider.shape, pos);
+    }
+    computeBoundingBox(shape, position) {
+        const box = new Box3();
+        switch (shape.type) {
+            case 'box': {
+                const halfExtents = shape.dimensions.clone().multiplyScalar(0.5);
+                box.setFromCenterAndSize(position, shape.dimensions);
                 break;
             }
-            // Check collision filter
-            if (!this.testCollisionFilter(colliderA.filter, colliderB.layer)) {
+            case 'sphere': {
+                const diameter = shape.radius * 2;
+                box.setFromCenterAndSize(position, new Vector3(diameter, diameter, diameter));
+                break;
+            }
+            case 'capsule': {
+                const width = shape.radius * 2;
+                const height = shape.height + shape.radius * 2;
+                box.setFromCenterAndSize(position, new Vector3(width, height, width));
+                break;
+            }
+            case 'cylinder': {
+                const diameter = shape.radius * 2;
+                box.setFromCenterAndSize(position, new Vector3(diameter, shape.height, diameter));
+                break;
+            }
+            case 'convexHull':
+            case 'trimesh': {
+                if (shape.vertices) {
+                    box.setFromPoints(Array.from(shape.vertices).map((_, i) => new Vector3(shape.vertices[i * 3], shape.vertices[i * 3 + 1], shape.vertices[i * 3 + 2]).add(position)));
+                }
+                break;
+            }
+        }
+        return box;
+    }
+    computeBoundingSphere(shape, position) {
+        let radius = 0;
+        switch (shape.type) {
+            case 'box':
+                radius = shape.dimensions.length() * 0.5;
+                break;
+            case 'sphere':
+                radius = shape.radius;
+                break;
+            case 'capsule':
+            case 'cylinder':
+                radius = Math.max(shape.radius, shape.height * 0.5);
+                break;
+            case 'convexHull':
+            case 'trimesh':
+                // Compute from vertices
+                if (shape.vertices) {
+                    let maxDist = 0;
+                    for (let i = 0; i < shape.vertices.length; i += 3) {
+                        const v = new Vector3(shape.vertices[i], shape.vertices[i + 1], shape.vertices[i + 2]);
+                        maxDist = Math.max(maxDist, v.length());
+                    }
+                    radius = maxDist;
+                }
+                break;
+        }
+        return new Sphere(position, radius);
+    }
+    /**
+     * Broad phase collision detection using sweep and prune
+     */
+    broadPhase() {
+        const potentialCollisions = [];
+        const colliderList = Array.from(this.colliders.values());
+        // Sort by min X coordinate (sweep and prune)
+        colliderList.sort((a, b) => a.boundingBox.min.x - b.boundingBox.min.x);
+        // Check overlapping intervals
+        for (let i = 0; i < colliderList.length; i++) {
+            const colliderA = colliderList[i];
+            for (let j = i + 1; j < colliderList.length; j++) {
+                const colliderB = colliderList[j];
+                // Early exit if no overlap in X
+                if (colliderB.boundingBox.min.x > colliderA.boundingBox.max.x) {
+                    break;
+                }
+                // Check collision filter
+                if (!this.testCollisionFilter(colliderA.filter, colliderB.layer)) {
+                    continue;
+                }
+                // Check bounding box overlap
+                if (this.testBoxOverlap(colliderA.boundingBox, colliderB.boundingBox)) {
+                    potentialCollisions.push([colliderA.id, colliderB.id]);
+                }
+            }
+        }
+        return potentialCollisions;
+    }
+    testCollisionFilter(filter, layer) {
+        return (filter.groups & layer) !== 0 && (filter.mask & layer) !== 0;
+    }
+    testBoxOverlap(boxA, boxB) {
+        return boxA.intersectsBox(boxB);
+    }
+    /**
+     * Narrow phase collision detection
+     */
+    narrowPhase(pairs) {
+        const collisions = [];
+        for (const [idA, idB] of pairs) {
+            const colliderA = this.colliders.get(idA);
+            const colliderB = this.colliders.get(idB);
+            if (!colliderA || !colliderB)
                 continue;
+            const contact = this.detectContact(colliderA, colliderB);
+            if (contact) {
+                const pairKey = [idA, idB].sort().join('-');
+                const wasColliding = this.collisionPairs.has(pairKey);
+                this.collisionPairs.add(pairKey);
+                collisions.push({
+                    collider1: idA,
+                    collider2: idB,
+                    contactPoint: contact.points[0],
+                    normal: contact.normal,
+                    impulse: 0, // Would be computed during resolution
+                    timestamp: Date.now(),
+                });
+                // Cache contact data
+                this.contactCache.set(pairKey, contact);
             }
-            // Check bounding box overlap
-            if (this.testBoxOverlap(colliderA.boundingBox, colliderB.boundingBox)) {
-                potentialCollisions.push([colliderA.id, colliderB.id]);
+            else {
+                const pairKey = [idA, idB].sort().join('-');
+                this.collisionPairs.delete(pairKey);
+                this.contactCache.delete(pairKey);
             }
         }
+        return collisions;
     }
-    return potentialCollisions;
-}
-testCollisionFilter(filter, CollisionFilter, layer, CollisionLayer);
-boolean;
-{
-    return (filter.groups & layer) !== 0 && (filter.mask & layer) !== 0;
-}
-testBoxOverlap(boxA, Box3, boxB, Box3);
-boolean;
-{
-    return boxA.intersectsBox(boxB);
-}
-/**
- * Narrow phase collision detection
- */
-narrowPhase(pairs, string[][]);
-CollisionEvent[];
-{
-    const collisions = [];
-    for (const [idA, idB] of pairs) {
-        const colliderA = this.colliders.get(idA);
-        const colliderB = this.colliders.get(idB);
-        if (!colliderA || !colliderB)
-            continue;
-        const contact = this.detectContact(colliderA, colliderB);
-        if (contact) {
-            const pairKey = [idA, idB].sort().join('-');
-            const wasColliding = this.collisionPairs.has(pairKey);
-            this.collisionPairs.add(pairKey);
-            collisions.push({
-                collider1: idA,
-                collider2: idB,
-                contactPoint: contact.points[0],
-                normal: contact.normal,
-                impulse: 0, // Would be computed during resolution
-                timestamp: Date.now(),
-            });
-            // Cache contact data
-            this.contactCache.set(pairKey, contact);
-        }
-        else {
-            const pairKey = [idA, idB].sort().join('-');
-            this.collisionPairs.delete(pairKey);
-            this.contactCache.delete(pairKey);
+    detectContact(a, b) {
+        // Simple GJK-like contact detection (simplified)
+        // In production, would use full GJK/EPA algorithm
+        switch (a.shape.type) {
+            case 'sphere':
+                return this.sphereContacts(a, b);
+            case 'box':
+                return this.boxContacts(a, b);
+            default:
+                return this.genericContacts(a, b);
         }
     }
-    return collisions;
-}
-detectContact(a, ColliderInfo, b, ColliderInfo);
-ContactData | null;
-{
-    // Simple GJK-like contact detection (simplified)
-    // In production, would use full GJK/EPA algorithm
-    switch (a.shape.type) {
-        case 'sphere':
-            return this.sphereContacts(a, b);
-        case 'box':
-            return this.boxContacts(a, b);
-        default:
-            return this.genericContacts(a, b);
-    }
-}
-sphereContacts(sphereCollider, ColliderInfo, other, ColliderInfo);
-ContactData | null;
-{
-    const sphere = sphereCollider.boundingSphere;
-    switch (other.shape.type) {
-        case 'sphere': {
-            const otherSphere = other.boundingSphere;
-            const direction = new Vector3().subVectors(otherSphere.center, sphere.center);
-            const distance = direction.length();
-            const minDistance = sphere.radius + otherSphere.radius;
-            if (distance >= minDistance)
-                return null;
-            direction.normalize();
-            const contactPoint = sphere.center.clone().add(direction.multiplyScalar(sphere.radius));
-            const penetration = minDistance - distance;
-            return {
-                points: [contactPoint],
-                normal: direction,
-                depth: penetration,
-                bodyA: sphereCollider.id,
-                bodyB: other.id,
-            };
+    sphereContacts(sphereCollider, other) {
+        const sphere = sphereCollider.boundingSphere;
+        switch (other.shape.type) {
+            case 'sphere': {
+                const otherSphere = other.boundingSphere;
+                const direction = new Vector3().subVectors(otherSphere.center, sphere.center);
+                const distance = direction.length();
+                const minDistance = sphere.radius + otherSphere.radius;
+                if (distance >= minDistance)
+                    return null;
+                direction.normalize();
+                const contactPoint = sphere.center.clone().add(direction.multiplyScalar(sphere.radius));
+                const penetration = minDistance - distance;
+                return {
+                    points: [contactPoint],
+                    normal: direction,
+                    depth: penetration,
+                    bodyA: sphereCollider.id,
+                    bodyB: other.id,
+                };
+            }
+            case 'box': {
+                // Simplified sphere-box contact
+                const closestPoint = other.boundingBox.clampPoint(sphere.center, new Vector3());
+                const direction = new Vector3().subVectors(sphere.center, closestPoint);
+                const distance = direction.length();
+                if (distance >= sphere.radius)
+                    return null;
+                direction.normalize();
+                const penetration = sphere.radius - distance;
+                return {
+                    points: [closestPoint],
+                    normal: direction,
+                    depth: penetration,
+                    bodyA: sphereCollider.id,
+                    bodyB: other.id,
+                };
+            }
         }
-        case 'box': {
-            // Simplified sphere-box contact
-            const closestPoint = other.boundingBox.clampPoint(sphere.center, new Vector3());
-            const direction = new Vector3().subVectors(sphere.center, closestPoint);
-            const distance = direction.length();
-            if (distance >= sphere.radius)
-                return null;
-            direction.normalize();
-            const penetration = sphere.radius - distance;
-            return {
-                points: [closestPoint],
-                normal: direction,
-                depth: penetration,
-                bodyA: sphereCollider.id,
-                bodyB: other.id,
-            };
-        }
-    }
-    return null;
-}
-boxContacts(a, ColliderInfo, b, ColliderInfo);
-ContactData | null;
-{
-    if (!a.boundingBox.intersectsBox(b.boundingBox)) {
         return null;
     }
-    // Simplified box-box contact
-    // In production, would use SAT (Separating Axis Theorem)
-    const centerA = new Vector3();
-    const centerB = new Vector3();
-    a.boundingBox.getCenter(centerA);
-    b.boundingBox.getCenter(centerB);
-    const normal = new Vector3().subVectors(centerB, centerA).normalize();
-    const contactPoint = new Vector3();
-    // Find contact point on A's surface
-    a.boundingBox.clampPoint(centerB, contactPoint);
-    // Estimate penetration depth
-    const overlap = Math.min(a.boundingBox.max.x - b.boundingBox.min.x, b.boundingBox.max.x - a.boundingBox.min.x, a.boundingBox.max.y - b.boundingBox.min.y, b.boundingBox.max.y - a.boundingBox.min.y, a.boundingBox.max.z - b.boundingBox.min.z, b.boundingBox.max.z - a.boundingBox.min.z);
-    return {
-        points: [contactPoint],
-        normal,
-        depth: overlap * 0.5,
-        bodyA: a.id,
-        bodyB: b.id,
-    };
-}
-genericContacts(a, ColliderInfo, b, ColliderInfo);
-ContactData | null;
-{
-    // Fallback to bounding sphere test
-    if (!a.boundingSphere.intersectsSphere(b.boundingSphere)) {
-        return null;
+    boxContacts(a, b) {
+        if (!a.boundingBox.intersectsBox(b.boundingBox)) {
+            return null;
+        }
+        // Simplified box-box contact
+        // In production, would use SAT (Separating Axis Theorem)
+        const centerA = new Vector3();
+        const centerB = new Vector3();
+        a.boundingBox.getCenter(centerA);
+        b.boundingBox.getCenter(centerB);
+        const normal = new Vector3().subVectors(centerB, centerA).normalize();
+        const contactPoint = new Vector3();
+        // Find contact point on A's surface
+        a.boundingBox.clampPoint(centerB, contactPoint);
+        // Estimate penetration depth
+        const overlap = Math.min(a.boundingBox.max.x - b.boundingBox.min.x, b.boundingBox.max.x - a.boundingBox.min.x, a.boundingBox.max.y - b.boundingBox.min.y, b.boundingBox.max.y - a.boundingBox.min.y, a.boundingBox.max.z - b.boundingBox.min.z, b.boundingBox.max.z - a.boundingBox.min.z);
+        return {
+            points: [contactPoint],
+            normal,
+            depth: overlap * 0.5,
+            bodyA: a.id,
+            bodyB: b.id,
+        };
     }
-    const direction = new Vector3().subVectors(b.boundingSphere.center, a.boundingSphere.center);
-    const distance = direction.length();
-    const minDistance = a.boundingSphere.radius + b.boundingSphere.radius;
-    if (distance >= minDistance)
-        return null;
-    direction.normalize();
-    const contactPoint = a.boundingSphere.center.clone().add(direction.multiplyScalar(a.boundingSphere.radius));
-    return {
-        points: [contactPoint],
-        normal: direction,
-        depth: minDistance - distance,
-        bodyA: a.id,
-        bodyB: b.id,
-    };
+    genericContacts(a, b) {
+        // Fallback to bounding sphere test
+        if (!a.boundingSphere.intersectsSphere(b.boundingSphere)) {
+            return null;
+        }
+        const direction = new Vector3().subVectors(b.boundingSphere.center, a.boundingSphere.center);
+        const distance = direction.length();
+        const minDistance = a.boundingSphere.radius + b.boundingSphere.radius;
+        if (distance >= minDistance)
+            return null;
+        direction.normalize();
+        const contactPoint = a.boundingSphere.center.clone().add(direction.multiplyScalar(a.boundingSphere.radius));
+        return {
+            points: [contactPoint],
+            normal: direction,
+            depth: minDistance - distance,
+            bodyA: a.id,
+            bodyB: b.id,
+        };
+    }
+    /**
+     * Get cached contact data
+     */
+    getContactData(colliderA, colliderB) {
+        const key = [colliderA, colliderB].sort().join('-');
+        return this.contactCache.get(key) || null;
+    }
+    /**
+     * Clear all collision data
+     */
+    clear() {
+        this.collisionPairs.clear();
+        this.contactCache.clear();
+    }
 }
-/**
- * Get cached contact data
- */
-getContactData(colliderA, string, colliderB, string);
-ContactData | null;
-{
-    const key = [colliderA, colliderB].sort().join('-');
-    return this.contactCache.get(key) || null;
-}
-/**
- * Clear all collision data
- */
-clear();
-void {
-    this: .collisionPairs.clear(),
-    this: .contactCache.clear()
-};
 export class RigidBodyDynamics {
     constructor() {
         this.bodies = new Map();

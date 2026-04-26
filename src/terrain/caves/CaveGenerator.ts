@@ -379,7 +379,24 @@ export class CaveGenerator {
 
   private perm: number[] = [];
 
-  {
+  constructor(params: Partial<CaveParams> = {}) {
+    this.params = {
+      density: 0.3,
+      caveSize: 3.0,
+      complexity: 0.5,
+      enableStalactites: true,
+      enableStalagmites: true,
+      stalactiteDensity: 0.2,
+      stalagmiteDensity: 0.2,
+      enableDecorations: true,
+      decorationDensity: 0.1,
+      enableLighting: true,
+      lightIntensity: 0.5,
+      lightColor: new THREE.Color(0xffaa88),
+      ...params,
+    };
+    this.sdfOps = new SDFOperations();
+    
     // Initialize permutation table
     const p = Array.from({ length: 256 }, (_, i) => i);
     for (let i = 255; i > 0; i--) {

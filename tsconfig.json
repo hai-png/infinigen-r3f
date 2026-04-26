@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "ES2015.Symbol"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -22,7 +22,8 @@
     "paths": {
       "@infinigen/r3f": ["./src/index.ts"],
       "@infinigen/r3f/*": ["./src/*"]
-    }
+    },
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

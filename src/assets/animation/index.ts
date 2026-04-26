@@ -31,29 +31,29 @@ export {
   evaluateWave,
   createPresetMotion,
   createPresetPattern 
-} from './procedural/OscillatoryMotion';
+} from './motion/OscillatoryMotion';
 export type { 
   WaveType, 
   OscillatoryConfig, 
   PatternType, 
   PatternConfig 
-} from './procedural/OscillatoryMotion';
+} from './motion/OscillatoryMotion';
 
-export { PathFollower, generateCameraPath } from './procedural/PathFollowing';
+export { PathFollower, generateCameraPath } from './motion/PathFollowing';
 export type { 
   SplineType, 
   OrientationMode, 
   SplineKeyframe, 
   PathFollowingConfig, 
   PathSample 
-} from './procedural/PathFollowing';
+} from './motion/PathFollowing';
 
-export { WindAnimationSystem, WindZone } from './procedural/WindAnimationSystem';
+export { WindAnimationSystem, WindZone } from './motion/WindAnimationSystem';
 export type { 
   WindLayer, 
   WindParams, 
   AnimationConfig 
-} from './procedural/WindAnimationSystem';
+} from './motion/WindAnimationSystem';
 
 // Character Animation & IK
 export { 

@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 import { Quaternion } from '../../../core/util/math/quaternion';
 /**
  * Catmull-Rom Spline implementation

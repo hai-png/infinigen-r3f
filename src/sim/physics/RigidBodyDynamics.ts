@@ -62,6 +62,7 @@ export interface CollisionEvent {
   normal: Vector3;
   impulse: number;
   timestamp: number;
+  depth: number;
 }
 
 export interface ConstraintConfig {
@@ -440,24 +441,6 @@ export class CollisionDetectionSystem {
   private collisionPairs: Set<string> = new Set();
   private contactCache: Map<string, ContactData> = new Map();
 
-  interface ColliderInfo {
-    id: string;
-    shape: PhysicsShape;
-    layer: CollisionLayer;
-    filter: CollisionFilter;
-    boundingBox: Box3;
-    boundingSphere: Sphere;
-    isTrigger: boolean;
-  }
-
-  interface ContactData {
-    points: Vector3[];
-    normal: Vector3;
-    depth: number;
-    bodyA: string;
-    bodyB: string;
-  }
-
   /**
    * Register a collider
    */
@@ -653,6 +636,7 @@ export class CollisionDetectionSystem {
           normal: contact.normal,
           impulse: 0, // Would be computed during resolution
           timestamp: Date.now(),
+          depth: contact.depth || 0,
         });
         
         // Cache contact data
@@ -1299,4 +1283,23 @@ export function meshToPhysicsShape(
     const indices = geometry.index?.array || new Uint32Array(positions.length / 3);
     return createTrimeshShape(vertices, indices);
   }
+}
+
+// Type definitions for collision detection
+interface ColliderInfo {
+  id: string;
+  shape: PhysicsShape;
+  layer: CollisionLayer;
+  filter: CollisionFilter;
+  boundingBox: Box3;
+  boundingSphere: Sphere;
+  isTrigger: boolean;
+}
+
+interface ContactData {
+  points: Vector3[];
+  normal: Vector3;
+  depth: number;
+  bodyA: string;
+  bodyB: string;
 }

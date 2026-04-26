@@ -1,15 +1,35 @@
 /**
- * Auto-generated placeholder - to be fully implemented
+ * Candle Generator
+ *
+ * Procedural candle generation with various styles,
+ * wax materials, flames, and holders.
  */
-import { Group } from 'three';
+import * as THREE from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-export interface Params {
-    style: string;
+export interface CandleConfig {
+    style: 'pillar' | 'taper' | 'votive' | 'tea-light' | 'jar';
+    waxType: 'paraffin' | 'beeswax' | 'soy' | 'gel';
+    waxColor: string;
+    height: number;
+    radius: number;
+    hasFlame: boolean;
+    flameSize: 'small' | 'medium' | 'large';
+    burned: boolean;
+    burnLevel: number;
+    holderStyle: 'none' | 'simple' | 'ornate' | 'lantern';
+    scentVisible: boolean;
     seed?: number;
 }
-export declare class Generator extends BaseObjectGenerator<Params> {
-    protected readonly defaultParams: Params;
-    generate(params?: Partial<Params>): Group;
-    getVariations(): Params[];
+export declare class CandleGenerator extends BaseObjectGenerator<CandleConfig> {
+    protected readonly defaultParams: CandleConfig;
+    generate(params?: Partial<CandleConfig>): THREE.Group;
+    private createCandleBody;
+    private getWaxMaterial;
+    private createWick;
+    private createFlame;
+    private createHolder;
+    private addBurnEffects;
+    private createScentEffect;
+    getVariations(): CandleConfig[];
 }
 //# sourceMappingURL=CandleGenerator.d.ts.map

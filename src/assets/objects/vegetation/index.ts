@@ -28,5 +28,4 @@ export { TropicPlantGenerator, TropicSpeciesPresets, type TropicPlantConfig } fr
 
 // Climbing plants
 export { VineGenerator, VineSpeciesPresets, type VineSpeciesConfig } from './climbing/VineGenerator';
-export { CreeperGenerator, CreeperParams, CreeperType, LeafShape, GrowthPattern } from './climbing/CreeperGenerator';
 export { IvyGenerator, type IvyConfig } from './climbing/IvyGenerator';

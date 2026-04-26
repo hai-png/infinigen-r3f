@@ -1,4 +1,4 @@
-import { Vector3 } from '../../../core/util/math/vector';
+import { Vector3 } from 'three';
 import { Quaternion } from '../../../core/util/math/quaternion';
 
 /**
