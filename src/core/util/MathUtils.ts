@@ -510,6 +510,46 @@ export function noise3D(x: number, y: number, z: number, scale: number = 1.0): n
 }
 
 /**
+ * Simple 2D noise function using gradient hashing
+ * Based on classic Perlin noise algorithm
+ * @param x - X coordinate
+ * @param y - Y coordinate
+ * @param scale - Noise scale/frequency multiplier
+ * @returns Noise value in range [-1, 1]
+ */
+export function noise2D(x: number, y: number, scale: number = 1.0): number {
+  const X = Math.floor(x * scale) & 255;
+  const Y = Math.floor(y * scale) & 255;
+
+  x -= Math.floor(x * scale);
+  y -= Math.floor(y * scale);
+
+  // Fade curves for smooth interpolation
+  const u = fade(x);
+  const v = fade(y);
+
+  // Hash coordinates of square corners
+  const A = p[X] + Y;
+  const B = p[X + 1] + Y;
+
+  // Gradient contributions
+  const result = lerp(
+    v,
+    lerp(u, grad(p[A], x, y, 0), grad(p[B], x - 1, y, 0)),
+    lerp(u, grad(p[A + 1], x, y - 1, 0), grad(p[B + 1], x - 1, y - 1, 0))
+  );
+
+  return result;
+}
+
+/**
+ * Alias for noise2D for backward compatibility
+ */
+export function perlin2D(x: number, y: number, scale: number = 1.0): number {
+  return noise2D(x, y, scale);
+}
+
+/**
  * 2D Voronoi noise function
  * Returns distance to nearest feature point
  * @param x - X coordinate

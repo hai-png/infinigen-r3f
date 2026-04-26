@@ -23,8 +23,12 @@ export class Noise3D {
     this.seed = seed;
   }
   
-  evaluate(x: number, y: number, z: number): number {
+  perlin(x: number, y: number, z: number): number {
     return noise3D(x, y, z, this.seed);
+  }
+  
+  evaluate(x: number, y: number, z: number): number {
+    return this.perlin(x, y, z);
   }
   
   setSeed(seed: number): void {

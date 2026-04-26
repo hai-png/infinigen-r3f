@@ -166,6 +166,13 @@ export class NoiseUtils {
   ): number {
     return ((value - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
   }
+
+  /**
+   * Static method to generate 2D Perlin noise without instantiation
+   */
+  public static perlin2D(x: number, y: number): number {
+    return globalNoiseInstance.perlin2D(x, y);
+  }
 }
 
 // Static utility instance for convenience
