@@ -8,5 +8,7 @@
  */
 
 export { WaterMaterial, WaterParams, WaterPreset } from './WaterMaterial';
-export { LavaMaterial, LavaParams, LavaPreset } from './LavaMaterial';
-export { SlimeMaterial, SlimeParams, SlimePreset } from './SlimeMaterial';
+// TODO: Implement LavaMaterial
+// export { LavaMaterial, LavaParams, LavaPreset } from './LavaMaterial';
+// TODO: Implement SlimeMaterial
+// export { SlimeMaterial, SlimeParams, SlimePreset } from './SlimeMaterial';

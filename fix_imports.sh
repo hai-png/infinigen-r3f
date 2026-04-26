@@ -1,49 +1,54 @@
 #!/bin/bash
 
-# Script to systematically fix import path issues in TypeScript files
+echo "=== Fixing Import Paths Systematically ==="
 
-echo "Starting systematic import path fixes..."
+# Fix 1: BaseMaterialGenerator imports in categories (../../BaseMaterialGenerator is correct, no change needed)
+echo "Checking BaseMaterialGenerator imports..."
+grep -r "from '../BaseMaterialGenerator'" /workspace/src/assets/materials --include="*.ts" 2>/dev/null | while read line; do
+    file=$(echo "$line" | cut -d: -f1)
+    echo "Fixing: $file (../BaseMaterialGenerator -> ../../BaseMaterialGenerator)"
+    sed -i "s|from '../BaseMaterialGenerator'|from '../../BaseMaterialGenerator'|g" "$file"
+done
 
-# Fix 1: Fix core/util/math/utils imports (should be ../../core/util/math/utils or similar)
-echo "Fixing core/util/math/utils imports..."
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./core/util/math/utils'|from '../../../../core/util/math/utils'|g" {} \;
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./\.\./core/util/math/utils'|from '../../../../core/util/math/utils'|g" {} \;
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./\.\./\.\./core/util/math/utils'|from '../../../../../core/util/math/utils'|g" {} \;
-
-# Fix 2: Fix core/util/math/noise imports
-echo "Fixing core/util/math/noise imports..."
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./core/util/math/noise'|from '../../../../core/util/math/noise'|g" {} \;
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./\.\./core/util/math/noise'|from '../../../../core/util/math/noise'|g" {} \;
-
-# Fix 3: Fix BaseMaterialGenerator imports
-echo "Fixing BaseMaterialGenerator imports..."
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./BaseMaterialGenerator'|from '../../BaseMaterialGenerator'|g" {} \;
-
-# Fix 4: Fix BaseObjectGenerator imports  
-echo "Fixing BaseObjectGenerator imports..."
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\./utils/BaseObjectGenerator'|from '../utils/BaseObjectGenerator'|g" {} \;
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\./BaseObjectGenerator'|from '../BaseObjectGenerator'|g" {} \;
-
-# Fix 5: Fix Transform imports
+# Fix 2: Transform imports - files in src/assets/objects/*/ need ../../../core/util/math/transforms
 echo "Fixing Transform imports..."
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./core/util/math/transforms'|from '../../../../core/util/math/transforms'|g" {} \;
+find /workspace/src/assets/objects -name "*.ts" -type f -exec grep -l "from '../../../../core/util/math/transforms'" {} \; 2>/dev/null | while read file; do
+    depth=$(echo "$file" | grep -o '/' | wc -l)
+    if [ $depth -ge 6 ]; then
+        echo "Fixing: $file (../../../../core/util/math/transforms -> ../../../../../core/util/math/transforms)"
+        sed -i "s|from '../../../../core/util/math/transforms'|from '../../../../../core/util/math/transforms'|g" "$file"
+    fi
+done
 
-# Fix 6: Fix Vector3, Quaternion imports from math directory
-echo "Fixing Vector3/Quaternion imports..."
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./core/util/math/vector'|from '../../../../core/util/math/vector'|g" {} \;
-find src -name "*.ts" -type f -exec sed -i \
-  "s|from '\.\./\.\./\.\./core/util/math/quaternion'|from '../../../../core/util/math/quaternion'|g" {} \;
+# Fix 3: utils imports in objects directory  
+echo "Fixing utils imports in objects..."
+find /workspace/src/assets/objects -mindepth 2 -name "*.ts" -type f -exec grep -l "from '../../../../core/util/math/utils'" {} \; 2>/dev/null | while read file; do
+    echo "Checking: $file"
+    # Files in src/assets/objects/category/*.ts need ../../../../core/util/math/utils (4 levels up from category)
+    # But they're using it correctly already
+done
 
-echo "Import path fixes completed!"
-echo "Running TypeScript compiler to check for remaining errors..."
-npx tsc --noEmit 2>&1 | head -100
+# Fix 4: BaseObjectGenerator imports
+echo "Fixing BaseObjectGenerator imports..."
+find /workspace/src/assets/objects -name "*.ts" -type f -exec grep -l "from '../BaseObjectGenerator'" {} \; 2>/dev/null | while read file; do
+    dir=$(dirname "$file")
+    basename=$(basename "$dir")
+    if [ "$basename" != "utils" ]; then
+        echo "Fixing: $file (../BaseObjectGenerator -> ../utils/BaseObjectGenerator)"
+        sed -i "s|from '../BaseObjectGenerator'|from '../utils/BaseObjectGenerator'|g" "$file"
+    fi
+done
+
+# Fix 5: NoiseUtils imports
+echo "Fixing NoiseUtils imports..."
+find /workspace/src/assets -name "*.ts" -type f -exec grep -l "from '../../../utils/NoiseUtils'" {} \; 2>/dev/null | while read file; do
+    echo "Fixing: $file (../../../utils/NoiseUtils -> ../../utils/NoiseUtils)"
+    sed -i "s|from '../../../utils/NoiseUtils'|from '../../utils/NoiseUtils'|g" "$file"
+done
+
+find /workspace/src/assets -name "*.ts" -type f -exec grep -l "from '../../terrain/utils/NoiseUtils'" {} \; 2>/dev/null | while read file; do
+    echo "Fixing: $file (../../terrain/utils/NoiseUtils -> ../utils/NoiseUtils)"
+    sed -i "s|from '../../terrain/utils/NoiseUtils'|from '../utils/NoiseUtils'|g" "$file"
+done
+
+echo "=== Import Path Fixes Complete ==="

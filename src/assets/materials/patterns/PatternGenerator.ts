@@ -2,7 +2,7 @@
  * Procedural Pattern Generator - Stripes, checks, dots, geometric, organic
  */
 import { Texture, CanvasTexture, Color } from 'three';
-import { FixedSeed } from '../../../../core/util/math/utils';
+import { FixedSeed } from '../../../core/util/math/utils';
 
 export interface PatternParams {
   type: 'stripes' | 'checkers' | 'dots' | 'geometric' | 'organic';

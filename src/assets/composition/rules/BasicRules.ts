@@ -4,7 +4,7 @@
  * Implements fundamental spatial relationships and aesthetic principles.
  */
 
-import { Vector3, Quaternion, Matrix4, Box3 } from 'three';
+import { Vector3, Quaternion, Matrix4, Box3, Sphere } from 'three';
 import type { CompositionRule, CompositionContext, CompositionResult } from '../CompositionEngine';
 import { SpatialRelation, AestheticPrinciple } from '../CompositionEngine';
 
@@ -33,20 +33,22 @@ export const centerObjectRule: CompositionRule = {
       score: 0,
       metrics: { 
         balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
-        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+        details: { centerOfMass: new Vector3(), boundingVolume: new Sphere(new Vector3(), 0), densityDistribution: [], goldenRatioDeviations: [] }
       },
     };
 
     if (context.existingObjects.length === 0) return result;
 
     const primaryObject = context.existingObjects[0];
-    const center = context.center.clone();
+    const center = context.center?.clone() || new Vector3();
     
     // Apply axis-specific centering
-    const axis = this.parameters.axis || 'xz';
-    if (axis.includes('x')) center.x += this.parameters.offset.x || 0;
-    if (axis.includes('y')) center.y += this.parameters.offset.y || 0;
-    if (axis.includes('z')) center.z += this.parameters.offset.z || 0;
+    const axis = centerObjectRule.parameters.axis || 'xz';
+    const offset = centerObjectRule.parameters.offset || { x: 0, y: 0, z: 0 };
+    
+    if (axis.includes('x')) center.x += offset.x || 0;
+    if (axis.includes('y')) center.y += offset.y || 0;
+    if (axis.includes('z')) center.z += offset.z || 0;
 
     const targetPosition = center.clone().sub(primaryObject.center).add(
       primaryObject.bounds.getCenter(new Vector3())
@@ -88,21 +90,23 @@ export const alignObjectsRule: CompositionRule = {
       score: 0,
       metrics: { 
         balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
-        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+        details: { centerOfMass: new Vector3(), boundingVolume: new Sphere(new Vector3(), 0), densityDistribution: [], goldenRatioDeviations: [] }
       },
     };
 
     if (context.existingObjects.length < 2) return result;
 
-    const axis = this.parameters.axis || 'x';
-    const spacing = this.parameters.spacing || 1.0;
-    const alignTo = this.parameters.alignTo || 'center';
-    const startOffset = this.parameters.startOffset || 0;
+    const axis = alignObjectsRule.parameters.axis || 'x';
+    const spacing = alignObjectsRule.parameters.spacing || 1.0;
+    const alignTo = alignObjectsRule.parameters.alignTo || 'center';
+    const startOffset = alignObjectsRule.parameters.startOffset || 0;
 
     // Sort objects by their current position on the axis
     const sorted = [...context.existingObjects].sort((a, b) => {
-      const aPos = a.bounds.getCenter(new Vector3())[axis];
-      const bPos = b.bounds.getCenter(new Vector3())[axis];
+      const aCenter = a.bounds.getCenter(new Vector3());
+      const bCenter = b.bounds.getCenter(new Vector3());
+      const aPos = axis === 'x' ? aCenter.x : axis === 'y' ? aCenter.y : aCenter.z;
+      const bPos = axis === 'x' ? bCenter.x : axis === 'y' ? bCenter.y : bCenter.z;
       return aPos - bPos;
     });
 
@@ -116,14 +120,23 @@ export const alignObjectsRule: CompositionRule = {
     for (const obj of sorted) {
       const center = obj.bounds.getCenter(new Vector3());
       const newPosition = center.clone();
-      newPosition[axis] = currentPosition;
-
-      // Adjust for alignment type
+      
+      // Adjust for alignment type using proper Vector3 methods
+      const size = obj.bounds.getSize(new Vector3());
       if (alignTo === 'min') {
-        newPosition[axis] += obj.bounds.getSize(new Vector3())[axis] / 2;
+        if (axis === 'x') newPosition.x += size.x / 2;
+        else if (axis === 'y') newPosition.y += size.y / 2;
+        else newPosition.z += size.z / 2;
       } else if (alignTo === 'max') {
-        newPosition[axis] -= obj.bounds.getSize(new Vector3())[axis] / 2;
+        if (axis === 'x') newPosition.x -= size.x / 2;
+        else if (axis === 'y') newPosition.y -= size.y / 2;
+        else newPosition.z -= size.z / 2;
       }
+      
+      // Set the position based on axis
+      if (axis === 'x') newPosition.x = currentPosition;
+      else if (axis === 'y') newPosition.y = currentPosition;
+      else newPosition.z = currentPosition;
 
       result.transformations.push({
         nodeId: obj.nodeId,
@@ -166,16 +179,16 @@ export const gridDistributionRule: CompositionRule = {
       score: 0,
       metrics: { 
         balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
-        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+        details: { centerOfMass: new Vector3(), boundingVolume: new Sphere(new Vector3(), 0), densityDistribution: [], goldenRatioDeviations: [] }
       },
     };
 
-    const columns = this.parameters.columns || 3;
-    const rows = this.parameters.rows || 3;
-    const xSpacing = this.parameters.xSpacing || 1.0;
-    const ySpacing = this.parameters.ySpacing || 1.0;
-    const zSpacing = this.parameters.zSpacing || 0;
-    const centerGrid = this.parameters.centerGrid !== false;
+    const columns = gridArrangementRule.parameters.columns || 3;
+    const rows = gridArrangementRule.parameters.rows || 3;
+    const xSpacing = gridArrangementRule.parameters.xSpacing || 1.0;
+    const ySpacing = gridArrangementRule.parameters.ySpacing || 1.0;
+    const zSpacing = gridArrangementRule.parameters.zSpacing || 0;
+    const centerGrid = gridArrangementRule.parameters.centerGrid !== false;
 
     const totalObjects = Math.min(context.existingObjects.length, columns * rows);
     
@@ -239,20 +252,20 @@ export const radialArrangementRule: CompositionRule = {
       score: 0,
       metrics: { 
         balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
-        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+        details: { centerOfMass: new Vector3(), boundingVolume: new Sphere(new Vector3(), 0), densityDistribution: [], goldenRatioDeviations: [] }
       },
     };
 
     if (context.existingObjects.length < 2) return result;
 
-    const radius = this.parameters.radius || 2.0;
-    const startAngle = this.parameters.startAngle || 0;
-    const endAngle = this.parameters.endAngle || Math.PI * 2;
-    const axis = this.parameters.axis || 'y';
-    const faceCenter = this.parameters.faceCenter !== false;
+    const radius = circularArrangementRule.parameters.radius || 2.0;
+    const startAngle = circularArrangementRule.parameters.startAngle || 0;
+    const endAngle = circularArrangementRule.parameters.endAngle || Math.PI * 2;
+    const axis = circularArrangementRule.parameters.axis || 'y';
+    const faceCenter = circularArrangementRule.parameters.faceCenter !== false;
 
     const angleStep = (endAngle - startAngle) / (context.existingObjects.length - 1);
-    const center = context.center;
+    const center = context.center?.clone() || new Vector3();
 
     for (let i = 0; i < context.existingObjects.length; i++) {
       const obj = context.existingObjects[i];
@@ -328,15 +341,15 @@ export const separationRule: CompositionRule = {
       score: 0,
       metrics: { 
         balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
-        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+        details: { centerOfMass: new Vector3(), boundingVolume: new Sphere(new Vector3(), 0), densityDistribution: [], goldenRatioDeviations: [] }
       },
     };
 
     if (context.existingObjects.length < 2) return result;
 
-    const minDistance = this.parameters.minDistance || 0.5;
-    const maxIterations = this.parameters.maxIterations || 10;
-    const relaxationFactor = this.parameters.relaxationFactor || 0.3;
+    const minDistance = overlapResolutionRule.parameters.minDistance || 0.5;
+    const maxIterations = overlapResolutionRule.parameters.maxIterations || 10;
+    const relaxationFactor = overlapResolutionRule.parameters.relaxationFactor || 0.3;
 
     // Create working copies of positions
     const positions = context.existingObjects.map(obj => 
@@ -408,20 +421,21 @@ export const symmetryRule: CompositionRule = {
       score: 0,
       metrics: { 
         balanceScore: 0, rhythmScore: 0, proportionScore: 0, harmonyScore: 0, overallScore: 0,
-        details: { centerOfMass: new Vector3(), boundingVolume: { center: new Vector3(), radius: 0 }, densityDistribution: [], goldenRatioDeviations: [] }
+        details: { centerOfMass: new Vector3(), boundingVolume: new Sphere(new Vector3(), 0), densityDistribution: [], goldenRatioDeviations: [] }
       },
     };
 
     if (context.existingObjects.length < 2) return result;
 
-    const axis = this.parameters.axis || 'x';
-    const center = context.center;
+    const axis = symmetryRule.parameters.axis || 'x';
+    const center = context.center || new Vector3();
+    const pairsParam = symmetryRule.parameters.pairs;
 
     // Group objects into pairs
     const objects = [...context.existingObjects];
     const pairs: Array<[any, any]> = [];
 
-    if (this.parameters.pairs) {
+    if (pairsParam) {
       while (objects.length >= 2) {
         pairs.push([objects.pop()!, objects.pop()!]);
       }
@@ -443,7 +457,7 @@ export const symmetryRule: CompositionRule = {
       
       // Project midpoint onto symmetry plane
       const symmetricMidpoint = midpoint.clone();
-      symmetricMidpoint[axis] = center[axis];
+      symmetricMidpoint[axis as 'x' | 'y' | 'z'] = center[axis as 'x' | 'y' | 'z'];
 
       // Calculate offsets from midpoint
       const offset1 = center1.sub(midpoint);
