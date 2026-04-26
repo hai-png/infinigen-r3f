@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface VaseConfig {
   shape: 'cylinder' | 'sphere' | 'cone' | 'hourglass' | 'amphora' | 'bud' | 'flute';

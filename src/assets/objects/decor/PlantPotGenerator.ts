@@ -2,7 +2,7 @@
  * PlantPotGenerator - Procedural plant pot generation
  */
 import { Group, Mesh, CylinderGeometry, BoxGeometry, Material, MeshStandardMaterial } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export type PotStyle = 'terracotta' | 'ceramic' | 'plastic' | 'hanging' | 'self_watering' | 'decorative';
 export type PotShape = 'cylindrical' | 'tapered' | 'square' | 'rectangular' | 'spherical';

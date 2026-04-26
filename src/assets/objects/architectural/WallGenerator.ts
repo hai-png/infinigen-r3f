@@ -2,7 +2,7 @@
  * WallGenerator - Procedural wall segment generation
  */
 import { Group, Mesh, BoxGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface WallParams {
   width: number;

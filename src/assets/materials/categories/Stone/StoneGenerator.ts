@@ -2,8 +2,8 @@
  * Stone Material Generator - Marble, granite, limestone, slate, concrete
  */
 import { Color, Texture, CanvasTexture } from 'three';
-import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
+import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface StoneParams {

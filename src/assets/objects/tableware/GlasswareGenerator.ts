@@ -3,8 +3,8 @@
  */
 
 import { Group, Mesh, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
 
 export interface GlasswareParams {
   type: 'wine' | 'beer' | 'water' | 'champagne' | 'whiskey' | 'cocktail' | 'bottle_wine' | 'bottle_beer' | 'bottle_spirit';

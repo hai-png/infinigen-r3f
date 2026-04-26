@@ -2,7 +2,7 @@
  * TrinketGenerator - Procedural small decorative objects
  */
 import { Group, Mesh, SphereGeometry, TorusGeometry, IcosahedronGeometry, Material, MeshStandardMaterial } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export type TrinketType = 'figurine' | 'vase_mini' | 'crystal' | 'coin' | 'jewelry' | 'ornament';
 export type TrinketMaterial = 'ceramic' | 'metal' | 'glass' | 'stone' | 'wood';

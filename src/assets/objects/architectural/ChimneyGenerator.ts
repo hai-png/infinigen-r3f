@@ -2,7 +2,7 @@
  * ChimneyGenerator - Procedural chimney generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface ChimneyParams {
   height: number;

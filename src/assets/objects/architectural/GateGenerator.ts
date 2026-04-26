@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
 
 export interface GateParams {
   type: 'swing' | 'slide' | 'double' | 'ornate' | 'farm' | 'picket';

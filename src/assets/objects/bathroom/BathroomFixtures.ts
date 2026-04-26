@@ -6,8 +6,8 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, Mesh, CircleGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { BBox } from '../../../core/util/math/transforms';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BBox } from '../../../../core/util/math/transforms';
 
 export interface BathroomFixtureParams {
   fixtureType: 'toilet' | 'sink' | 'bathtub' | 'shower';

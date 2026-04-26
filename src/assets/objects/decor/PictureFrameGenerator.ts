@@ -12,7 +12,7 @@ import {
   MeshStandardMaterial,
   MeshPhysicalMaterial
 } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export type FrameStyle = 'modern' | 'classic' | 'ornate' | 'minimal' | 'rustic' | 'gallery';
 export type FrameMaterial = 'wood' | 'metal' | 'plastic' | 'composite';

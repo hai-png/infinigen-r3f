@@ -2,7 +2,7 @@
  * ColumnGenerator - Procedural column generation
  */
 import { Group, Mesh, CylinderGeometry, BoxGeometry, TorusGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface ColumnParams {
   height: number;

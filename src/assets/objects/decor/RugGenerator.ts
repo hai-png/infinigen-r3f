@@ -2,7 +2,7 @@
  * RugGenerator - Procedural rug/carpet generation
  */
 import { Group, Mesh, PlaneGeometry, BoxGeometry, Material, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export type RugStyle = 'persian' | 'modern' | 'shag' | 'oriental' | 'geometric' | 'traditional';
 export type RugShape = 'rectangular' | 'round' | 'oval' | 'runner';

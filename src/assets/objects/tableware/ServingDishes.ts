@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface ServingDishConfig {
   type: 'platter' | 'bowl' | 'tureen' | 'casserole' | 'tray' | 'pitcher';

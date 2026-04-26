@@ -2,8 +2,8 @@
  * Glass Material Generator - Clear, frosted, tinted, patterned glass
  */
 import { Color, Texture, CanvasTexture } from 'three';
-import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
+import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface GlassParams {

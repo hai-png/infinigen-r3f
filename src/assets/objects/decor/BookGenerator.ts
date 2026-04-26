@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface BookConfig {
   size: 'small' | 'medium' | 'large' | 'folio';

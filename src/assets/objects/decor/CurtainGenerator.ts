@@ -15,7 +15,7 @@ import {
   Vector3,
   MathUtils
 } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 import { NoiseUtils } from '../../utils/NoiseUtils';
 
 export type CurtainStyle = 'drapes' | 'sheer' | 'valance' | 'cafe' | 'pencil' | 'grommet' | 'rod_pocket';

@@ -5,8 +5,8 @@
 
 import { Color, Texture, CanvasTexture, MeshStandardMaterial, RepeatWrapping } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
-import { Noise3D } from '../../../core/util/math/noise';
+import { FixedSeed } from '../../../../core/util/math/utils';
+import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface CeramicParams {
   type: 'porcelain' | 'stoneware' | 'earthenware' | 'terracotta' | 'tile';

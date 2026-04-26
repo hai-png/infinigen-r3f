@@ -2,9 +2,9 @@
  * Wood Material Generator - Hardwood, softwood, plywood, reclaimed
  */
 import { Color, Texture, CanvasTexture } from 'three';
-import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
-import { Noise3D } from '../../../core/util/math/noise';
+import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
+import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface WoodParams {
   type: 'oak' | 'pine' | 'walnut' | 'mahogany' | 'plywood' | 'reclaimed';

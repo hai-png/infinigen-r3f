@@ -4,12 +4,10 @@
  * Central export point for all procedural asset generators.
  */
 
-// Furniture
-export * from './furniture';
-export * from './chairs';
+// Furniture & Seating
+export * from './seating';
 export * from './tables';
 export * from './beds';
-export * from './sofas';
 export * from './storage';
 
 // Tableware (Phase 2A)
@@ -23,42 +21,42 @@ export * from './architectural';
 
 // Appliances & Bathroom Fixtures (Phase 2D)
 export * from './appliances';
-export * from './bathroom-fixtures';
+export * from './bathroom';
 
 // Plant Generators (Phase 3A)
-export * from './plants';
+export * from './vegetation';
 
 // Creature Generators (Phase 4A)
 export * from './creatures';
 
 // Weather & Atmospheric Effects (Phase 5)
-export * from './cloud';
+// export * from './cloud';
 
 // Particle Systems (Phase 5B)
-export * from './particles';
+// export * from './particles';
 
 // Reptiles & Amphibians (Phase 4D)
-export * from './reptiles-amphibians';
+// export * from './reptiles-amphibians';
 
 // Birds & Avian Creatures (Phase 4E)
-export * from './birds';
+// export * from './birds';
 
 // Future exports (to be implemented)
 // export * from './lighting';
-export * from './mammals';
+// export * from './mammals';
 
 // Fruits Generator (NEW)
-export * from './fruits';
+// export * from './fruits';
 
 // Clothes Generator (NEW)
 export * from './clothes';
 
 // Lamp Generators (NEW)
-export * from './lamps';
-export * from './specialized-lamps';
+// export * from './lamps';
+// export * from './specialized-lamps';
 
 // Outdoor Furniture (NEW)
-export * from './outdoor-furniture';
+// export * from './outdoor-furniture';
 
 // Niche Decoratives (NEW)
-export * from './niche-decoratives';
+// export * from './niche-decoratives';

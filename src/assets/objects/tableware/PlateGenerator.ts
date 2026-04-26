@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
 
 export interface PlateParams {
   type: 'dinner' | 'salad' | 'dessert' | 'soup' | 'appetizer';
