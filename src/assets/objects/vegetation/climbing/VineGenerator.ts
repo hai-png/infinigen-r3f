@@ -41,6 +41,7 @@ export interface VineConfig {
  * - Attachment point system for climbing surfaces
  */
 export class VineGenerator {
+  private defaultConfig: VineConfig = {
     species: 'ivy',
     growthPattern: 'climbing',
     length: 2.0,
