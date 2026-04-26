@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 
 export interface TableLampParams {

@@ -2,7 +2,7 @@
  * BeamGenerator - Procedural beam generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface BeamParams {
   length: number;

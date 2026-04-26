@@ -2,7 +2,7 @@
  * CeilingGenerator - Procedural ceiling generation
  */
 import { Group, Mesh, BoxGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface CeilingParams {
   width: number;

@@ -4,8 +4,8 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, MeshStandardMaterial, Color } from 'three';
-import { FixedSeed } from '../../../core/util/math/utils';
-import { BaseObjectGenerator } from './BaseObjectGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
+import { BaseObjectGenerator } from '../BaseObjectGenerator';
 
 export interface WindowParams {
   width: number;

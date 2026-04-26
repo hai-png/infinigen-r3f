@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from './BaseObjectGenerator';
+import { BaseObjectGenerator, ObjectStylePreset } from '../BaseObjectGenerator';
 import { ObjectRegistry } from './ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 import { extrudeShape } from '../../assets/utils/curves';

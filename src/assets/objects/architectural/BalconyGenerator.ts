@@ -2,7 +2,7 @@
  * BalconyGenerator - Procedural balcony generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface BalconyParams {
   width: number;

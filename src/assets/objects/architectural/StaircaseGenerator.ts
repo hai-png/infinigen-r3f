@@ -9,8 +9,8 @@
  */
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, ExtrudeGeometry, Vector3, Color } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { FixedSeed } from '../../../core/util/math/utils';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { FixedSeed } from '../../../../core/util/math/utils';
 
 export interface StaircaseParams {
   // Geometry

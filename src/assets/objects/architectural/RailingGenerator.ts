@@ -2,7 +2,7 @@
  * RailingGenerator - Procedural railing generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface RailingParams {
   length: number;

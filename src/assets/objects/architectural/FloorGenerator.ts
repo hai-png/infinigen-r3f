@@ -2,7 +2,7 @@
  * FloorGenerator - Procedural flooring generation
  */
 import { Group, Mesh, BoxGeometry, PlaneGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface FloorParams {
   width: number;

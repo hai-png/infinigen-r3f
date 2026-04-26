@@ -10,8 +10,8 @@
  */
 
 import { Object3D, Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { BBox } from '../../../core/util/math/transforms';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BBox } from '../../../../core/util/math/transforms';
 
 export interface ApplianceParams {
   width: number;

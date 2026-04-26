@@ -6,8 +6,8 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, Mesh, PlaneGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
-import { BBox } from '../../../core/util/math/transforms';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BBox } from '../../../../core/util/math/transforms';
 
 export interface BedParams {
   size: 'twin' | 'full' | 'queen' | 'king' | 'cal-king';

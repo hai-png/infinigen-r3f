@@ -2,7 +2,7 @@
  * FenceGenerator - Procedural fence generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface FenceParams {
   length: number;

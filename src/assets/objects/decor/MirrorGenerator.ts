@@ -16,7 +16,7 @@ import {
   Float32BufferAttribute,
   MathUtils
 } from 'three';
-import { BaseObjectGenerator } from '../BaseObjectGenerator';
+import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 import { NoiseUtils } from '../../utils/NoiseUtils';
 
 export type MirrorStyle = 'wall' | 'standing' | 'vanity' | 'decorative' | 'round' | 'oval' | 'sunburst';
