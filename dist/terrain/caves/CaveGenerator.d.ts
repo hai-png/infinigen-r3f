@@ -40,7 +40,6 @@ export declare class CaveGenerator {
     private params;
     private sdfOps;
     private decorations;
-    constructor(params?: Partial<CaveParams>);
     /**
      * Generate cave SDF by subtracting from terrain SDF
      */

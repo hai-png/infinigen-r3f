@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NoiseUtils } from '../../../procedural/NoiseUtils';
+import { NoiseUtils } from '../../../utils/NoiseUtils';
 
 /**
  * Configuration for small plant generation

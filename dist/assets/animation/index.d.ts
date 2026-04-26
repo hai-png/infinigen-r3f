@@ -12,6 +12,8 @@ export { OscillatoryMotion, PatternGenerator, evaluateWave, createPresetMotion, 
 export type { WaveType, OscillatoryConfig, PatternType, PatternConfig } from './procedural/OscillatoryMotion';
 export { PathFollower, generateCameraPath } from './procedural/PathFollowing';
 export type { SplineType, OrientationMode, SplineKeyframe, PathFollowingConfig, PathSample } from './procedural/PathFollowing';
+export { WindAnimationSystem, WindZone } from './procedural/WindAnimationSystem';
+export type { WindLayer, WindParams, AnimationConfig } from './procedural/WindAnimationSystem';
 export { InverseKinematics, CCDIKSolver, FABRIKSolver, createArmChain, createLegChain, createSnakeChain } from './character/InverseKinematics';
 export type { JointConfig, IKSolverType, IKChainConfig, JointState } from './character/InverseKinematics';
 export { GaitGenerator, createPresetGait } from './character/GaitGenerator';

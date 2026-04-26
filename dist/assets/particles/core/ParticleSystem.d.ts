@@ -7,7 +7,7 @@
  * @module particles/core
  */
 import * as THREE from 'three';
-import { Vector3 } from '../../../core/util/math/vector';
+import { Vector3 } from 'three';
 export type ParticleLifeCycle = 'birth' | 'alive' | 'dying' | 'dead';
 export interface ParticleData {
     id: number;

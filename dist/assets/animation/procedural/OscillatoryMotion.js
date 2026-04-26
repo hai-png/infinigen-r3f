@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 /**
  * Evaluate wave function
  */

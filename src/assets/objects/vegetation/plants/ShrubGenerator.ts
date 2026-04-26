@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { NoiseUtils } from '../../../utils/NoiseUtils';
 
 /**
+ * ShrubGenerator - Procedural shrub and bush generation with species presets
+ * 
+ * Features:
+ * - Multiple predefined species (boxwood, hydrangea, lavender, rose_bush, etc.)
+ * - Seasonal color variations
+ * - Berry and flower support
+ * - Multiple branch patterns (spherical, elliptical, irregular, flat)
+ * - Evergreen/deciduous support
+ * 
+ * @module vegetation/plants
+ */
+
+/**
  * Shrub species configuration
  */
 export interface ShrubSpeciesConfig {

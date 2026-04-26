@@ -23,10 +23,13 @@ export class WindowGenerator extends BaseObjectGenerator {
     generate(params) {
         const finalParams = { ...this.getDefaultParams(), ...params };
         const seed = params?.seed ?? Math.floor(Math.random() * 1000000);
-        using(new FixedSeed(seed));
-        {
+        const fixedSeed = new FixedSeed(seed);
+        try {
             this.random.seed = seed;
             return this.createWindow(finalParams);
+        }
+        finally {
+            fixedSeed[Symbol.dispose]?.();
         }
     }
     createWindow(params) {

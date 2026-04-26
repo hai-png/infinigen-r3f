@@ -10,6 +10,7 @@ export { Timeline, AnimationTrack, Easings, getEasing, lerp } from './core/Timel
 // Procedural Motion
 export { OscillatoryMotion, PatternGenerator, evaluateWave, createPresetMotion, createPresetPattern } from './procedural/OscillatoryMotion';
 export { PathFollower, generateCameraPath } from './procedural/PathFollowing';
+export { WindAnimationSystem, WindZone } from './procedural/WindAnimationSystem';
 // Character Animation & IK
 export { InverseKinematics, CCDIKSolver, FABRIKSolver, createArmChain, createLegChain, createSnakeChain } from './character/InverseKinematics';
 export { GaitGenerator, createPresetGait } from './character/GaitGenerator';

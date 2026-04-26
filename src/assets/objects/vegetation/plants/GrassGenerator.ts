@@ -2,7 +2,15 @@ import * as THREE from 'three';
 import { NoiseUtils } from '../../../utils/NoiseUtils';
 
 /**
- * Configuration for grass generation
+ * GrassGenerator - Procedural grass field generation with instanced rendering
+ * 
+ * Features:
+ * - Multiple grass varieties (fine, coarse, mixed)
+ * - Wind animation support
+ * - Color variation for natural appearance
+ * - Optimized for large-scale terrain coverage
+ * 
+ * @module vegetation/plants
  */
 export interface GrassConfig {
   bladeHeight: number;

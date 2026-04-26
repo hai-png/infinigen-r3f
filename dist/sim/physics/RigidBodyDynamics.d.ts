@@ -4,7 +4,7 @@
  * Provides complete rigid body dynamics, collision detection,
  * and physics material definitions integrated with @react-three/rapier.
  */
-import { Vector3, Quaternion, Matrix4 } from 'three';
+import { Vector3, Quaternion, Matrix4, Box3, Sphere } from 'three';
 export type PhysicsShapeType = 'box' | 'sphere' | 'capsule' | 'cylinder' | 'convexHull' | 'trimesh' | 'heightfield';
 export interface PhysicsShape {
     type: PhysicsShapeType;
@@ -159,6 +159,43 @@ export declare class CollisionDetectionSystem {
     private colliders;
     private collisionPairs;
     private contactCache;
+    /**
+     * Register a collider
+     */
+    registerCollider(collider: ColliderInfo): void;
+    /**
+     * Unregister a collider
+     */
+    unregisterCollider(colliderId: string): void;
+    /**
+     * Update collider transform
+     */
+    updateColliderTransform(colliderId: string, position: Vector3, rotation: Quaternion): void;
+    private updateBoundingVolumes;
+    private computeBoundingBox;
+    private computeBoundingSphere;
+    /**
+     * Broad phase collision detection using sweep and prune
+     */
+    broadPhase(): string[][];
+    private testCollisionFilter;
+    private testBoxOverlap;
+    /**
+     * Narrow phase collision detection
+     */
+    narrowPhase(pairs: string[][]): CollisionEvent[];
+    private detectContact;
+    private sphereContacts;
+    private boxContacts;
+    private genericContacts;
+    /**
+     * Get cached contact data
+     */
+    getContactData(colliderA: string, colliderB: string): ContactData | null;
+    /**
+     * Clear all collision data
+     */
+    clear(): void;
 }
 export interface RigidBodyState {
     position: Vector3;
@@ -261,4 +298,21 @@ export declare function createTrimeshShape(vertices: Float32Array, indices: Uint
  * Convert Three.js mesh to physics shape
  */
 export declare function meshToPhysicsShape(geometry: any, useConvexHull?: boolean): PhysicsShape;
+interface ColliderInfo {
+    id: string;
+    shape: PhysicsShape;
+    layer: CollisionLayer;
+    filter: CollisionFilter;
+    boundingBox: Box3;
+    boundingSphere: Sphere;
+    isTrigger: boolean;
+}
+interface ContactData {
+    points: Vector3[];
+    normal: Vector3;
+    depth: number;
+    bodyA: string;
+    bodyB: string;
+}
+export {};
 //# sourceMappingURL=RigidBodyDynamics.d.ts.map

@@ -18,7 +18,7 @@ import {
   type ParticleCollider
 } from '../../particles/core/ParticleSystem';
 import { WeatherSystem, createWeatherSystem } from '../../particles/effects/WeatherSystem';
-import { Vector3 } from '../../../core/util/math/vector';
+import { Vector3 } from 'three';
 
 describe('Particle System', () => {
   describe('Particle', () => {

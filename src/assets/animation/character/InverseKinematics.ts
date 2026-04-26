@@ -1,4 +1,4 @@
-import { Vector3 } from '../../../core/util/math/vector';
+import { Vector3 } from 'three';
 
 /**
  * Joint Configuration for IK chains

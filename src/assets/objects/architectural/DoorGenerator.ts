@@ -42,9 +42,12 @@ export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const seed = params?.seed ?? Math.floor(Math.random() * 1000000);
     
-    using (new FixedSeed(seed)) {
+    const fixedSeed = new FixedSeed(seed);
+    try {
       this.random.seed = seed;
       return this.createDoor(finalParams);
+    } finally {
+      fixedSeed[Symbol.dispose]?.();
     }
   }
 

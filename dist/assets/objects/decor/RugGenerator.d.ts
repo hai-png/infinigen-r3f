@@ -1,15 +1,25 @@
 /**
- * Auto-generated placeholder - to be fully implemented
+ * RugGenerator - Procedural rug/carpet generation
  */
 import { Group } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-export interface Params {
-    style: string;
+export type RugStyle = 'persian' | 'modern' | 'shag' | 'oriental' | 'geometric' | 'traditional';
+export type RugShape = 'rectangular' | 'round' | 'oval' | 'runner';
+export interface RugConfig {
+    style: RugStyle;
+    shape: RugShape;
+    width: number;
+    length: number;
+    pileHeight: number;
+    hasFringe: boolean;
     seed?: number;
 }
-export declare class Generator extends BaseObjectGenerator<Params> {
-    protected readonly defaultParams: Params;
-    generate(params?: Partial<Params>): Group;
+export declare class RugGenerator extends BaseObjectGenerator<RugConfig> {
+    protected readonly defaultParams: RugConfig;
+    generate(params?: Partial<RugConfig>): Group;
+    private createRug;
+    private addFringe;
+    private getMaterial;
     getVariations(): Params[];
 }
 //# sourceMappingURL=RugGenerator.d.ts.map

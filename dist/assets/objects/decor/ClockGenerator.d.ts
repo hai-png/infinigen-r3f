@@ -1,15 +1,38 @@
 /**
- * Auto-generated placeholder - to be fully implemented
+ * ClockGenerator - Procedural clock generation with various styles
+ * Generates wall clocks, mantel clocks, grandfather clocks, and digital clocks
  */
 import { Group } from 'three';
 import { BaseObjectGenerator } from '../BaseObjectGenerator';
-export interface Params {
-    style: string;
+export type ClockStyle = 'wall' | 'mantel' | 'grandfather' | 'digital' | 'cuckoo' | 'pendulum' | 'alarm';
+export type ClockMaterialType = 'wood' | 'metal' | 'plastic' | 'glass' | 'ceramic' | 'brass';
+export type ClockFaceStyle = 'analog' | 'digital' | 'roman' | 'minimal' | 'ornate';
+export interface ClockConfig {
+    style: ClockStyle;
+    materialType: ClockMaterialType;
+    faceStyle: ClockFaceStyle;
+    size: 'small' | 'medium' | 'large';
+    hasPendulum: boolean;
+    hasChime: boolean;
+    ornateLevel: number;
     seed?: number;
 }
-export declare class Generator extends BaseObjectGenerator<Params> {
-    protected readonly defaultParams: Params;
-    generate(params?: Partial<Params>): Group;
+export declare class ClockGenerator extends BaseObjectGenerator<ClockConfig> {
+    protected readonly defaultParams: ClockConfig;
+    private noise;
+    constructor();
+    generate(params?: Partial<ClockConfig>): Group;
+    private createWallClock;
+    private createMantelClock;
+    private createGrandfatherClock;
+    private createDigitalClock;
+    private createCuckooClock;
+    private createPendulumClock;
+    private createAlarmClock;
+    private createClockHands;
+    private createPendulum;
+    private getSizeMultiplier;
+    private getMaterialByType;
     getVariations(): Params[];
 }
 //# sourceMappingURL=ClockGenerator.d.ts.map
