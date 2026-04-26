@@ -7,6 +7,7 @@ import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface PlasticParams {
+  [key: string]: unknown;
   type: 'matte' | 'glossy' | 'textured' | 'translucent' | 'metallic';
   color: Color;
   roughness: number;
@@ -31,7 +32,7 @@ export class PlasticGenerator extends BaseMaterialGenerator<PlasticParams> {
   generate(params: Partial<PlasticParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(PlasticGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as any;
     
     material.color = finalParams.color;
     material.roughness = finalParams.roughness;

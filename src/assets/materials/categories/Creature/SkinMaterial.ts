@@ -33,6 +33,10 @@ export interface SkinMaterialConfig {
   skinType: 'human' | 'alien' | 'creature';
 }
 
+// Export type aliases for compatibility with index.ts
+export type SkinParams = SkinMaterialConfig;
+export type SkinPreset = 'fair' | 'medium' | 'dark' | 'alien' | 'zombie';
+
 /**
  * Realistic skin material with subsurface scattering
  */

@@ -206,7 +206,7 @@ export interface RandomGenerator {
 }
 
 export class SeededRandom implements RandomGenerator {
-  private seed: number;
+  public seed: number;
 
   constructor(seed: number) {
     this.seed = seed;
@@ -233,9 +233,21 @@ export class SeededRandom implements RandomGenerator {
 
   /**
    * Returns a random float in [min, max).
+   * If no arguments provided, returns a random float in [0, 1).
    */
-  nextFloat(min: number, max: number): number {
+  nextFloat(min?: number, max?: number): number {
+    if (min === undefined || max === undefined) {
+      return this.next();
+    }
     return this.next() * (max - min) + min;
+  }
+
+  /**
+   * Alias for next() - returns a random float in [0, 1).
+   * For backward compatibility with code expecting uniform().
+   */
+  uniform(): number {
+    return this.next();
   }
 
   /**

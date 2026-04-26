@@ -7,6 +7,7 @@ import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface WoodParams {
+  [key: string]: unknown;
   type: 'oak' | 'pine' | 'walnut' | 'mahogany' | 'plywood' | 'reclaimed';
   color: Color;
   grainIntensity: number;
@@ -33,7 +34,7 @@ export class WoodGenerator extends BaseMaterialGenerator<WoodParams> {
   generate(params: Partial<WoodParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(WoodGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as any;
     
     material.color = finalParams.color;
     material.roughness = finalParams.roughness;

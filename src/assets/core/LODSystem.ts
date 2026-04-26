@@ -81,7 +81,7 @@ export class LODSystem {
 
     // Enable fade transitions if configured
     if (this.fadeTransition) {
-      lod.enableFade = true;
+      // lod.enableFade = true; // Not available in current Three.js version
     }
 
     this.lodGroups.set(assetId, lod);
@@ -330,10 +330,8 @@ export class LODSystem {
         matrices.push(obj.matrixWorld);
       }
     });
-
-    return THREE.BufferGeometryUtils 
-      ? THREE.BufferGeometryUtils.mergeGeometries(geometries, false)
-      : this.simpleMergeGeometries(geometries, matrices);
+    
+    return this.simpleMergeGeometries(geometries, matrices);
   }
 
   /**
@@ -446,7 +444,7 @@ export class LODSystem {
   public setFadeTransition(enabled: boolean): void {
     this.fadeTransition = enabled;
     this.lodGroups.forEach(lod => {
-      lod.enableFade = enabled;
+      // lod.enableFade = enabled; // Not available in current Three.js version
     });
   }
 

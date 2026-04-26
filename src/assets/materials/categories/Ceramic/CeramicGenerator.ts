@@ -9,6 +9,7 @@ import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface CeramicParams {
+  [key: string]: unknown;
   type: 'porcelain' | 'stoneware' | 'earthenware' | 'terracotta' | 'tile';
   color: Color;
   glazeType: 'glossy' | 'matte' | 'satin' | 'crackle';
@@ -52,50 +53,51 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
     
     const material = this.createBaseMaterial();
+    const mat = material as MeshStandardMaterial;
     
     // Generate base ceramic color with subtle variations
     const baseColor = this.generateBaseColor(finalParams.color, finalParams.type, rng);
-    material.map = this.createTextureFromColor(baseColor);
+    mat.map = this.createTextureFromColor(baseColor);
     
     // Apply glaze effects
-    this.applyGlaze(material, finalParams, rng);
+    this.applyGlaze(mat, finalParams, rng);
     
     // Add patterns if requested
     if (finalParams.patternType !== 'none') {
-      this.applyPattern(material, finalParams, rng);
+      this.applyPattern(mat, finalParams, rng);
     }
     
     // Generate roughness based on glaze type and wear
-    this.generateRoughnessMap(material, finalParams, rng);
+    this.generateRoughnessMap(mat, finalParams, rng);
     
     // Add edge wear
     if (finalParams.edgeWear > 0) {
-      this.applyEdgeWear(material, finalParams, rng);
+      this.applyEdgeWear(mat, finalParams, rng);
     }
     
     // Add dirt accumulation in crevices
     if (finalParams.dirtAccumulation > 0) {
-      this.applyDirt(material, finalParams, rng);
+      this.applyDirt(mat, finalParams, rng);
     }
     
     // Handle tile-specific generation
     if (finalParams.type === 'tile' && finalParams.tileGroutWidth !== undefined) {
-      this.applyTileGrout(material, finalParams, rng);
+      this.applyTileGrout(mat, finalParams, rng);
     }
     
     // Generate normal map for surface detail
-    material.normalMap = this.generateNormalMap(finalParams, rng);
+    mat.normalMap = this.generateNormalMap(finalParams, rng);
     
     // Generate AO map for depth
-    material.aoMap = this.generateAOMap(finalParams, rng);
+    mat.aoMap = this.generateAOMap(finalParams, rng);
     
     return {
-      material,
+      material: mat,
       maps: {
-        map: material.map,
-        roughnessMap: material.roughnessMap,
-        normalMap: material.normalMap,
-        aoMap: material.aoMap,
+        map: mat.map,
+        roughnessMap: mat.roughnessMap,
+        normalMap: mat.normalMap,
+        aoMap: mat.aoMap,
       },
       params: finalParams,
     };
@@ -115,7 +117,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     return new Color(r, g, b);
   }
 
-  private applyGlaze(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private applyGlaze(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     let roughness: number;
     let metalness = 0.0;
     
@@ -147,7 +149,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.roughnessMap = this.createRoughnessTexture(params, rng);
   }
 
-  private applyCrackleEffect(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private applyCrackleEffect(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -181,7 +183,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.displacementScale = 0.02;
   }
 
-  private applyPattern(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private applyPattern(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -298,7 +300,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private generateRoughnessMap(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private generateRoughnessMap(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -327,13 +329,13 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.roughnessMap = new CanvasTexture(canvas);
   }
 
-  private applyEdgeWear(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private applyEdgeWear(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     // Edge wear would be applied via AO map or vertex colors in actual implementation
     // For now, we adjust roughness to simulate worn edges
     material.roughness = Math.min(1.0, material.roughness + params.edgeWear * 0.3);
   }
 
-  private applyDirt(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private applyDirt(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     // Dirt accumulation affects AO and color
     const dirtColor = new Color(0x3d2817);
     const baseColor = params.color.clone().lerp(dirtColor, params.dirtAccumulation * 0.3);
@@ -344,7 +346,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private applyTileGrout(material: any, params: CeramicParams, rng: FixedSeed): void {
+  private applyTileGrout(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size;

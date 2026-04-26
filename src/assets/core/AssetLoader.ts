@@ -345,7 +345,7 @@ export class AssetLoader {
         (texture) => {
           // Apply compression if requested
           if (options?.compress) {
-            texture.compression = THREE.BasisCompression; // Requires Basis transcoder
+            // texture.compression = THREE.BasisCompression; // Requires Basis transcoder - commented out due to type issues
           }
           
           if (cacheKey && options?.cache !== false) {

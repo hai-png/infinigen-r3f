@@ -3,12 +3,13 @@
  * Generates procedural fabric materials including cotton, linen, wool, velvet, denim
  */
 
-import { Color, Texture, CanvasTexture } from 'three';
+import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface FabricParams {
+  [key: string]: unknown;
   type: 'cotton' | 'linen' | 'wool' | 'velvet' | 'denim' | 'silk' | 'canvas';
   color: Color;
   weaveType: 'plain' | 'twill' | 'satin' | 'knit';
@@ -47,7 +48,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     const finalParams = this.mergeParams(FabricGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
     
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as MeshPhysicalMaterial;
     material.metalness = 0.0;
     
     // Generate weave pattern
@@ -87,7 +88,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
       material,
       maps: {
         map: material.map,
-        roughnessMap: material.roughnessMap,
+        roughnessMap: material.roughnessMap || null,
         normalMap: material.normalMap,
       },
       params: finalParams,

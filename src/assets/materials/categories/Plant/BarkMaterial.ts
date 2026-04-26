@@ -1,6 +1,22 @@
 import * as THREE from 'three';
 import { NoiseUtils } from '../../../utils/NoiseUtils';
 
+export interface BarkParams {
+  baseColor: THREE.Color;
+  creviceColor: THREE.Color;
+  roughness: number;
+  pattern: 'smooth' | 'rough' | 'furrowed' | 'peeling' | 'ridged';
+  depth: number;
+  enableMoss: boolean;
+  mossDensity: number;
+  mossColor: THREE.Color;
+  enableLichen: boolean;
+  lichenColor: THREE.Color;
+  [key: string]: unknown;
+}
+
+export type BarkPreset = 'oak' | 'pine' | 'birch' | 'cedar' | 'mossy';
+
 /**
  * Configuration for bark material properties
  */

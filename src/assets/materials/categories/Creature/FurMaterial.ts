@@ -33,6 +33,10 @@ export interface FurMaterialConfig {
   anisotropy: number;
 }
 
+// Export type aliases for compatibility with index.ts
+export type FurParams = FurMaterialConfig;
+export type FurPreset = 'cat' | 'dog' | 'tiger' | 'leopard' | 'bear' | 'rabbit';
+
 /**
  * Realistic fur/hair material with anisotropic shading
  */

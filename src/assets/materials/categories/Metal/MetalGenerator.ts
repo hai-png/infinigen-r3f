@@ -7,6 +7,7 @@ import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface MetalParams {
+  [key: string]: unknown;
   type: 'steel' | 'aluminum' | 'brass' | 'copper' | 'iron' | 'gold' | 'silver';
   color: Color;
   roughness: number;
@@ -33,7 +34,7 @@ export class MetalGenerator extends BaseMaterialGenerator<MetalParams> {
   generate(params: Partial<MetalParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(MetalGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as any;
     
     material.metalness = finalParams.metalness;
     material.roughness = finalParams.roughness;

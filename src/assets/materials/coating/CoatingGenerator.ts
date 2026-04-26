@@ -11,6 +11,7 @@ export interface CoatingParams {
   glossiness: number;
   thickness: number;
   clearcoat: number;
+  [key: string]: unknown;
 }
 
 export class CoatingGenerator extends BaseMaterialGenerator<CoatingParams> {
@@ -27,7 +28,7 @@ export class CoatingGenerator extends BaseMaterialGenerator<CoatingParams> {
 
   generate(params: Partial<CoatingParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(CoatingGenerator.DEFAULT_PARAMS, params);
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as THREE.MeshPhysicalMaterial;
     
     material.color = finalParams.color;
     material.roughness = 1 - finalParams.glossiness;
@@ -41,7 +42,7 @@ export class CoatingGenerator extends BaseMaterialGenerator<CoatingParams> {
       material.metalness = 0.5;
     }
     
-    return { material, maps: { map: null, roughnessMap: null, normalMap: null }, params: finalParams };
+    return { material: material as any, maps: { map: null, roughnessMap: null, normalMap: null }, params: finalParams };
   }
 
   getVariations(count: number): CoatingParams[] {

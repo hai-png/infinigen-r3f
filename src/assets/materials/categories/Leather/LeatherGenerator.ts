@@ -1,12 +1,13 @@
 /**
  * Leather Material Generator - Full-grain, top-grain, suede, distressed
  */
-import { Color, Texture, CanvasTexture } from 'three';
+import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface LeatherParams {
+  [key: string]: unknown;
   type: 'full-grain' | 'top-grain' | 'suede' | 'distressed' | 'patent';
   color: Color;
   roughness: number;
@@ -31,7 +32,7 @@ export class LeatherGenerator extends BaseMaterialGenerator<LeatherParams> {
   generate(params: Partial<LeatherParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(LeatherGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as MeshPhysicalMaterial;
     
     material.color = finalParams.color;
     material.roughness = finalParams.roughness;

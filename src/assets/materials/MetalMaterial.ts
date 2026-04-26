@@ -92,7 +92,7 @@ export class MetalMaterialGenerator {
       metalType
     };
 
-    const material = new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshPhysicalMaterial({
       color: finalConfig.baseColor,
       roughness: finalConfig.roughness,
       metalness: finalConfig.metalness,

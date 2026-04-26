@@ -1,12 +1,13 @@
 /**
  * Glass Material Generator - Clear, frosted, tinted, patterned glass
  */
-import { Color, Texture, CanvasTexture } from 'three';
+import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface GlassParams {
+  [key: string]: unknown;
   type: 'clear' | 'frosted' | 'tinted' | 'patterned' | 'textured';
   color: Color;
   transmission: number;
@@ -33,7 +34,7 @@ export class GlassGenerator extends BaseMaterialGenerator<GlassParams> {
   generate(params: Partial<GlassParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(GlassGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as MeshPhysicalMaterial;
     
     material.transparent = true;
     material.transmission = finalParams.transmission;

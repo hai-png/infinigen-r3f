@@ -7,6 +7,7 @@ import { FixedSeed } from '../../../../core/util/math/utils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface StoneParams {
+  [key: string]: unknown;
   type: 'marble' | 'granite' | 'limestone' | 'slate' | 'concrete' | 'travertine';
   color: Color;
   veinColor: Color;
@@ -33,7 +34,7 @@ export class StoneGenerator extends BaseMaterialGenerator<StoneParams> {
   generate(params: Partial<StoneParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(StoneGenerator.DEFAULT_PARAMS, params);
     const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
-    const material = this.createBaseMaterial();
+    const material = this.createBaseMaterial() as any;
     
     material.color = finalParams.color;
     material.roughness = finalParams.roughness;

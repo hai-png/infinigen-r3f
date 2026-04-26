@@ -1,0 +1,149 @@
+/**
+ * Light Nodes - Light source definitions and properties
+ * Based on Blender's light nodes and Three.js light types
+ *
+ * @module nodes/light
+ */
+import { Color, Vector3 } from 'three';
+import { NodeTypes } from '../../core/node-types.js';
+export const PointLightDefinition = {
+    type: NodeTypes.PointLight,
+    label: 'Point Light',
+    category: 'Light',
+    inputs: [
+        { name: 'Color', type: 'COLOR', default: new Color(1, 1, 1) },
+        { name: 'Strength', type: 'FLOAT', default: 100 },
+        { name: 'Position', type: 'VECTOR', default: new Vector3(0, 0, 0) },
+    ],
+    outputs: [{ name: 'Light', type: 'LIGHT' }],
+    params: {
+        intensity: { type: 'float', default: 1, min: 0, max: 1000 },
+        distance: { type: 'float', default: 0, min: 0 }, // 0 = infinite
+        decay: { type: 'float', default: 2, min: 0, max: 3 },
+    },
+};
+export const SpotLightDefinition = {
+    type: NodeTypes.SpotLight,
+    label: 'Spot Light',
+    category: 'Light',
+    inputs: [
+        { name: 'Color', type: 'COLOR', default: new Color(1, 1, 1) },
+        { name: 'Strength', type: 'FLOAT', default: 100 },
+        { name: 'Position', type: 'VECTOR', default: new Vector3(0, 5, 0) },
+        { name: 'Target', type: 'VECTOR', default: new Vector3(0, 0, 0) },
+    ],
+    outputs: [{ name: 'Light', type: 'LIGHT' }],
+    params: {
+        intensity: { type: 'float', default: 1, min: 0, max: 1000 },
+        distance: { type: 'float', default: 0, min: 0 },
+        angle: { type: 'float', default: Math.PI / 6, min: 0, max: Math.PI / 2 },
+        penumbra: { type: 'float', default: 0, min: 0, max: 1 },
+        decay: { type: 'float', default: 2, min: 0, max: 3 },
+    },
+};
+export const AreaLightDefinition = {
+    type: NodeTypes.AreaLight,
+    label: 'Area Light',
+    category: 'Light',
+    inputs: [
+        { name: 'Color', type: 'COLOR', default: new Color(1, 1, 1) },
+        { name: 'Strength', type: 'FLOAT', default: 100 },
+        { name: 'Position', type: 'VECTOR', default: new Vector3(0, 5, 0) },
+    ],
+    outputs: [{ name: 'Light', type: 'LIGHT' }],
+    params: {
+        intensity: { type: 'float', default: 1, min: 0, max: 1000 },
+        width: { type: 'float', default: 1, min: 0.01, max: 100 },
+        height: { type: 'float', default: 1, min: 0.01, max: 100 },
+        shape: { type: 'enum', options: ['rectangle', 'disk', 'sphere'], default: 'rectangle' },
+    },
+};
+export const SunLightDefinition = {
+    type: NodeTypes.SunLight,
+    label: 'Sun Light',
+    category: 'Light',
+    inputs: [
+        { name: 'Color', type: 'COLOR', default: new Color(1, 1, 0.95) },
+        { name: 'Strength', type: 'FLOAT', default: 1 },
+        { name: 'Direction', type: 'VECTOR', default: new Vector3(0, -1, 0) },
+    ],
+    outputs: [{ name: 'Light', type: 'LIGHT' }],
+    params: {
+        intensity: { type: 'float', default: 1, min: 0, max: 10 },
+        angle: { type: 'float', default: 0.004, min: 0, max: 0.1 }, // Sun angular diameter
+    },
+};
+export const LightFalloffDefinition = {
+    type: NodeTypes.LightFalloff,
+    label: 'Light Falloff',
+    category: 'Light',
+    inputs: [
+        { name: 'Strength', type: 'FLOAT', default: 1 },
+        { name: 'Smooth', type: 'FLOAT', default: 0 },
+    ],
+    outputs: [{ name: 'Strength', type: 'FLOAT' }],
+    params: {
+        constant: { type: 'float', default: 1, min: 0 },
+        linear: { type: 'float', default: 0, min: 0 },
+        quadratic: { type: 'float', default: 1, min: 0 },
+    },
+};
+export const LightAttenuationDefinition = {
+    type: NodeTypes.LightAttenuation,
+    label: 'Light Attenuation',
+    category: 'Light',
+    inputs: [
+        { name: 'Distance', type: 'FLOAT', default: 0 },
+        { name: 'Curve', type: 'FLOAT_CURVE', default: null },
+    ],
+    outputs: [{ name: 'Factor', type: 'FLOAT' }],
+    params: {
+        useCustomCurve: { type: 'boolean', default: false },
+    },
+};
+// ============================================================================
+// Light Execution Functions
+// ============================================================================
+import { PointLight as ThreePointLight, SpotLight as ThreeSpotLight, DirectionalLight } from 'three';
+export function createPointLight(color, strength, position, intensity = 1, distance = 0, decay = 2) {
+    const light = new ThreePointLight(color, strength * intensity, distance, decay);
+    light.position.copy(position);
+    return light;
+}
+export function createSpotLight(color, strength, position, target, intensity = 1, distance = 0, angle = Math.PI / 6, penumbra = 0, decay = 2) {
+    const light = new ThreeSpotLight(color, strength * intensity, distance, angle, penumbra, decay);
+    light.position.copy(position);
+    light.target.position.copy(target);
+    return light;
+}
+export function createSunLight(color, strength, direction, intensity = 1) {
+    const light = new DirectionalLight(color, strength * intensity);
+    light.position.copy(direction.clone().negate().multiplyScalar(100));
+    light.target.position.set(0, 0, 0);
+    return light;
+}
+export function calculateFalloff(distance, strength, smooth, constant = 1, linear = 0, quadratic = 1) {
+    if (distance <= 0)
+        return strength;
+    const falloff = constant + linear * distance + quadratic * distance * distance;
+    const smoothed = Math.max(0, strength - smooth);
+    return smoothed / falloff;
+}
+// ============================================================================
+// Exports
+// ============================================================================
+export const LightNodes = {
+    PointLight: PointLightDefinition,
+    SpotLight: SpotLightDefinition,
+    AreaLight: AreaLightDefinition,
+    SunLight: SunLightDefinition,
+    LightFalloff: LightFalloffDefinition,
+    LightAttenuation: LightAttenuationDefinition,
+};
+export const LightFunctions = {
+    createPointLight,
+    createSpotLight,
+    createSunLight,
+    calculateFalloff,
+};
+//# sourceMappingURL=LightNodes.js.map

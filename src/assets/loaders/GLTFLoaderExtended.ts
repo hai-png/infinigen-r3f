@@ -142,7 +142,7 @@ export class GLTFLoaderExtended {
         const material = child.material as THREE.MeshStandardMaterial;
         
         if (material.map && options.generateMipmaps) {
-          material.map.generateMipmaps();
+          material.map.needsUpdate = true;
           material.map.anisotropy = options.anisotropy;
         }
 
@@ -201,7 +201,6 @@ export class GLTFLoaderExtended {
     });
 
     return {
-      id: url.split('/').pop()?.replace('.glb', '').replace('.gltf', '') || 'unknown',
       name: url.split('/').pop() || 'unknown',
       url,
       type: 'model',
@@ -212,7 +211,7 @@ export class GLTFLoaderExtended {
       textureCount: textureCount.size,
       lodLevels: [],
       tags: ['imported', 'gltf'],
-      createdAt: new Date(),
+      createdAt: Date.now(),
     };
   }
 
