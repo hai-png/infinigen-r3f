@@ -24,7 +24,7 @@ export class WeatheringGenerator {
     };
   }
 
-  private generateColorWeathering(params: WeatherParams, rng: FixedSeed): Texture {
+  private generateColorWeathering(params: WeatheringParams, rng: FixedSeed): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

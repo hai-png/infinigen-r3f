@@ -26,4 +26,5 @@ export type { BarkMaterial, BarkParams, BarkPreset } from './Plant/BarkMaterial'
 export type { WaterMaterial, WaterParams, WaterPreset } from './Fluid/WaterMaterial';
 
 // Tile materials (Sprint 1.5)
-export type { CeramicTileMaterial, CeramicTileParams, CeramicTilePreset } from './Tile/CeramicTileMaterial';
+export { CeramicTileMaterial } from './Tile/CeramicTileMaterial';
+export type { CeramicTileMaterialConfig as CeramicTileParams, CeramicTileMaterialConfig as CeramicTilePreset } from './Tile/CeramicTileMaterial';

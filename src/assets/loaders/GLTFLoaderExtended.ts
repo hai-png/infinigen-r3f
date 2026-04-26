@@ -212,6 +212,9 @@ export class GLTFLoaderExtended {
       lodLevels: [],
       tags: ['imported', 'gltf'],
       createdAt: Date.now(),
+      version: '1.0.0',
+      updatedAt: Date.now(),
+      author: 'system',
     };
   }
 

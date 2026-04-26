@@ -7,5 +7,7 @@
  * @module materials/categories/plant
  */
 
-export { LeafMaterial, LeafParams, LeafPreset } from './LeafMaterial';
-export { BarkMaterial, BarkParams, BarkPreset } from './BarkMaterial';
+export { LeafMaterial } from './LeafMaterial';
+export type { LeafParams, LeafPreset } from './LeafMaterial';
+export { BarkMaterial } from './BarkMaterial';
+export type { BarkParams, BarkPreset } from './BarkMaterial';
