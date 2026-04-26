@@ -1,1 +1,0 @@
-{"version":3,"file":"WalkCycle.d.ts","sourceRoot":"","sources":["../../../../../src/assets/objects/creatures/animation/WalkCycle.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,aAAa,EAAiB,MAAM,OAAO,CAAC;AACrD,qBAAa,SAAS;IACR,OAAO,CAAC,IAAI,CAAC;gBAAL,IAAI,CAAC,EAAE,MAAM,YAAA;IACjC,QAAQ,CAAC,IAAI,EAAE,OAAO,GAAG,WAAW,GAAG,SAAS,EAAE,KAAK,EAAE,MAAM,GAAG,aAAa;CAKhF"}

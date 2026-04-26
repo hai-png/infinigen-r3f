@@ -1,1 +1,0 @@
-{"version":3,"file":"BroadPhase.d.ts","sourceRoot":"","sources":["../../../../src/sim/physics/collision/BroadPhase.ts"],"names":[],"mappings":"AAAA,qBAAa,UAAU;IAAG,MAAM,CAAC,OAAO,EAAE,GAAG,EAAE,GAAG,GAAG,EAAE;CAAiB;AACxE,eAAe,UAAU,CAAC"}

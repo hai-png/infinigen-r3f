@@ -1,1 +1,0 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/scatter/index.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,cAAc,SAAS,CAAC;AACxB,cAAc,cAAc,CAAC;AA8B7B,eAAO,MAAM,eAAe;;;;;;;;;;;;;;;;;;;;;;;;;;;CA2B3B,CAAC;AAEF,MAAM,MAAM,WAAW,GAAG,MAAM,OAAO,eAAe,CAAC;AAEvD;;GAEG;AACH,wBAAgB,aAAa,CAAC,IAAI,EAAE,WAAW,EAAE,MAAM,CAAC,EAAE,GAAG,OAM5D;AAED,eAAe,eAAe,CAAC"}
