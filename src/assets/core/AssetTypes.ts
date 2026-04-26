@@ -36,6 +36,7 @@ export interface AssetMetadata {
   polyCount?: number;
   textureResolution?: number;
   memoryUsage?: number;
+  tags?: string[];
 }
 
 /**

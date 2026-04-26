@@ -197,19 +197,19 @@ export class WindAnimationSystem {
     const scale = this.windParams.turbulenceScale;
     const strength = this.windParams.turbulenceStrength;
     
-    const nx = this.noise.noise3D(
+    const nx = this.noise.noise3d(
       position.x * scale * 0.1,
       position.y * scale * 0.1,
       this.time * 0.5
     );
     
-    const ny = this.noise.noise3D(
+    const ny = this.noise.noise3d(
       position.x * scale * 0.1 + 100,
       position.y * scale * 0.1,
       this.time * 0.5
     );
     
-    const nz = this.noise.noise3D(
+    const nz = this.noise.noise3d(
       position.x * scale * 0.1 + 200,
       position.y * scale * 0.1,
       this.time * 0.5

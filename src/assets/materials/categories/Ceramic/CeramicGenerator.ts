@@ -3,8 +3,8 @@
  * Generates procedural ceramic materials including porcelain, stoneware, earthenware, and tiles
  */
 
-import { Color, Texture, CanvasTexture } from 'three';
-import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
+import { Color, Texture, CanvasTexture, MeshStandardMaterial, RepeatWrapping } from 'three';
+import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 import { FixedSeed } from '../../../core/util/math/utils';
 import { Noise3D } from '../../../core/util/math/noise';
 
@@ -190,9 +190,11 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     
     if (!ctx) return;
     
+    // Use the base color from params
+    const baseColor = params.color;
+    
     // Draw base
-    ctx.fillStyle = `#${material.map.image instanceof HTMLCanvasElement ? 
-      this.getPixelColor(material.map.image, 0, 0) : 'ffffff'}`;
+    ctx.fillStyle = `#${baseColor.getHexString()}`;
     ctx.fillRect(0, 0, size, size);
     
     const patternColor = params.color.clone().multiplyScalar(0.7);
@@ -215,7 +217,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
     
     const patternTexture = new CanvasTexture(canvas);
-    patternTexture.wrapS = patternTexture.wrapT = 1; // RepeatWrapping
+    patternTexture.wrapS = patternTexture.wrapT = RepeatWrapping;
     
     // Blend pattern with base
     material.map = patternTexture;
@@ -446,7 +448,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     
     if (!ctx) return new CanvasTexture(canvas);
     
-    const baseValue = Math.floor((material?.roughness || 0.2) * 255);
+    const baseValue = Math.floor((params.surfaceRoughness || 0.2) * 255);
     ctx.fillStyle = `rgb(${baseValue}, ${baseValue}, ${baseValue})`;
     ctx.fillRect(0, 0, size, size);
     
@@ -462,17 +464,17 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     for (let i = 0; i < count; i++) {
       variations.push({
         type: types[this.rng.nextInt(0, types.length - 1)],
-        color: new Color().setHSL(this.rng.nextFloat(), 0.3, 0.5 + this.rng.nextFloat() * 0.3),
+        color: new Color().setHSL(this.rng.nextFloat(0, 1), 0.3, 0.5 + this.rng.nextFloat(0, 0.3)),
         glazeType: glazeTypes[this.rng.nextInt(0, glazeTypes.length - 1)],
-        glazeThickness: 0.5 + this.rng.nextFloat() * 0.5,
-        surfaceRoughness: this.rng.nextFloat() * 0.5,
+        glazeThickness: 0.5 + this.rng.nextFloat(0, 0.5),
+        surfaceRoughness: this.rng.nextFloat(0, 0.5),
         patternType: patternTypes[this.rng.nextInt(0, patternTypes.length - 1)],
-        patternIntensity: this.rng.nextFloat(),
-        edgeWear: this.rng.nextFloat() * 0.3,
-        dirtAccumulation: this.rng.nextFloat() * 0.2,
-        tileGroutWidth: 0.01 + this.rng.nextFloat() * 0.03,
-        tileGroutColor: new Color().setHSL(this.rng.nextFloat(), 0.1, 0.5),
-        tileSize: 0.2 + this.rng.nextFloat() * 0.4,
+        patternIntensity: this.rng.nextFloat(0, 1),
+        edgeWear: this.rng.nextFloat(0, 0.3),
+        dirtAccumulation: this.rng.nextFloat(0, 0.2),
+        tileGroutWidth: 0.01 + this.rng.nextFloat(0, 0.03),
+        tileGroutColor: new Color().setHSL(this.rng.nextFloat(0, 1), 0.1, 0.5),
+        tileSize: 0.2 + this.rng.nextFloat(0, 0.4),
       });
     }
     
