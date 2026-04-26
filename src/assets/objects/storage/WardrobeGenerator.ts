@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type WardrobeType = 'freestanding' | 'built-in' | 'armoire' | 'cabinet' | 'walk-in' | 'chifforobe';
 export type DoorStyle = 'sliding' | 'hinged' | 'bi-fold' | 'curtain' | 'french';
@@ -44,10 +44,10 @@ export interface WardrobeResult {
 }
 
 export class WardrobeGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
 
   constructor() {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
   }
 
   /**

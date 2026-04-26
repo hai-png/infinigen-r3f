@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type OutdoorLightType = 'street' | 'garden' | 'pathway' | 'flood' | 'bollard' | 'wall' | 'post';
 export type LightStyle = 'modern' | 'vintage' | 'industrial' | 'decorative' | 'minimal';
@@ -35,10 +35,10 @@ export interface OutdoorLightResult {
 }
 
 export class OutdoorLightGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
 
   constructor() {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
   }
 
   /**

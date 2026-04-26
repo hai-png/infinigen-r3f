@@ -17,7 +17,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export interface TropicPlantConfig {
   // Plant type
@@ -192,11 +192,11 @@ const defaultConfig: TropicPlantConfig = {
 };
 
 export class TropicPlantGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   private config: TropicPlantConfig;
   
   constructor(config: Partial<TropicPlantConfig> = {}) {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
     this.config = { ...defaultConfig, ...config };
     
     // Apply preset if species is specified

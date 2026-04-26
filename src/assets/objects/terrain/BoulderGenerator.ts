@@ -15,7 +15,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type BoulderType = 'round' | 'angular' | 'flat' | 'irregular' | 'weathered';
 export type BoulderMaterial = 'granite' | 'limestone' | 'sandstone' | 'basalt' | 'slate';
@@ -66,11 +66,11 @@ const DEFAULT_BOULDER_CONFIG: BoulderConfig = {
 };
 
 export class BoulderGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   private config: BoulderConfig;
   
   constructor(config: Partial<BoulderConfig> = {}) {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
     this.config = { ...DEFAULT_BOULDER_CONFIG, ...config };
   }
 
@@ -226,7 +226,7 @@ export class BoulderGenerator {
       const y = positions[i + 1];
       const z = positions[i + 2];
       
-      const noise = this.noise.noise3D(x * 0.5, y * 0.5, z * 0.5);
+      const noise = this.noise(x * 0.5, y * 0.5, z * 0.5);
       const factor = 1 + noise * 0.3;
       
       positions[i] = x * factor;
@@ -256,9 +256,9 @@ export class BoulderGenerator {
       const z = positions[i + 2];
       
       // Multi-octave noise
-      const noise1 = this.noise.noise3D(x * 0.3, y * 0.3, z * 0.3);
-      const noise2 = this.noise.noise3D(x * 0.8, y * 0.8, z * 0.8) * 0.5;
-      const noise3 = this.noise.noise3D(x * 1.5, y * 1.5, z * 1.5) * 0.25;
+      const noise1 = this.noise(x * 0.3, y * 0.3, z * 0.3);
+      const noise2 = this.noise(x * 0.8, y * 0.8, z * 0.8) * 0.5;
+      const noise3 = this.noise(x * 1.5, y * 1.5, z * 1.5) * 0.25;
       
       const combinedNoise = noise1 + noise2 + noise3;
       const factor = 1 + combinedNoise * this.config.displacementScale;
@@ -282,7 +282,7 @@ export class BoulderGenerator {
       // More erosion on upward-facing surfaces
       const erosionFactor = Math.max(0, ny) * this.config.erosionLevel;
       
-      const noise = this.noise.noise3D(
+      const noise = this.noise(
         positions[i] * 1.0,
         positions[i + 1] * 1.0,
         positions[i + 2] * 1.0
@@ -309,7 +309,7 @@ export class BoulderGenerator {
       const z = positions[i + 2];
       
       // High-frequency noise for surface roughness
-      const noise = this.noise.noise3D(x * detail, y * detail, z * detail);
+      const noise = this.noise(x * detail, y * detail, z * detail);
       
       // Get approximate normal
       const nx = normals[i];

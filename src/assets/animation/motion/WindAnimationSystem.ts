@@ -15,7 +15,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type WindLayer = 'base' | 'gusts' | 'turbulence';
 
@@ -82,13 +82,13 @@ const DEFAULT_ANIMATION_CONFIG: AnimationConfig = {
 };
 
 export class WindAnimationSystem {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   private windParams: WindParams;
   private time: number = 0;
   private activeGusts: Array<{strength: number; direction: THREE.Vector3; progress: number}> = [];
   
   constructor(windParams: Partial<WindParams> = {}) {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
     this.windParams = { ...DEFAULT_WIND_PARAMS, ...windParams };
     
     // Normalize direction
@@ -197,19 +197,19 @@ export class WindAnimationSystem {
     const scale = this.windParams.turbulenceScale;
     const strength = this.windParams.turbulenceStrength;
     
-    const nx = this.noise.noise3d(
+    const nx = this.noise(
       position.x * scale * 0.1,
       position.y * scale * 0.1,
       this.time * 0.5
     );
     
-    const ny = this.noise.noise3d(
+    const ny = this.noise(
       position.x * scale * 0.1 + 100,
       position.y * scale * 0.1,
       this.time * 0.5
     );
     
-    const nz = this.noise.noise3d(
+    const nz = this.noise(
       position.x * scale * 0.1 + 200,
       position.y * scale * 0.1,
       this.time * 0.5

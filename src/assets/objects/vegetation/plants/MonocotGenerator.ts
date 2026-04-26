@@ -16,7 +16,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export interface MonocotConfig {
   // Plant type
@@ -202,11 +202,11 @@ const defaultConfig: MonocotConfig = {
 };
 
 export class MonocotGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   private config: MonocotConfig;
   
   constructor(config: Partial<MonocotConfig> = {}) {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
     this.config = { ...defaultConfig, ...config };
     
     // Apply preset if species is specified

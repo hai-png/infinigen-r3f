@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type BlindType = 'horizontal' | 'vertical' | 'roller' | 'roman' | 'venetian' | 'shutter' | 'pleated';
 export type BlindMaterial = 'aluminum' | 'wood' | 'fabric' | 'vinyl' | 'bamboo';
@@ -38,10 +38,10 @@ export interface BlindResult {
 }
 
 export class BlindGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
 
   constructor() {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
   }
 
   /**

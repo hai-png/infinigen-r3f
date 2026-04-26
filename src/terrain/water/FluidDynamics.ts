@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export interface FluidParticle {
   position: THREE.Vector3;
@@ -33,7 +33,7 @@ export interface FluidSimulationParams {
 export class FluidDynamics {
   private particles: FluidParticle[] = [];
   private params: FluidSimulationParams;
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   private spatialHash: Map<string, FluidParticle[]>;
   private hashScale: number;
 
@@ -50,7 +50,7 @@ export class FluidDynamics {
       ...params
     };
 
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
     this.spatialHash = new Map();
     this.hashScale = this.params.smoothingRadius;
   }

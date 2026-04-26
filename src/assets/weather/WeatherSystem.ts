@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'snow' | 'fog' | 'storm' | 'thunderstorm';
 
@@ -33,7 +33,7 @@ export interface WeatherState {
 export class WeatherSystem {
   private scene: THREE.Scene;
   private state: WeatherState;
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   
   // Particle systems
   private rainParticles: THREE.Points | null = null;
@@ -50,7 +50,7 @@ export class WeatherSystem {
 
   constructor(scene: THREE.Scene, initialWeather: WeatherType = 'clear') {
     this.scene = scene;
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
     
     this.state = {
       currentType: initialWeather,
@@ -395,7 +395,7 @@ export class WeatherSystem {
    */
   private addWeatherVariation(deltaTime: number): void {
     const time = Date.now() * 0.001;
-    const variation = this.noise.noise3D(time * 0.1, 0, 0) * 0.1;
+    const variation = this.noise(time * 0.1, 0, 0) * 0.1;
     
     this.state.params.windSpeed *= (1 + variation);
     this.state.params.cloudCover = Math.max(0, Math.min(1, this.state.params.cloudCover + variation * 0.05));

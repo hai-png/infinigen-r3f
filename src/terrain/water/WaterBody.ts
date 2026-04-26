@@ -8,7 +8,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 import { FluidDynamics } from './FluidDynamics';
 
 export interface WaterBodyParams {
@@ -36,7 +36,7 @@ export class WaterBody {
   private geometry: THREE.PlaneGeometry;
   private material: THREE.ShaderMaterial;
   private params: WaterBodyParams;
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
   private time: number = 0;
   private fluidDynamics: FluidDynamics | null = null;
   private shorelinePoints: ShorelinePoint[] = [];
@@ -57,7 +57,7 @@ export class WaterBody {
       ...params
     };
 
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
 
     // Create water surface geometry
     this.geometry = new THREE.PlaneGeometry(

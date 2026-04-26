@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
 export type BenchType = 'park' | 'garden' | 'indoor' | 'picnic' | 'storage' | 'swings' | 'memorial';
 export type BenchMaterial = 'wood' | 'metal' | 'concrete' | 'stone' | 'composite' | 'wrought_iron';
@@ -38,10 +38,10 @@ export interface BenchResult {
 }
 
 export class BenchGenerator {
-  private noise: SimplexNoise;
+  private noise: NoiseFunction3D;
 
   constructor() {
-    this.noise = new SimplexNoise();
+    this.noise = createNoise3D();
   }
 
   /**
