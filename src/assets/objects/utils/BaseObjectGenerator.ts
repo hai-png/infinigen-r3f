@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { SeededRandom } from '../../../../core/util/math/distributions';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface BaseGeneratorConfig {
   seed?: number;

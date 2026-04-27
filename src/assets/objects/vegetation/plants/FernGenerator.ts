@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../core/util/math/distributions';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export type FernSpecies = 'boston' | 'maidenhair' | 'bird_nest' | 'staghorn' | 'tree_fern';
 

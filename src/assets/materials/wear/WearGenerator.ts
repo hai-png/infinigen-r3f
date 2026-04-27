@@ -2,7 +2,7 @@
  * Wear and Tear Generator - Scratches, scuffs, dents, edge wear
  */
 import { Texture, CanvasTexture, Color } from 'three';
-import { FixedSeed } from '../../../core/util/MathUtils';
+import { SeededRandom } from '../../../core/util/MathUtils';
 import { Noise3D } from '../../../core/util/math/noise';
 
 export interface WearParams {
@@ -17,7 +17,7 @@ export interface WearParams {
 
 export class WearGenerator {
   generateWearMap(params: WearParams, seed: number): { roughnessMap: Texture; normalMap: Texture; aoMap: Texture } {
-    const rng = new FixedSeed(seed);
+    const rng = new SeededRandom(seed);
     
     return {
       roughnessMap: this.generateRoughnessWear(params, rng),
@@ -26,7 +26,7 @@ export class WearGenerator {
     };
   }
 
-  private generateRoughnessWear(params: WearParams, rng: FixedSeed): Texture {
+  private generateRoughnessWear(params: WearParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -69,7 +69,7 @@ export class WearGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalWear(params: WearParams, rng: FixedSeed): Texture {
+  private generateNormalWear(params: WearParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -97,7 +97,7 @@ export class WearGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private generateAOWear(params: WearParams, rng: FixedSeed): Texture {
+  private generateAOWear(params: WearParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

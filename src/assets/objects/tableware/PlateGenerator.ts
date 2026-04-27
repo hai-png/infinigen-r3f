@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface PlateParams {
   type: 'dinner' | 'salad' | 'dessert' | 'soup' | 'appetizer';
@@ -32,7 +32,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     this.validateParams(finalParams);
     
     const group = new THREE.Group();
-    const seed = new FixedSeed(this.seed);
+    const seed = new SeededRandom(this.seed);
     
     // Set dimensions based on type
     if (finalParams.type === 'dinner') {
@@ -71,7 +71,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     return group;
   }
 
-  private createRoundPlate(group: THREE.Group, params: PlateParams, seed: FixedSeed): void {
+  private createRoundPlate(group: THREE.Group, params: PlateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const rimMaterial = params.rimColor ? this.getRimMaterial(params) : material;
     
@@ -111,7 +111,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     }
   }
 
-  private createSquarePlate(group: THREE.Group, params: PlateParams, seed: FixedSeed): void {
+  private createSquarePlate(group: THREE.Group, params: PlateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const size = params.diameter;
     const cornerRadius = size * 0.1;
@@ -181,7 +181,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     group.add(rim);
   }
 
-  private createOvalPlate(group: THREE.Group, params: PlateParams, seed: FixedSeed): void {
+  private createOvalPlate(group: THREE.Group, params: PlateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const majorAxis = params.diameter;
     const minorAxis = params.diameter * 0.7;
@@ -217,7 +217,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     group.add(rim);
   }
 
-  private createRectangularPlate(group: THREE.Group, params: PlateParams, seed: FixedSeed): void {
+  private createRectangularPlate(group: THREE.Group, params: PlateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const width = params.diameter;
     const height = params.diameter * 0.6;
@@ -243,7 +243,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     group.add(body);
   }
 
-  private addPattern(group: THREE.Group, params: PlateParams, seed: FixedSeed): void {
+  private addPattern(group: THREE.Group, params: PlateParams, seed: SeededRandom): void {
     const patternMaterial = new THREE.MeshStandardMaterial({
       color: params.rimColor || '#cccccc',
       metalness: 0.1,

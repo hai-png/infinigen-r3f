@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface WoodParams {
@@ -33,7 +33,7 @@ export class WoodGenerator extends BaseMaterialGenerator<WoodParams> {
 
   generate(params: Partial<WoodParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(WoodGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     const material = this.createBaseMaterial() as any;
     
     material.color = finalParams.color;
@@ -49,7 +49,7 @@ export class WoodGenerator extends BaseMaterialGenerator<WoodParams> {
     return { material, maps: { map: material.map, roughnessMap: null, normalMap: material.normalMap }, params: finalParams };
   }
 
-  private generateGrainTexture(params: WoodParams, rng: FixedSeed): Texture {
+  private generateGrainTexture(params: WoodParams, rng: SeededRandom): Texture {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -96,7 +96,7 @@ export class WoodGenerator extends BaseMaterialGenerator<WoodParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalMap(params: WoodParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: WoodParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

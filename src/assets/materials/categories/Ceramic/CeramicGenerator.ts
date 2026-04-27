@@ -5,7 +5,7 @@
 
 import { Color, Texture, CanvasTexture, MeshStandardMaterial, RepeatWrapping } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface CeramicParams {
@@ -50,7 +50,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
 
   generate(params: Partial<CeramicParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(CeramicGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     
     const material = this.createBaseMaterial();
     const mat = material as MeshStandardMaterial;
@@ -103,7 +103,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     };
   }
 
-  private generateBaseColor(baseColor: Color, type: string, rng: FixedSeed): Color {
+  private generateBaseColor(baseColor: Color, type: string, rng: SeededRandom): Color {
     const noise = new Noise3D(rng.seed);
     const variation = 0.05;
     
@@ -117,7 +117,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     return new Color(r, g, b);
   }
 
-  private applyGlaze(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private applyGlaze(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     let roughness: number;
     let metalness = 0.0;
     
@@ -149,7 +149,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.roughnessMap = this.createRoughnessTexture(params, rng);
   }
 
-  private applyCrackleEffect(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private applyCrackleEffect(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -183,7 +183,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.displacementScale = 0.02;
   }
 
-  private applyPattern(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private applyPattern(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -225,7 +225,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.map = patternTexture;
   }
 
-  private drawFloralPattern(ctx: CanvasRenderingContext2D, size: number, rng: FixedSeed): void {
+  private drawFloralPattern(ctx: CanvasRenderingContext2D, size: number, rng: SeededRandom): void {
     const flowers = 8 + Math.floor(rng.nextFloat() * 12);
     
     for (let i = 0; i < flowers; i++) {
@@ -252,7 +252,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private drawGeometricPattern(ctx: CanvasRenderingContext2D, size: number, rng: FixedSeed): void {
+  private drawGeometricPattern(ctx: CanvasRenderingContext2D, size: number, rng: SeededRandom): void {
     const gridSize = 8;
     const cellSize = size / gridSize;
     
@@ -272,7 +272,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private drawStripedPattern(ctx: CanvasRenderingContext2D, size: number, rng: FixedSeed): void {
+  private drawStripedPattern(ctx: CanvasRenderingContext2D, size: number, rng: SeededRandom): void {
     const stripes = 10 + Math.floor(rng.nextFloat() * 10);
     const stripeWidth = size / stripes;
     
@@ -281,7 +281,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private drawDottedPattern(ctx: CanvasRenderingContext2D, size: number, rng: FixedSeed): void {
+  private drawDottedPattern(ctx: CanvasRenderingContext2D, size: number, rng: SeededRandom): void {
     const dotsPerRow = 15;
     const dotSpacing = size / dotsPerRow;
     
@@ -300,7 +300,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private generateRoughnessMap(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private generateRoughnessMap(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -329,13 +329,13 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.roughnessMap = new CanvasTexture(canvas);
   }
 
-  private applyEdgeWear(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private applyEdgeWear(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     // Edge wear would be applied via AO map or vertex colors in actual implementation
     // For now, we adjust roughness to simulate worn edges
     material.roughness = Math.min(1.0, material.roughness + params.edgeWear * 0.3);
   }
 
-  private applyDirt(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private applyDirt(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     // Dirt accumulation affects AO and color
     const dirtColor = new Color(0x3d2817);
     const baseColor = params.color.clone().lerp(dirtColor, params.dirtAccumulation * 0.3);
@@ -346,7 +346,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     }
   }
 
-  private applyTileGrout(material: MeshStandardMaterial, params: CeramicParams, rng: FixedSeed): void {
+  private applyTileGrout(material: MeshStandardMaterial, params: CeramicParams, rng: SeededRandom): void {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -386,7 +386,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     material.map = new CanvasTexture(canvas);
   }
 
-  private generateNormalMap(params: CeramicParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: CeramicParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -413,7 +413,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateAOMap(params: CeramicParams, rng: FixedSeed): Texture {
+  private generateAOMap(params: CeramicParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -441,7 +441,7 @@ export class CeramicGenerator extends BaseMaterialGenerator<CeramicParams> {
     return new CanvasTexture(canvas);
   }
 
-  private createRoughnessTexture(params: CeramicParams, rng: FixedSeed): Texture {
+  private createRoughnessTexture(params: CeramicParams, rng: SeededRandom): Texture {
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size;

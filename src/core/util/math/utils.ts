@@ -5,8 +5,8 @@
 
 import * as THREE from 'three';
 
-// FixedSeed is an alias for SeededRandom for backward compatibility
-export { SeededRandom as FixedSeed } from '../MathUtils';
+// SeededRandom is an alias for SeededRandom for backward compatibility
+export { SeededRandom as SeededRandom } from '../MathUtils';
 export type { RandomGenerator } from '../MathUtils';
 
 // Re-export commonly used utilities

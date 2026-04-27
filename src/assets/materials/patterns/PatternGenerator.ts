@@ -2,7 +2,7 @@
  * Procedural Pattern Generator - Stripes, checks, dots, geometric, organic
  */
 import { Texture, CanvasTexture, Color } from 'three';
-import { FixedSeed } from '../../../core/util/MathUtils';
+import { SeededRandom } from '../../../core/util/MathUtils';
 
 export interface PatternParams {
   type: 'stripes' | 'checkers' | 'dots' | 'geometric' | 'organic';
@@ -15,7 +15,7 @@ export interface PatternParams {
 
 export class PatternGenerator {
   generate(params: PatternParams, seed: number): Texture {
-    const rng = new FixedSeed(seed);
+    const rng = new SeededRandom(seed);
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -48,7 +48,7 @@ export class PatternGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private drawStripes(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: FixedSeed): void {
+  private drawStripes(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     const stripeWidth = 50 * params.scale;
     for (let x = 0; x < size; x += stripeWidth * 2) {
       ctx.fillStyle = `#${params.color1.getHexString()}`;
@@ -58,7 +58,7 @@ export class PatternGenerator {
     }
   }
 
-  private drawCheckers(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: FixedSeed): void {
+  private drawCheckers(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     const checkerSize = 60 * params.scale;
     for (let y = 0; y < size; y += checkerSize) {
       for (let x = 0; x < size; x += checkerSize) {
@@ -69,7 +69,7 @@ export class PatternGenerator {
     }
   }
 
-  private drawDots(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: FixedSeed): void {
+  private drawDots(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     ctx.fillStyle = `#${params.color1.getHexString()}`;
     ctx.fillRect(0, 0, size, size);
     
@@ -89,7 +89,7 @@ export class PatternGenerator {
     }
   }
 
-  private drawGeometric(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: FixedSeed): void {
+  private drawGeometric(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     ctx.fillStyle = `#${params.color1.getHexString()}`;
     ctx.fillRect(0, 0, size, size);
     
@@ -114,7 +114,7 @@ export class PatternGenerator {
     }
   }
 
-  private drawOrganic(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: FixedSeed): void {
+  private drawOrganic(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     ctx.fillStyle = `#${params.color1.getHexString()}`;
     ctx.fillRect(0, 0, size, size);
     

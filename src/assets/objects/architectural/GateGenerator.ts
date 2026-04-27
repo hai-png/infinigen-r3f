@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface GateParams {
   type: 'swing' | 'slide' | 'double' | 'ornate' | 'farm' | 'picket';
@@ -38,7 +38,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     this.validateParams(finalParams);
     
     const group = new THREE.Group();
-    const seed = new FixedSeed(this.seed);
+    const seed = new SeededRandom(this.seed);
     
     // Generate gate structure based on type
     switch (finalParams.type) {
@@ -83,7 +83,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     return group;
   }
 
-  private createSwingGate(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private createSwingGate(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const geometry = new THREE.BoxGeometry(params.width, params.height, 0.1);
     const material = this.getMaterial(params);
     const gate = new THREE.Mesh(geometry, material);
@@ -101,7 +101,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     }
   }
 
-  private createSlidingGate(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private createSlidingGate(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const panelWidth = params.width * 0.6;
     const geometry = new THREE.BoxGeometry(panelWidth, params.height, 0.1);
     const material = this.getMaterial(params);
@@ -116,7 +116,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     group.add(track);
   }
 
-  private createDoubleGate(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private createDoubleGate(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const halfWidth = params.width / 2;
     const material = this.getMaterial(params);
     
@@ -133,7 +133,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     group.add(rightPanel);
   }
 
-  private createOrnateGate(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private createOrnateGate(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     
     // Create ornate pattern with vertical bars
@@ -166,7 +166,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     }
   }
 
-  private createFarmGate(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private createFarmGate(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     
     // Diagonal brace pattern typical of farm gates
@@ -185,7 +185,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     group.add(brace);
   }
 
-  private createPicketGate(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private createPicketGate(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const picketCount = Math.floor(params.width / 0.12);
     
@@ -208,7 +208,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     });
   }
 
-  private addPosts(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private addPosts(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const postGeo = new THREE.CylinderGeometry(0.1, 0.12, params.postHeight, 8);
     
@@ -235,7 +235,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     }
   }
 
-  private addLatch(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private addLatch(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.2 });
     const latchY = params.height * 0.6;
     
@@ -270,7 +270,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     }
   }
 
-  private addHinges(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private addHinges(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.8, roughness: 0.3 });
     const hingePositions = [params.height * 0.2, params.height * 0.8];
     
@@ -282,7 +282,7 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     });
   }
 
-  private addDecorativeElements(group: THREE.Group, params: GateParams, seed: FixedSeed): void {
+  private addDecorativeElements(group: THREE.Group, params: GateParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     
     if (params.style === 'victorian' || params.style === 'traditional') {

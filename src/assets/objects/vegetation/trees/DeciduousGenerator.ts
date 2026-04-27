@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../core/util/math/distributions';
+import { SeededRandom } from '../../../../core/util/math/index';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export type DeciduousType = 'oak' | 'maple' | 'birch' | 'willow' | 'ash';

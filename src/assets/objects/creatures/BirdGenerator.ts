@@ -5,7 +5,7 @@
 
 import { Group, Mesh, Material } from 'three';
 import { CreatureBase, CreatureParameters, CreatureType } from './CreatureBase';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 import { WingGenerator } from './parts/WingGenerator';
 import { LegGenerator } from './parts/LegGenerator';
 import { BeakGenerator } from './parts/MouthGenerator';
@@ -94,7 +94,7 @@ export class BirdGenerator extends CreatureBase<BirdParameters> {
   }
 
   private applySpeciesDefaults(species: BirdSpecies, params: BirdParameters): void {
-    const seed = new FixedSeed(this.seed + this.hashString(species));
+    const seed = new SeededRandom(this.seed + this.hashString(species));
     
     switch (species) {
       case 'eagle':

@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface GlassParams {
@@ -33,7 +33,7 @@ export class GlassGenerator extends BaseMaterialGenerator<GlassParams> {
 
   generate(params: Partial<GlassParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(GlassGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     const material = this.createBaseMaterial() as MeshPhysicalMaterial;
     
     material.transparent = true;
@@ -53,7 +53,7 @@ export class GlassGenerator extends BaseMaterialGenerator<GlassParams> {
     return { material, maps: { map: null, roughnessMap: null, normalMap: material.normalMap || null }, params: finalParams };
   }
 
-  private generatePatternNormal(patternType: string, rng: FixedSeed): Texture {
+  private generatePatternNormal(patternType: string, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

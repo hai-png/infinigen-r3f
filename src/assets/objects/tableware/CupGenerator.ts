@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface CupParams {
   type: 'mug' | 'teacup' | 'coffee' | 'espresso' | 'tumbler' | 'wine' | 'beer';
@@ -30,7 +30,7 @@ export class CupGenerator extends BaseObjectGenerator<CupParams> {
     this.validateParams(finalParams);
     
     const group = new THREE.Group();
-    const seed = new FixedSeed(this.seed);
+    const seed = new SeededRandom(this.seed);
     
     // Set capacity based on type
     if (finalParams.type === 'mug') {
@@ -72,7 +72,7 @@ export class CupGenerator extends BaseObjectGenerator<CupParams> {
     return group;
   }
 
-  private createCupBody(group: THREE.Group, params: CupParams, radius: number, height: number, seed: FixedSeed): void {
+  private createCupBody(group: THREE.Group, params: CupParams, radius: number, height: number, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     
     if (params.type === 'wine') {
@@ -151,7 +151,7 @@ export class CupGenerator extends BaseObjectGenerator<CupParams> {
     group.add(thick);
   }
 
-  private addHandle(group: THREE.Group, params: CupParams, radius: number, height: number, seed: FixedSeed): void {
+  private addHandle(group: THREE.Group, params: CupParams, radius: number, height: number, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const handleCenterY = height * 0.5;
     const handleOffset = radius * 0.3;
@@ -214,7 +214,7 @@ export class CupGenerator extends BaseObjectGenerator<CupParams> {
     }
   }
 
-  private addSaucer(group: THREE.Group, params: CupParams, radius: number, seed: FixedSeed): void {
+  private addSaucer(group: THREE.Group, params: CupParams, radius: number, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const saucerRadius = radius * 2.5;
     const saucerDepth = 0.015;

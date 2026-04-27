@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface ArchwayParams {
   type: 'round' | 'pointed' | 'segmental' | 'elliptical' | 'parabolic' | 'trefoil';
@@ -36,7 +36,7 @@ export class ArchwayGenerator extends BaseObjectGenerator<ArchwayParams> {
     this.validateParams(finalParams);
     
     const group = new THREE.Group();
-    const seed = new FixedSeed(this.seed);
+    const seed = new SeededRandom(this.seed);
     
     // Generate arch shape
     this.createArch(group, finalParams, seed);
@@ -59,7 +59,7 @@ export class ArchwayGenerator extends BaseObjectGenerator<ArchwayParams> {
     return group;
   }
 
-  private createArch(group: THREE.Group, params: ArchwayParams, seed: FixedSeed): void {
+  private createArch(group: THREE.Group, params: ArchwayParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const segments = 32;
     
@@ -250,7 +250,7 @@ export class ArchwayGenerator extends BaseObjectGenerator<ArchwayParams> {
     group.add(arch);
   }
 
-  private addKeystone(group: THREE.Group, params: ArchwayParams, seed: FixedSeed): void {
+  private addKeystone(group: THREE.Group, params: ArchwayParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const keystoneWidth = params.depth * 1.5;
     const keystoneHeight = params.depth * 1.2;
@@ -270,7 +270,7 @@ export class ArchwayGenerator extends BaseObjectGenerator<ArchwayParams> {
     group.add(keystone);
   }
 
-  private addColumns(group: THREE.Group, params: ArchwayParams, seed: FixedSeed): void {
+  private addColumns(group: THREE.Group, params: ArchwayParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const columnHeight = params.height;
     const columnRadius = params.depth * 0.4;
@@ -320,7 +320,7 @@ export class ArchwayGenerator extends BaseObjectGenerator<ArchwayParams> {
     return column;
   }
 
-  private addMolding(group: THREE.Group, params: ArchwayParams, seed: FixedSeed): void {
+  private addMolding(group: THREE.Group, params: ArchwayParams, seed: SeededRandom): void {
     const material = this.getMaterial(params);
     const moldingDepth = params.depth + 0.1;
     

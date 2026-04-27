@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../core/util/math/distributions';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export type ConiferType = 'pine' | 'fir' | 'spruce' | 'cedar' | 'redwood';
 export interface ConiferConfig {

@@ -4,7 +4,7 @@
  */
 
 import { Group, Mesh, Material } from 'three';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface CreatureParams {
@@ -32,7 +32,7 @@ export abstract class CreatureBase extends BaseObjectGenerator {
       biome: 'temperate',
       ...params
     };
-    this.rng = new FixedSeed(this.params.seed);
+    this.rng = new SeededRandom(this.params.seed);
   }
 
   /**

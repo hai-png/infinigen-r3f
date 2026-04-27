@@ -11,7 +11,7 @@
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface CutleryParams {
   type: 'fork' | 'knife' | 'spoon';
@@ -35,7 +35,7 @@ export class CutleryGenerator extends BaseObjectGenerator<CutleryParams> {
     const finalParams = this.validateParams({ ...this.defaultParams, ...params });
     const seed = finalParams.seed ?? Math.floor(Math.random() * 1000000);
     
-    using ctx = new FixedSeed(seed);
+    using ctx = new SeededRandom(seed);
     
     const group = new Group();
     let mesh: Mesh;

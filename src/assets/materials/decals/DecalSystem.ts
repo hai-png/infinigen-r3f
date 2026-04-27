@@ -2,7 +2,7 @@
  * Decal Application System - Logo placement, labels, projected decals
  */
 import { Texture, CanvasTexture, Color, Vector3 } from 'three';
-import { FixedSeed } from '../../../core/util/MathUtils';
+import { SeededRandom } from '../../../core/util/MathUtils';
 
 export interface DecalParams {
   type: 'logo' | 'label' | 'warning' | 'custom';
@@ -21,7 +21,7 @@ export interface DecalPlacement {
 
 export class DecalSystem {
   generateDecal(params: DecalParams, seed: number): Texture {
-    const rng = new FixedSeed(seed);
+    const rng = new SeededRandom(seed);
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -46,7 +46,7 @@ export class DecalSystem {
     return new CanvasTexture(canvas);
   }
 
-  private drawLogo(ctx: CanvasRenderingContext2D, size: number, params: DecalParams, rng: FixedSeed): void {
+  private drawLogo(ctx: CanvasRenderingContext2D, size: number, params: DecalParams, rng: SeededRandom): void {
     ctx.save();
     ctx.translate(size / 2, size / 2);
     ctx.rotate(params.rotation);
@@ -64,7 +64,7 @@ export class DecalSystem {
     ctx.restore();
   }
 
-  private drawLabel(ctx: CanvasRenderingContext2D, size: number, params: DecalParams, rng: FixedSeed): void {
+  private drawLabel(ctx: CanvasRenderingContext2D, size: number, params: DecalParams, rng: SeededRandom): void {
     ctx.save();
     ctx.translate(size / 2, size / 2);
     ctx.rotate(params.rotation);
@@ -80,7 +80,7 @@ export class DecalSystem {
     ctx.restore();
   }
 
-  private drawWarning(ctx: CanvasRenderingContext2D, size: number, params: DecalParams, rng: FixedSeed): void {
+  private drawWarning(ctx: CanvasRenderingContext2D, size: number, params: DecalParams, rng: SeededRandom): void {
     ctx.save();
     ctx.translate(size / 2, size / 2);
     ctx.rotate(params.rotation);

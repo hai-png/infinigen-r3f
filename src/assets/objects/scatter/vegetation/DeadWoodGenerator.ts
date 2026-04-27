@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../core/util/math/distributions';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export type DeadWoodType = 'fallen_log' | 'snag' | 'branch_pile' | 'stump';
 export interface DeadWoodConfig {

@@ -2,7 +2,7 @@
  * Microsurface Detail Generator - Bump, normal, displacement maps
  */
 import { Texture, CanvasTexture } from 'three';
-import { FixedSeed } from '../../../core/util/MathUtils';
+import { SeededRandom } from '../../../core/util/MathUtils';
 import { Noise3D } from '../../../core/util/math/noise';
 
 export interface SurfaceParams {
@@ -15,7 +15,7 @@ export interface SurfaceParams {
 
 export class SurfaceDetailGenerator {
   generate(params: SurfaceParams, seed: number): { bumpMap: Texture; normalMap: Texture; displacementMap: Texture } {
-    const rng = new FixedSeed(seed);
+    const rng = new SeededRandom(seed);
     
     return {
       bumpMap: this.generateBumpMap(params, rng),
@@ -24,7 +24,7 @@ export class SurfaceDetailGenerator {
     };
   }
 
-  private generateBumpMap(params: SurfaceParams, rng: FixedSeed): Texture {
+  private generateBumpMap(params: SurfaceParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -44,7 +44,7 @@ export class SurfaceDetailGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalMap(params: SurfaceParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: SurfaceParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -68,7 +68,7 @@ export class SurfaceDetailGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private generateDisplacementMap(params: SurfaceParams, rng: FixedSeed): Texture {
+  private generateDisplacementMap(params: SurfaceParams, rng: SeededRandom): Texture {
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

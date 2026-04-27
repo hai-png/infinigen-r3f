@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface StoneParams {
@@ -33,7 +33,7 @@ export class StoneGenerator extends BaseMaterialGenerator<StoneParams> {
 
   generate(params: Partial<StoneParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(StoneGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     const material = this.createBaseMaterial() as any;
     
     material.color = finalParams.color;
@@ -58,7 +58,7 @@ export class StoneGenerator extends BaseMaterialGenerator<StoneParams> {
     return { material, maps: { map: material.map || null, roughnessMap: null, normalMap: material.normalMap }, params: finalParams };
   }
 
-  private generateMarbleTexture(params: StoneParams, rng: FixedSeed): Texture {
+  private generateMarbleTexture(params: StoneParams, rng: SeededRandom): Texture {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -87,7 +87,7 @@ export class StoneGenerator extends BaseMaterialGenerator<StoneParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateGraniteTexture(params: StoneParams, rng: FixedSeed): Texture {
+  private generateGraniteTexture(params: StoneParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -111,7 +111,7 @@ export class StoneGenerator extends BaseMaterialGenerator<StoneParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateConcreteTexture(params: StoneParams, rng: FixedSeed): Texture {
+  private generateConcreteTexture(params: StoneParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -133,7 +133,7 @@ export class StoneGenerator extends BaseMaterialGenerator<StoneParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalMap(params: StoneParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: StoneParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

@@ -11,7 +11,7 @@ import * as THREE from 'three';
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, ExtrudeGeometry, Vector3, Color } from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/MathUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface StaircaseParams {
   // Geometry

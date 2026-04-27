@@ -205,6 +205,11 @@ export interface RandomGenerator {
   nextFloat(min: number, max: number): number;
 }
 
+/**
+ * SeededRandom is an alias for SeededRandom for backward compatibility
+ */
+export type SeededRandomType = SeededRandom;
+
 export class SeededRandom implements RandomGenerator {
   public seed: number;
 
