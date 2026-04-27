@@ -5,7 +5,7 @@
 
 import { Group, Mesh, Material } from 'three';
 import { CreatureBase, CreatureParameters, CreatureType } from './CreatureBase';
-import { SeededRandom } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../core/util/math/index';
 import { WingGenerator } from './parts/WingGenerator';
 import { LegGenerator } from './parts/LegGenerator';
 import { BeakGenerator } from './parts/MouthGenerator';

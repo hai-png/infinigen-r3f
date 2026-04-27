@@ -4,7 +4,7 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, MeshStandardMaterial, Color } from 'three';
-import { SeededRandom } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../core/util/math/index';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface DoorParams {

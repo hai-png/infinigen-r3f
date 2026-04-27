@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Noise } from '../../util/NoiseUtils';
+import { Noise } from '../../utils/NoiseUtils';
 
 /**
  * Clothing configuration interface

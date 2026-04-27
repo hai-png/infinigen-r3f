@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../core/util/math/index';
 
 export interface PlateParams {
   type: 'dinner' | 'salad' | 'dessert' | 'soup' | 'appetizer';

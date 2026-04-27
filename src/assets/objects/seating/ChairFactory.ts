@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { AssetFactory, AssetParameters } from '../../utils/AssetFactory';
-import { SeededRandom, weightedSample } from '../../../../core/util/math/index';
+import { SeededRandom, weightedSample } from '../../../core/util/math/index';
 import { BezierCurveGenerator } from '../../utils/curves';
 import { MeshUtils } from '../../utils/mesh';
 

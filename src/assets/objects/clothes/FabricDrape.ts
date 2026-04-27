@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NoiseUtils } from '../../util/NoiseUtils';
+import { NoiseUtils } from '../../utils/NoiseUtils';
 
 /**
  * Fabric drape configuration

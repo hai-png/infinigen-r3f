@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { NoiseUtils } from '../../terrain/utils/NoiseUtils';
+import { NoiseUtils } from '../../../../terrain/utils/NoiseUtils';
 
 // ============================================================================
 // Type Definitions

@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { AssetFactory } from '../../utils/AssetFactory';
-import { SeededRandom, weightedSample } from '../../../../core/util/math/index';
+import { SeededRandom, weightedSample } from '../../../core/util/math/index';
 
 export interface PillowConfig {
   // Shape parameters

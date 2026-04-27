@@ -11,7 +11,7 @@
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../core/util/math/index';
 
 export interface CutleryParams {
   type: 'fork' | 'knife' | 'spoon';
