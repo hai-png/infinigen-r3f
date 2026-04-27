@@ -74,6 +74,10 @@ export declare class LODSystem {
      */
     private combineGeometries;
     /**
+     * Fallback geometry merging without BufferGeometryUtils
+     */
+    private simpleMergeGeometries;
+    /**
      * Get average material from objects
      */
     private getAverageMaterial;

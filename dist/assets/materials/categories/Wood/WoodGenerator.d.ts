@@ -4,6 +4,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface WoodParams {
+    [key: string]: unknown;
     type: 'oak' | 'pine' | 'walnut' | 'mahogany' | 'plywood' | 'reclaimed';
     color: Color;
     grainIntensity: number;

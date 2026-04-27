@@ -5,6 +5,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface CeramicParams {
+    [key: string]: unknown;
     type: 'porcelain' | 'stoneware' | 'earthenware' | 'terracotta' | 'tile';
     color: Color;
     glazeType: 'glossy' | 'matte' | 'satin' | 'crackle';

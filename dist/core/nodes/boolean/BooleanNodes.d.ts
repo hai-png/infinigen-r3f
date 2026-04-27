@@ -5,8 +5,8 @@
  * @module nodes/boolean
  */
 import { BufferGeometry } from 'three';
-import { Node, NodeSocket } from '../../core/types.js';
-import { NodeTypes } from '../../core/node-types.js';
+import { Node, NodeSocket } from '../types.js';
+import { NodeTypes } from '../core/node-types.js';
 /**
  * BooleanUnion Node
  * Performs union operation on two meshes

@@ -30,11 +30,14 @@ export class ScaleMaterial {
             metalness: this.config.metalness,
             iridescence: this.config.iridescence,
             iridescenceIOR: this.config.ior,
-            iridescenceColor: this.config.iridescentColor,
             clearcoat: 0.8,
             clearcoatRoughness: 0.2,
             side: THREE.DoubleSide,
         });
+        // Set iridescence color via setColorAt if needed, or use alternative approach
+        // Note: Three.js MeshPhysicalMaterial uses iridescenceColor property in newer versions
+        // For compatibility, we'll set it directly if available
+        material.iridescenceColor = this.config.iridescentColor;
         // Generate scale pattern texture
         this.generateScalePattern(material);
         // Add bioluminescence if enabled
@@ -181,7 +184,8 @@ export class ScaleMaterial {
         this.material.metalness = this.config.metalness;
         this.material.iridescence = this.config.iridescence;
         this.material.iridescenceIOR = this.config.ior;
-        this.material.iridescenceColor.set(this.config.iridescentColor);
+        // Set iridescence color with type assertion for compatibility
+        this.material.iridescenceColor = this.config.iridescentColor;
         this.material.clearcoat = 0.8;
         this.material.clearcoatRoughness = 0.2;
         // Regenerate textures if pattern changed

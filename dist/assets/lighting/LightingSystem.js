@@ -129,7 +129,7 @@ export class LightingSystem {
     clearLights() {
         this.lights.forEach(light => {
             this.scene.remove(light);
-            if (light instanceof THREE.LightWithShadow) {
+            if (light instanceof THREE.LightShadow || light instanceof THREE.DirectionalLight) {
                 light.dispose();
             }
         });
@@ -191,8 +191,9 @@ export class LightingSystem {
                 light instanceof THREE.PointLight) {
                 light.castShadow = true;
                 if (light.shadow && light instanceof THREE.DirectionalLight) {
-                    light.shadow.mapSize.width = this.config.shadowMapSize;
-                    light.shadow.mapSize.height = this.config.shadowMapSize;
+                    const shadowMapSize = this.config.shadowMapSize ?? 2048;
+                    light.shadow.mapSize.width = shadowMapSize;
+                    light.shadow.mapSize.height = shadowMapSize;
                     light.shadow.camera.near = 0.5;
                     light.shadow.camera.far = 500;
                 }
@@ -296,9 +297,9 @@ export function createThreePointLighting(scene, intensity = 1.0) {
  */
 export function createDaylightLighting(scene, timeOfDay = 'noon') {
     const configs = {
-        morning: { sunIntensity: 0.7, ambientIntensity: 0.4, sunColor: 0xffaa55 },
-        noon: { sunIntensity: 1.5, ambientIntensity: 0.5, sunColor: 0xffffee },
-        evening: { sunIntensity: 0.8, ambientIntensity: 0.3, sunColor: 0xff8844 },
+        morning: { sunIntensity: 0.7, ambientIntensity: 0.4, sunColor: new THREE.Color(0xffaa55) },
+        noon: { sunIntensity: 1.5, ambientIntensity: 0.5, sunColor: new THREE.Color(0xffffee) },
+        evening: { sunIntensity: 0.8, ambientIntensity: 0.3, sunColor: new THREE.Color(0xff8844) },
     };
     const lighting = new LightingSystem(scene, {
         preset: 'outdoor',

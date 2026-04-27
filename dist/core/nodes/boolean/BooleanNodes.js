@@ -5,7 +5,7 @@
  * @module nodes/boolean
  */
 import { BufferGeometry } from 'three';
-import { NodeTypes } from '../../core/node-types.js';
+import { NodeTypes } from '../core/node-types.js';
 export const BooleanUnionDefinition = {
     type: NodeTypes.BooleanUnion,
     label: 'Boolean Union',

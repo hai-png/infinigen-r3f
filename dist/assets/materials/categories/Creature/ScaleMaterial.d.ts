@@ -30,6 +30,8 @@ export interface ScaleMaterialConfig {
     /** Bioluminescence intensity */
     bioluminescenceIntensity: number;
 }
+export type ScaleParams = ScaleMaterialConfig;
+export type ScalePreset = 'dragon' | 'snake' | 'fish' | 'lizard' | 'dinosaur';
 /**
  * Realistic reptilian/dragon scale material with iridescence
  */

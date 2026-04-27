@@ -20,7 +20,7 @@ export class CoatingGenerator extends BaseMaterialGenerator {
         else if (finalParams.type === 'anodized') {
             material.metalness = 0.5;
         }
-        return { material, maps: { map: null, roughnessMap: null, normalMap: null }, params: finalParams };
+        return { material: material, maps: { map: null, roughnessMap: null, normalMap: null }, params: finalParams };
     }
     getVariations(count) {
         const variations = [];

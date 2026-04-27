@@ -4,6 +4,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface GlassParams {
+    [key: string]: unknown;
     type: 'clear' | 'frosted' | 'tinted' | 'patterned' | 'textured';
     color: Color;
     transmission: number;

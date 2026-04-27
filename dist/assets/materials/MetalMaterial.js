@@ -75,7 +75,7 @@ export class MetalMaterialGenerator {
             hasRust: config.hasRust ?? false,
             metalType
         };
-        const material = new THREE.MeshStandardMaterial({
+        const material = new THREE.MeshPhysicalMaterial({
             color: finalConfig.baseColor,
             roughness: finalConfig.roughness,
             metalness: finalConfig.metalness,

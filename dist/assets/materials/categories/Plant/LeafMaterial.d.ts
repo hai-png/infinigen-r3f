@@ -1,4 +1,20 @@
 import * as THREE from 'three';
+export interface LeafParams {
+    baseColor: THREE.Color;
+    veinColor: THREE.Color;
+    edgeColor: THREE.Color;
+    translucency: number;
+    roughness: number;
+    enableVeins: boolean;
+    veinDensity: number;
+    enableDamage: boolean;
+    damageAmount: number;
+    enableDew: boolean;
+    dewSize: number;
+    health: number;
+    [key: string]: unknown;
+}
+export type LeafPreset = 'healthy' | 'autumn' | 'withered' | 'variegated' | 'young';
 /**
  * Configuration for leaf material properties
  */

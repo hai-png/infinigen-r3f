@@ -93,7 +93,7 @@ export class GLTFLoaderExtended {
             if (child instanceof THREE.Mesh) {
                 const material = child.material;
                 if (material.map && options.generateMipmaps) {
-                    material.map.generateMipmaps();
+                    material.map.needsUpdate = true;
                     material.map.anisotropy = options.anisotropy;
                 }
                 if (material.normalMap) {
@@ -143,7 +143,6 @@ export class GLTFLoaderExtended {
             }
         });
         return {
-            id: url.split('/').pop()?.replace('.glb', '').replace('.gltf', '') || 'unknown',
             name: url.split('/').pop() || 'unknown',
             url,
             type: 'model',
@@ -154,7 +153,10 @@ export class GLTFLoaderExtended {
             textureCount: textureCount.size,
             lodLevels: [],
             tags: ['imported', 'gltf'],
-            createdAt: new Date(),
+            createdAt: Date.now(),
+            version: '1.0.0',
+            updatedAt: Date.now(),
+            author: 'system',
         };
     }
     createInstancedClusters(gltf, threshold) {

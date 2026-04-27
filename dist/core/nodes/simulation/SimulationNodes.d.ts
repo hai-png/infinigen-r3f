@@ -4,7 +4,7 @@
  * Ported from Blender Geometry Nodes and Infinigen physics system
  */
 import { Vector3 } from 'three';
-import type { NodeBase, Domain } from '../core/types';
+import type { NodeBase, AttributeDomain } from '../core/types';
 export interface SimulationNodeBase extends NodeBase {
     category: 'simulation';
 }
@@ -23,7 +23,7 @@ export declare class RigidBodyWorldNode implements SimulationNodeBase {
     readonly nodeType = "rigid_body_world";
     readonly inputs: RigidBodyWorldInputs;
     readonly outputs: RigidBodyWorldOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: RigidBodyWorldInputs);
     execute(): RigidBodyWorldOutputs;
 }
@@ -47,7 +47,7 @@ export declare class RigidBodyConstraintsNode implements SimulationNodeBase {
     readonly nodeType = "rigid_body_constraints";
     readonly inputs: RigidBodyConstraintsInputs;
     readonly outputs: RigidBodyConstraintsOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: RigidBodyConstraintsInputs);
     execute(): RigidBodyConstraintsOutputs;
 }
@@ -69,7 +69,7 @@ export declare class SoftBodySetupNode implements SimulationNodeBase {
     readonly nodeType = "soft_body_setup";
     readonly inputs: SoftBodySetupInputs;
     readonly outputs: SoftBodySetupOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: SoftBodySetupInputs);
     execute(): SoftBodySetupOutputs;
 }
@@ -93,7 +93,7 @@ export declare class ParticleSystemNode implements SimulationNodeBase {
     readonly nodeType = "particle_system";
     readonly inputs: ParticleSystemInputs;
     readonly outputs: ParticleSystemOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ParticleSystemInputs);
     execute(): ParticleSystemOutputs;
 }
@@ -113,7 +113,7 @@ export declare class ParticleCollisionNode implements SimulationNodeBase {
     readonly nodeType = "particle_collision";
     readonly inputs: ParticleCollisionInputs;
     readonly outputs: ParticleCollisionOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ParticleCollisionInputs);
     execute(): ParticleCollisionOutputs;
 }
@@ -134,7 +134,7 @@ export declare class FluidDomainNode implements SimulationNodeBase {
     readonly nodeType = "fluid_domain";
     readonly inputs: FluidDomainInputs;
     readonly outputs: FluidDomainOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: FluidDomainInputs);
     execute(): FluidDomainOutputs;
 }
@@ -153,7 +153,7 @@ export declare class FluidFlowNode implements SimulationNodeBase {
     readonly nodeType = "fluid_flow";
     readonly inputs: FluidFlowInputs;
     readonly outputs: FluidFlowOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: FluidFlowInputs);
     execute(): FluidFlowOutputs;
 }
@@ -176,7 +176,7 @@ export declare class ClothSetupNode implements SimulationNodeBase {
     readonly nodeType = "cloth_setup";
     readonly inputs: ClothSetupInputs;
     readonly outputs: ClothSetupOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ClothSetupInputs);
     execute(): ClothSetupOutputs;
 }
@@ -193,7 +193,7 @@ export declare class ClothPinGroupNode implements SimulationNodeBase {
     readonly nodeType = "cloth_pin_group";
     readonly inputs: ClothPinGroupInputs;
     readonly outputs: ClothPinGroupOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ClothPinGroupInputs);
     execute(): ClothPinGroupOutputs;
 }

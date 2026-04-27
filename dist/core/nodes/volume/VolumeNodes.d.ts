@@ -3,7 +3,7 @@
  * Volume data access, sampling, and volume-to-mesh conversion
  * Ported from Blender Geometry Nodes
  */
-import type { NodeBase, Domain } from '../core/types';
+import type { NodeBase, AttributeDomain } from '../core/types';
 export interface VolumeNodeBase extends NodeBase {
     category: 'volume';
 }
@@ -23,7 +23,7 @@ export declare class VolumeToMeshNode implements VolumeNodeBase {
     readonly nodeType = "volume_to_mesh";
     readonly inputs: VolumeToMeshInputs;
     readonly outputs: VolumeToMeshOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: VolumeToMeshInputs);
     execute(): VolumeToMeshOutputs;
 }
@@ -41,7 +41,7 @@ export declare class SampleVolumeNode implements VolumeNodeBase {
     readonly nodeType = "sample_volume";
     readonly inputs: SampleVolumeInputs;
     readonly outputs: SampleVolumeOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: SampleVolumeInputs);
     execute(): SampleVolumeOutputs;
 }
@@ -61,7 +61,7 @@ export declare class VolumeAttributeStatsNode implements VolumeNodeBase {
     readonly nodeType = "volume_attribute_stats";
     readonly inputs: VolumeAttributeStatsInputs;
     readonly outputs: VolumeAttributeStatsOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: VolumeAttributeStatsInputs);
     execute(): VolumeAttributeStatsOutputs;
 }
@@ -78,7 +78,7 @@ export declare class DensityToAlphaNode implements VolumeNodeBase {
     readonly nodeType = "density_to_alpha";
     readonly inputs: DensityToAlphaInputs;
     readonly outputs: DensityToAlphaOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: DensityToAlphaInputs);
     execute(): DensityToAlphaOutputs;
 }

@@ -4,6 +4,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface LeatherParams {
+    [key: string]: unknown;
     type: 'full-grain' | 'top-grain' | 'suede' | 'distressed' | 'patent';
     color: Color;
     roughness: number;

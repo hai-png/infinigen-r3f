@@ -4,6 +4,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface MetalParams {
+    [key: string]: unknown;
     type: 'steel' | 'aluminum' | 'brass' | 'copper' | 'iron' | 'gold' | 'silver';
     color: Color;
     roughness: number;
