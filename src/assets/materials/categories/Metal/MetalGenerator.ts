@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface MetalParams {
@@ -33,7 +33,7 @@ export class MetalGenerator extends BaseMaterialGenerator<MetalParams> {
 
   generate(params: Partial<MetalParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(MetalGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     const material = this.createBaseMaterial() as any;
     
     material.metalness = finalParams.metalness;
@@ -53,7 +53,7 @@ export class MetalGenerator extends BaseMaterialGenerator<MetalParams> {
     return { material, maps: { map: null, roughnessMap: material.roughnessMap, normalMap: material.normalMap || null }, params: finalParams };
   }
 
-  private generateBrushedNormal(params: MetalParams, rng: FixedSeed): Texture {
+  private generateBrushedNormal(params: MetalParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -72,12 +72,12 @@ export class MetalGenerator extends BaseMaterialGenerator<MetalParams> {
     return new CanvasTexture(canvas);
   }
 
-  private applyOxidation(material: any, params: MetalParams, rng: FixedSeed): void {
+  private applyOxidation(material: any, params: MetalParams, rng: SeededRandom): void {
     // Oxidation affects color and roughness
     material.roughness = Math.min(1.0, material.roughness + params.oxidation * 0.4);
   }
 
-  private generateRoughnessMap(params: MetalParams, rng: FixedSeed): Texture {
+  private generateRoughnessMap(params: MetalParams, rng: SeededRandom): Texture {
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

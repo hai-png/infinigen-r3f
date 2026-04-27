@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface PlasticParams {
@@ -31,7 +31,7 @@ export class PlasticGenerator extends BaseMaterialGenerator<PlasticParams> {
 
   generate(params: Partial<PlasticParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(PlasticGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     const material = this.createBaseMaterial() as any;
     
     material.color = finalParams.color;
@@ -49,7 +49,7 @@ export class PlasticGenerator extends BaseMaterialGenerator<PlasticParams> {
     return { material, maps: { map: material.map || null, roughnessMap: null, normalMap: material.normalMap || null }, params: finalParams };
   }
 
-  private generateTexture(params: PlasticParams, rng: FixedSeed): Texture {
+  private generateTexture(params: PlasticParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -73,7 +73,7 @@ export class PlasticGenerator extends BaseMaterialGenerator<PlasticParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalMap(params: PlasticParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: PlasticParams, rng: SeededRandom): Texture {
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface LeatherParams {
@@ -31,7 +31,7 @@ export class LeatherGenerator extends BaseMaterialGenerator<LeatherParams> {
 
   generate(params: Partial<LeatherParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(LeatherGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     const material = this.createBaseMaterial() as MeshPhysicalMaterial;
     
     material.color = finalParams.color;
@@ -52,7 +52,7 @@ export class LeatherGenerator extends BaseMaterialGenerator<LeatherParams> {
     return { material, maps: { map: material.map, roughnessMap: material.roughnessMap, normalMap: material.normalMap }, params: finalParams };
   }
 
-  private generateGrainTexture(params: LeatherParams, rng: FixedSeed): Texture {
+  private generateGrainTexture(params: LeatherParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -76,7 +76,7 @@ export class LeatherGenerator extends BaseMaterialGenerator<LeatherParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalMap(params: LeatherParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: LeatherParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -97,7 +97,7 @@ export class LeatherGenerator extends BaseMaterialGenerator<LeatherParams> {
     return new CanvasTexture(canvas);
   }
 
-  private generateRoughnessMap(params: LeatherParams, rng: FixedSeed): Texture {
+  private generateRoughnessMap(params: LeatherParams, rng: SeededRandom): Texture {
     const size = 256;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

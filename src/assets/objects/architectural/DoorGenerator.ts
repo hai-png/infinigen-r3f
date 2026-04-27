@@ -4,7 +4,7 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, MeshStandardMaterial, Color } from 'three';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../../core/util/math/index';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface DoorParams {
@@ -42,7 +42,7 @@ export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const seed = params?.seed ?? Math.floor(Math.random() * 1000000);
     
-    const fixedSeed = new FixedSeed(seed);
+    const fixedSeed = new SeededRandom(seed);
     try {
       this.random.seed = seed;
       return this.createDoor(finalParams);

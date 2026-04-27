@@ -5,7 +5,7 @@
 
 import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from "../../../../core/util/MathUtils";
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface FabricParams {
@@ -46,7 +46,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
 
   generate(params: Partial<FabricParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(FabricGenerator.DEFAULT_PARAMS, params);
-    const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
+    const rng = seed !== undefined ? new SeededRandom(seed) : this.rng;
     
     const material = this.createBaseMaterial() as MeshPhysicalMaterial;
     material.metalness = 0.0;
@@ -95,7 +95,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     };
   }
 
-  private generateWeavePattern(params: FabricParams, rng: FixedSeed): Texture {
+  private generateWeavePattern(params: FabricParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -130,7 +130,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     return new CanvasTexture(canvas);
   }
 
-  private drawPlainWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: FixedSeed): void {
+  private drawPlainWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: SeededRandom): void {
     for (let y = 0; y < size; y += spacing) {
       const isOdd = Math.floor(y / spacing) % 2 === 1;
       for (let x = 0; x < size; x += spacing) {
@@ -144,7 +144,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private drawTwillWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: FixedSeed): void {
+  private drawTwillWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: SeededRandom): void {
     for (let y = 0; y < size; y += spacing) {
       for (let x = 0; x < size; x += spacing) {
         const offset = Math.floor(y / spacing);
@@ -158,7 +158,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private drawSatinWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: FixedSeed): void {
+  private drawSatinWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: SeededRandom): void {
     ctx.fillStyle = color.clone().multiplyScalar(1.15).getStyle();
     ctx.fillRect(0, 0, size, size);
     
@@ -168,7 +168,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private drawKnitWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: FixedSeed): void {
+  private drawKnitWeave(ctx: CanvasRenderingContext2D, size: number, spacing: number, color: Color, rng: SeededRandom): void {
     for (let row = 0; row < size; row += spacing) {
       for (let col = 0; col < size; col += spacing / 2) {
         const x = col + (row % (spacing * 2) === 0 ? 0 : spacing / 4);
@@ -180,11 +180,11 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private applyBaseColor(material: any, color: Color, rng: FixedSeed): void {
+  private applyBaseColor(material: any, color: Color, rng: SeededRandom): void {
     // Already applied in weave generation
   }
 
-  private applyPattern(material: any, params: FabricParams, rng: FixedSeed): void {
+  private applyPattern(material: any, params: FabricParams, rng: SeededRandom): void {
     const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -218,7 +218,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     material.map = new CanvasTexture(canvas);
   }
 
-  private drawStripes(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: FixedSeed): void {
+  private drawStripes(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: SeededRandom): void {
     const stripeWidth = 50 / scale;
     ctx.fillStyle = color.getStyle();
     for (let i = 0; i < size; i += stripeWidth * 2) {
@@ -226,7 +226,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private drawCheckers(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: FixedSeed): void {
+  private drawCheckers(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: SeededRandom): void {
     const checkerSize = 60 / scale;
     ctx.fillStyle = color.getStyle();
     for (let row = 0; row < size; row += checkerSize) {
@@ -238,7 +238,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private drawFloral(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: FixedSeed): void {
+  private drawFloral(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: SeededRandom): void {
     const flowers = Math.floor(10 * scale);
     for (let i = 0; i < flowers; i++) {
       const x = rng.nextFloat() * size;
@@ -252,7 +252,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private drawPaisley(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: FixedSeed): void {
+  private drawPaisley(ctx: CanvasRenderingContext2D, size: number, color: Color, scale: number, rng: SeededRandom): void {
     // Simplified paisley pattern
     const shapes = Math.floor(8 * scale);
     for (let i = 0; i < shapes; i++) {
@@ -266,7 +266,7 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     }
   }
 
-  private generateRoughnessMap(material: any, params: FabricParams, rng: FixedSeed): void {
+  private generateRoughnessMap(material: any, params: FabricParams, rng: SeededRandom): void {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -293,19 +293,19 @@ export class FabricGenerator extends BaseMaterialGenerator<FabricParams> {
     material.roughnessMap = new CanvasTexture(canvas);
   }
 
-  private applyFuzziness(material: any, params: FabricParams, rng: FixedSeed): void {
+  private applyFuzziness(material: any, params: FabricParams, rng: SeededRandom): void {
     // Simulated via normal map perturbation
   }
 
-  private applyWear(material: any, params: FabricParams, rng: FixedSeed): void {
+  private applyWear(material: any, params: FabricParams, rng: SeededRandom): void {
     material.roughness = Math.min(1.0, material.roughness + params.wearLevel * 0.2);
   }
 
-  private applyStains(material: any, params: FabricParams, rng: FixedSeed): void {
+  private applyStains(material: any, params: FabricParams, rng: SeededRandom): void {
     // Stain application would blend additional textures
   }
 
-  private generateNormalMap(params: FabricParams, rng: FixedSeed): Texture {
+  private generateNormalMap(params: FabricParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size;

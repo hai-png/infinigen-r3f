@@ -2,7 +2,7 @@
  * Material Blending System - Multi-material mixing, gradient blends, mask-based blending
  */
 import { Material, Texture, CanvasTexture, Color } from 'three';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../core/util/MathUtils';
 import { Noise3D } from '../../../core/util/math/noise';
 
 export interface BlendParams {
@@ -16,7 +16,7 @@ export interface BlendParams {
 
 export class MaterialBlender {
   blend(params: BlendParams, seed: number): { blendedMaterial: Material; blendMap: Texture } {
-    const rng = new FixedSeed(seed);
+    const rng = new SeededRandom(seed);
     const blendMap = this.generateBlendMap(params, rng);
     
     // In a full implementation, we would create a shader material that blends the two materials
@@ -27,7 +27,7 @@ export class MaterialBlender {
     };
   }
 
-  private generateBlendMap(params: BlendParams, rng: FixedSeed): Texture {
+  private generateBlendMap(params: BlendParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -78,7 +78,7 @@ export class MaterialBlender {
     ctx.fillRect(0, 0, size, size);
   }
 
-  private generateNoiseBlend(ctx: CanvasRenderingContext2D, size: number, params: BlendParams, rng: FixedSeed): void {
+  private generateNoiseBlend(ctx: CanvasRenderingContext2D, size: number, params: BlendParams, rng: SeededRandom): void {
     const noise = new Noise3D(rng.seed);
     
     for (let y = 0; y < size; y += 4) {

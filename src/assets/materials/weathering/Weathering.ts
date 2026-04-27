@@ -2,7 +2,7 @@
  * Weathering Effects - Rust, oxidation, moss, water stains, UV damage
  */
 import { Texture, CanvasTexture, Color } from 'three';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../core/util/MathUtils';
 import { Noise3D } from '../../../core/util/math/noise';
 
 export interface WeatheringParams {
@@ -15,7 +15,7 @@ export interface WeatheringParams {
 
 export class WeatheringGenerator {
   generate(params: WeatheringParams, seed: number): { colorMap: Texture; roughnessMap: Texture; normalMap: Texture } {
-    const rng = new FixedSeed(seed);
+    const rng = new SeededRandom(seed);
     
     return {
       colorMap: this.generateColorWeathering(params, rng),
@@ -24,7 +24,7 @@ export class WeatheringGenerator {
     };
   }
 
-  private generateColorWeathering(params: WeatheringParams, rng: FixedSeed): Texture {
+  private generateColorWeathering(params: WeatheringParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -85,7 +85,7 @@ export class WeatheringGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private generateRoughnessWeathering(params: WeatheringParams, rng: FixedSeed): Texture {
+  private generateRoughnessWeathering(params: WeatheringParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;
@@ -110,7 +110,7 @@ export class WeatheringGenerator {
     return new CanvasTexture(canvas);
   }
 
-  private generateNormalWeathering(params: WeatheringParams, rng: FixedSeed): Texture {
+  private generateNormalWeathering(params: WeatheringParams, rng: SeededRandom): Texture {
     const size = 512;
     const canvas = document.createElement('canvas');
     canvas.width = size; canvas.height = size;

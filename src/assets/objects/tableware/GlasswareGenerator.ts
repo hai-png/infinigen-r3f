@@ -4,7 +4,7 @@
 
 import { Group, Mesh, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/math/index';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface GlasswareParams {
   type: 'wine' | 'beer' | 'water' | 'champagne' | 'whiskey' | 'cocktail' | 'bottle_wine' | 'bottle_beer' | 'bottle_spirit';
@@ -26,7 +26,7 @@ export class GlasswareGenerator extends BaseObjectGenerator<GlasswareParams> {
     const finalParams = { ...this.defaultParams, ...params };
     const seed = finalParams.seed ?? Math.floor(Math.random() * 1000000);
     
-    using ctx = new FixedSeed(seed);
+    using ctx = new SeededRandom(seed);
     
     const group = new Group();
     const mat = this.getMaterial(finalParams.material || 'clear_glass');

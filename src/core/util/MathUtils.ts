@@ -206,9 +206,9 @@ export interface RandomGenerator {
 }
 
 /**
- * FixedSeed is an alias for SeededRandom for backward compatibility
+ * SeededRandom is an alias for SeededRandom for backward compatibility
  */
-export const FixedSeed = SeededRandom;
+export type SeededRandomType = SeededRandom;
 
 export class SeededRandom implements RandomGenerator {
   public seed: number;
