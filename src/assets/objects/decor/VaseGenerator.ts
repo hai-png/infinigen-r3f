@@ -47,6 +47,10 @@ export class VaseGenerator extends BaseObjectGenerator<VaseConfig> {
     seed: undefined
   };
 
+  getDefaultConfig(): VaseConfig {
+    return { ...this.defaultParams };
+  }
+
   generate(params: Partial<VaseConfig> = {}): THREE.Group {
     const config = { ...this.defaultParams, ...params };
     const group = new THREE.Group();

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
 
-export interface PlateParams {
+export interface PlateParams extends BaseGeneratorConfig {
   type: 'dinner' | 'salad' | 'dessert' | 'soup' | 'appetizer';
   shape: 'round' | 'square' | 'oval' | 'rectangular';
   diameter: number;
@@ -26,6 +26,10 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     color: '#ffffff',
     rimColor: undefined,
   };
+  public getDefaultConfig(): PlateParams {
+    return this.defaultParams;
+  }
+
 
   generate(params: Partial<PlateParams> = {}): THREE.Group {
     const finalParams = { ...this.defaultParams, ...params };

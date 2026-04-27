@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 /**
  * Bench Generator
  * 
@@ -15,7 +16,7 @@ export type BenchType = 'park' | 'garden' | 'indoor' | 'picnic' | 'storage' | 's
 export type BenchMaterial = 'wood' | 'metal' | 'concrete' | 'stone' | 'composite' | 'wrought_iron';
 export type BenchStyle = 'traditional' | 'modern' | 'rustic' | 'ornate' | 'minimal';
 
-export interface BenchParams {
+export interface BenchParams extends BaseGeneratorConfig {
   type: BenchType;
   material: BenchMaterial;
   style: BenchStyle;

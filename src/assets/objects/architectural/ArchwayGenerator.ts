@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
 
-export interface ArchwayParams {
+export interface ArchwayParams extends BaseGeneratorConfig {
   type: 'round' | 'pointed' | 'segmental' | 'elliptical' | 'parabolic' | 'trefoil';
   width: number;
   height: number;
@@ -30,6 +30,10 @@ export class ArchwayGenerator extends BaseObjectGenerator<ArchwayParams> {
     decorativeMolding: true,
     color: '#d4c5b0',
   };
+  public getDefaultConfig(): ArchwayParams {
+    return this.defaultParams;
+  }
+
 
   generate(params: Partial<ArchwayParams> = {}): THREE.Group {
     const finalParams = { ...this.defaultParams, ...params };

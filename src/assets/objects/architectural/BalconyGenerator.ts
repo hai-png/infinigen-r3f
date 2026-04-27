@@ -2,9 +2,9 @@
  * BalconyGenerator - Procedural balcony generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface BalconyParams {
+export interface BalconyParams extends BaseGeneratorConfig {
   width: number;
   depth: number;
   railingHeight: number;
@@ -30,10 +30,10 @@ const DEFAULT_PARAMS: BalconyParams = {
 
 export class BalconyGenerator extends BaseObjectGenerator<BalconyParams> {
   constructor(seed?: number) {
-    super('Balcony', seed);
+    super(seed);
   }
 
-  getDefaultParams(): BalconyParams {
+  getDefaultConfig(): BalconyParams {
     return { ...DEFAULT_PARAMS };
   }
 

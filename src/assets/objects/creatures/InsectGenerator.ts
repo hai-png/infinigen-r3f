@@ -1,200 +1,123 @@
 /**
  * InsectGenerator - Procedural insect generation
- * Generates: ants, bees, butterflies, beetles, dragonflies, spiders
  */
+import { Group, Mesh, MeshStandardMaterial } from 'three';
+import { CreatureBase, CreatureParams, CreatureType } from './CreatureBase';
 
-import { Group, Mesh, SphereGeometry, CylinderGeometry, BoxGeometry } from 'three';
-import { CreatureBase, CreatureParams } from './CreatureBase';
-import { BodyPartGenerator } from './parts/BodyPartGenerator';
-import { WingGenerator } from './parts/WingGenerator';
-import { LegGenerator } from './parts/LegGenerator';
-import { AntennaGenerator } from './parts/AntennaGenerator';
-import { EyeGenerator } from './parts/EyeGenerator';
-
-export interface InsectParams extends CreatureParams {
-  insectType: 'ant' | 'bee' | 'butterfly' | 'beetle' | 'dragonfly' | 'spider';
-  wingCount: number;
+export interface InsectParameters extends CreatureParams {
   legCount: number;
-  hasAntennae: boolean;
-  exoskeletonMaterial: string;
+  hasWings: boolean;
+  bodySegments: number;
+  primaryColor: string;
 }
 
+export type InsectSpecies = 'ant' | 'bee' | 'beetle' | 'butterfly' | 'spider' | 'grasshopper';
+
 export class InsectGenerator extends CreatureBase {
-  private insectParams: InsectParams;
-  private bodyPartGen: BodyPartGenerator;
-  private wingGen: WingGenerator;
-  private legGen: LegGenerator;
-  private antennaGen: AntennaGenerator;
-  private eyeGen: EyeGenerator;
-
-  constructor(params: Partial<InsectParams> = {}) {
-    super({ species: 'insect', ...params });
-    this.insectParams = {
-      insectType: params.insectType || 'ant',
-      wingCount: params.wingCount || 0,
-      legCount: params.legCount || 6,
-      hasAntennae: params.hasAntennae !== false,
-      exoskeletonMaterial: params.exoskeletonMaterial || 'chitin',
-      ...this.params
-    };
-    
-    this.bodyPartGen = new BodyPartGenerator(this.rng);
-    this.wingGen = new WingGenerator(this.rng);
-    this.legGen = new LegGenerator(this.rng);
-    this.antennaGen = new AntennaGenerator(this.rng);
-    this.eyeGen = new EyeGenerator(this.rng);
+  constructor(params: Partial<InsectParameters> = {}) {
+    super({ ...params, seed: params.seed || Math.random() * 10000 });
   }
 
-  generate(): Group {
-    const creature = new Group();
-    
-    // Generate body segments
-    const head = this.generateHead();
-    const thorax = this.generateBodyCore();
-    const abdomen = this.generateAbdomen();
-    
-    creature.add(head);
-    creature.add(thorax);
-    creature.add(abdomen);
-    
-    // Add legs
-    const legs = this.generateLimbs();
-    legs.forEach(leg => creature.add(leg));
-    
-    // Add wings if applicable
-    if (this.insectParams.wingCount > 0) {
-      const wings = this.generateAppendages();
-      wings.forEach(wing => creature.add(wing));
+  getDefaultConfig(): InsectParameters {
+    return {
+      ...this.params,
+      creatureType: CreatureType.INSECT,
+      legCount: 6,
+      hasWings: false,
+      bodySegments: 3,
+      primaryColor: '#2F2F2F',
+    } as InsectParameters;
+  }
+
+  generate(species: InsectSpecies = 'ant', params: Partial<InsectParameters> = {}): Group {
+    const parameters = this.mergeParameters(this.getDefaultConfig(), params);
+    this.applySpeciesDefaults(species, parameters);
+
+    const insect = new Group();
+    insect.name = `Insect_${species}`;
+    insect.add(this.generateBody(parameters));
+    if (parameters.hasWings) {
+      insect.add(this.generateWings(parameters));
     }
-    
-    // Add antennae
-    if (this.insectParams.hasAntennae) {
-      const antennae = this.antennaGen.generate(this.insectParams.insectType);
-      antennae.forEach(antenna => {
-        antenna.position.copy(head.position);
-        creature.add(antenna);
-      });
-    }
-    
-    // Apply materials
-    this.applyMaterials(creature);
-    
-    return creature;
+    return insect;
   }
 
-  protected generateBodyCore(): Mesh {
-    const thoraxSize = this.getThoraxSize();
-    const geometry = new SphereGeometry(thoraxSize, 16, 16);
-    const mesh = new Mesh(geometry);
-    mesh.position.set(0, thoraxSize, 0);
-    return mesh;
+  generateBodyCore(): Mesh {
+    return this.generateBody(this.getDefaultConfig());
   }
 
-  protected generateHead(): Mesh {
-    const headSize = this.getHeadSize();
-    const geometry = new SphereGeometry(headSize, 16, 16);
-    const mesh = new Mesh(geometry);
-    mesh.position.set(0, headSize * 2.5, 0);
-    
-    // Add compound eyes
-    const eyes = this.eyeGen.generate('compound', this.insectParams.insectType);
-    eyes.forEach(eye => {
-      eye.position.set(0, headSize * 2.5, 0);
-      mesh.add(eye);
-    });
-    
-    return mesh;
+  generateHead(): Mesh {
+    return this.generateBody(this.getDefaultConfig());
   }
 
-  protected generateLimbs(): Mesh[] {
-    const legs: Mesh[] = [];
-    const legCount = this.insectParams.legCount;
-    
-    for (let i = 0; i < legCount; i++) {
-      const leg = this.legGen.generate('insect', i, legCount);
-      const angle = (i / legCount) * Math.PI * 2;
-      const radius = 0.3;
-      
-      leg.position.set(
-        Math.cos(angle) * radius,
-        0.5,
-        Math.sin(angle) * radius
-      );
-      leg.rotation.y = angle;
-      
-      legs.push(leg);
-    }
-    
-    return legs;
+  generateLimbs(): Mesh[] {
+    return [];
   }
 
-  protected generateAppendages(): Mesh[] {
-    const wings: Mesh[] = [];
-    const wingCount = this.insectParams.wingCount;
-    
-    for (let i = 0; i < wingCount; i++) {
-      const wing = this.wingGen.generate(this.insectParams.insectType, i % 2 === 0 ? 'left' : 'right');
-      const yOffset = i < 2 ? 0.8 : 0.4;
-      const xOffset = i % 2 === 0 ? 0.3 : -0.3;
-      
-      wing.position.set(xOffset, yOffset, 0);
-      wings.push(wing);
-    }
-    
-    return wings;
+  generateAppendages(): Mesh[] {
+    return [];
   }
 
-  protected applySkin(materials: any[]): any[] {
-    // Insects use exoskeleton materials
+  applySkin(materials: any): any[] {
     return materials;
   }
 
-  private generateAbdomen(): Mesh {
-    const abdomenSize = this.getAbdomenSize();
-    const geometry = this.insectParams.insectType === 'dragonfly' 
-      ? new CylinderGeometry(abdomenSize * 0.3, abdomenSize, abdomenSize * 3, 8)
-      : new SphereGeometry(abdomenSize, 16, 16);
-    
-    const mesh = new Mesh(geometry);
-    mesh.position.set(0, -abdomenSize * 1.5, 0);
-    mesh.rotation.x = Math.PI / 6;
-    
-    return mesh;
+  private applySpeciesDefaults(species: InsectSpecies, params: InsectParameters): void {
+    switch (species) {
+      case 'ant':
+        params.size = 0.02;
+        params.legCount = 6;
+        params.hasWings = false;
+        params.primaryColor = '#2F2F2F';
+        break;
+      case 'bee':
+        params.size = 0.03;
+        params.legCount = 6;
+        params.hasWings = true;
+        params.primaryColor = '#FFD700';
+        break;
+      case 'beetle':
+        params.size = 0.05;
+        params.legCount = 6;
+        params.hasWings = true;
+        params.primaryColor = '#228B22';
+        break;
+      case 'butterfly':
+        params.size = 0.08;
+        params.legCount = 6;
+        params.hasWings = true;
+        params.primaryColor = '#FF69B4';
+        break;
+      case 'spider':
+        params.size = 0.04;
+        params.legCount = 8;
+        params.hasWings = false;
+        params.primaryColor = '#2F2F2F';
+        break;
+      case 'grasshopper':
+        params.size = 0.06;
+        params.legCount = 6;
+        params.hasWings = true;
+        params.primaryColor = '#228B22';
+        break;
+    }
   }
 
-  private getThoraxSize(): number {
-    const baseSizes = { ant: 0.1, bee: 0.15, butterfly: 0.12, beetle: 0.2, dragonfly: 0.15, spider: 0.25 };
-    return baseSizes[this.insectParams.insectType] * this.getSizeMultiplier();
+  private generateBody(params: InsectParameters): Mesh {
+    const geometry = this.createEllipsoidGeometry(params.size * 0.3, params.size * 0.2, params.size * 0.5);
+    const material = new MeshStandardMaterial({ color: params.primaryColor });
+    return new Mesh(geometry, material);
   }
 
-  private getHeadSize(): number {
-    return this.getThoraxSize() * 0.7;
+  private generateWings(params: InsectParameters): Mesh {
+    const geometry = this.createBoxGeometry(params.size * 0.5, 0.001, params.size * 0.3);
+    const material = new MeshStandardMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.5 });
+    return new Mesh(geometry, material);
   }
 
-  private getAbdomenSize(): number {
-    return this.getThoraxSize() * 1.2;
-  }
-
-  private getSizeMultiplier(): number {
-    const multipliers = { tiny: 0.5, small: 0.8, medium: 1.0, large: 1.5, huge: 2.0 };
-    return multipliers[this.insectParams.size];
-  }
-
-  private applyMaterials(creature: Group): void {
-    // Apply exoskeleton material based on type
-    const colors = {
-      ant: 0x2c1810,
-      bee: 0xffaa00,
-      butterfly: 0xff69b4,
-      beetle: 0x00ff00,
-      dragonfly: 0x0066ff,
-      spider: 0x333333
-    };
-    
-    creature.traverse((child) => {
-      if (child instanceof Mesh) {
-        child.material.color.setHex(colors[this.insectParams.insectType]);
-      }
-    });
+  private generateAntennae(_params: InsectParameters): Mesh {
+    const geometry = this.createCylinderGeometry(0.001, 0.001, 0.05);
+    const material = new MeshStandardMaterial({ color: '#2F2F2F' });
+    return new Mesh(geometry, material);
   }
 }

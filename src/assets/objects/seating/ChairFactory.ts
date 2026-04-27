@@ -75,6 +75,10 @@ export class ChairFactory extends AssetFactory {
     this.config = this.generateConfig();
   }
 
+  getDefaultConfig(): ChairConfig {
+    return this.generateConfig();
+  }
+
   /**
    * Generate random chair configuration
    */

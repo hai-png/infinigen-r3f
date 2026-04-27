@@ -6,10 +6,10 @@
  */
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, CircleGeometry, TorusGeometry, PlaneGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { BBox } from '../../../core/util/math/index';
 
-export interface WallDecorParams {
+export interface WallDecorParams extends BaseGeneratorConfig {
   decorType: 'picture' | 'mirror' | 'art' | 'clock' | 'shelf';
   style: 'modern' | 'traditional' | 'minimal' | 'industrial' | 'bohemian';
   frameMaterial: 'wood' | 'metal' | 'plastic' | 'none';
@@ -30,7 +30,12 @@ export class WallDecor extends BaseObjectGenerator<WallDecorParams> {
     shape: 'rectangle',
     hasGlass: true,
     hangingStyle: 'wire',
+    seed: undefined
   };
+
+  public getDefaultConfig(): WallDecorParams {
+    return this.defaultParams;
+  }
 
   constructor() {
     super();

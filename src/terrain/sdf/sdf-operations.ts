@@ -480,7 +480,11 @@ export function createPrimitiveSDF(
             const halfSize = params.size ? 
               new THREE.Vector3(params.size[0]/2, params.size[1]/2, params.size[2]/2) :
               size.clone().multiplyScalar(0.5);
-            const q = localPos.clone().absolute().sub(halfSize);
+            const q = new THREE.Vector3(
+              Math.abs(localPos.x),
+              Math.abs(localPos.y),
+              Math.abs(localPos.z)
+            ).sub(halfSize);
             distance = new THREE.Vector3(
               Math.max(q.x, 0),
               Math.max(q.y, 0),

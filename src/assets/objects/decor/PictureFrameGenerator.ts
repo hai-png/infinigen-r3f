@@ -45,6 +45,10 @@ export class PictureFrameGenerator extends BaseObjectGenerator<PictureFrameConfi
     seed: undefined
   };
 
+  getDefaultConfig(): PictureFrameConfig {
+    return { ...this.defaultParams };
+  }
+
   generate(params: Partial<PictureFrameConfig> = {}): Group {
     const finalParams = { ...this.defaultParams, ...params };
     const group = new Group();
@@ -109,7 +113,7 @@ export class PictureFrameGenerator extends BaseObjectGenerator<PictureFrameConfi
     }
   }
 
-  private addOrnateDetails(group: Group, params: Params, material: Material): void {
+  private addOrnateDetails(group: Group, params: PictureFrameConfig, material: Material): void {
     const cornerSize = params.frameWidth * 1.3;
     const cornerGeom = new BoxGeometry(cornerSize, cornerSize, 0.018);
 
@@ -252,7 +256,7 @@ export class PictureFrameGenerator extends BaseObjectGenerator<PictureFrameConfi
     return new MeshStandardMaterial({ color, roughness, metalness });
   }
 
-  getVariations(): Params[] {
+  getVariations(): PictureFrameConfig[] {
     const styles: FrameStyle[] = ['modern', 'classic', 'ornate', 'minimal', 'rustic', 'gallery'];
     const materials: FrameMaterial[] = ['wood', 'metal', 'plastic', 'composite'];
     const orientations: Orientation[] = ['portrait', 'landscape', 'square'];
@@ -272,9 +276,4 @@ export class PictureFrameGenerator extends BaseObjectGenerator<PictureFrameConfi
       }))
     );
   }
-}
-
-// Helper for wire geometry
-class SphereGeometry {
-  constructor(radius: number, w: number, h: number) {}
 }

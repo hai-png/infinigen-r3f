@@ -6,10 +6,10 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, Mesh, CircleGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { BBox } from '../../../core/util/math/index';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
+import { BBox } from '../../../core/util/math/bbox';
 
-export interface BathroomFixtureParams {
+export interface BathroomFixtureParams extends BaseGeneratorConfig {
   fixtureType: 'toilet' | 'sink' | 'bathtub' | 'shower';
   style: 'modern' | 'traditional' | 'minimal' | 'luxury';
   finish: 'white' | 'black' | 'stainless' | 'colored';
@@ -31,6 +31,10 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
     showerType: 'enclosure',
     size: 'standard',
   };
+  public getDefaultConfig(): BathroomFixtureParams {
+    return this.defaultParams;
+  }
+
 
   constructor() {
     super();
@@ -689,10 +693,10 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   public getBoundingBox(params: BathroomFixtureParams): BBox {
     const size = params.size === 'compact' ? 0.8 : params.size === 'large' ? 1.2 : 1.0;
-    return {
-      min: { x: -size / 2, y: 0, z: -size / 2 },
-      max: { x: size / 2, y: params.fixtureType === 'shower' ? 2.0 : 1.0, z: size / 2 },
-    };
+    return new BBox(
+      { x: -size / 2, y: 0, z: -size / 2 },
+      { x: size / 2, y: params.fixtureType === 'shower' ? 2.0 : 1.0, z: size / 2 }
+    );
   }
 
   public getCollisionMesh(params: BathroomFixtureParams): Mesh {

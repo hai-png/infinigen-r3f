@@ -57,6 +57,10 @@ export class BiomeInterpolator {
       weights: [],
       primaryBiome: null,
       transitionFactor: 0,
+      position: position,
+      normal: normal,
+      blendFactor: 0,
+      secondaryBiome: undefined,
     };
 
     // Find applicable biomes based on position

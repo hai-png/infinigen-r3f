@@ -6,10 +6,10 @@
  */
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, Mesh, PlaneGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { BBox } from '../../../core/util/math/index';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
+import { BBox } from '../../../core/util/math/bbox';
 
-export interface BedParams {
+export interface BedParams extends BaseGeneratorConfig {
   size: 'twin' | 'full' | 'queen' | 'king' | 'cal-king';
   style: 'modern' | 'traditional' | 'minimal' | 'canopy' | 'storage';
   frameMaterial: 'wood' | 'metal' | 'upholstered' | 'leather';
@@ -33,6 +33,10 @@ export class BedGenerator extends BaseObjectGenerator<BedParams> {
     pillowCount: 2,
     beddingStyle: 'duvet',
   };
+  public getDefaultConfig(): BedParams {
+    return this.defaultParams;
+  }
+
 
   constructor() {
     super();
@@ -120,7 +124,7 @@ export class BedGenerator extends BaseObjectGenerator<BedParams> {
     const group = new Group();
     const material = this.getFrameMaterial(params.frameMaterial, params.style);
     
-    const frameHeight = params.style === 'platform' || params.style === 'modern' ? 0.15 : 0.3;
+    const frameHeight = params.style === 'modern' ? 0.15 : 0.3;
     
     if (params.style === 'modern' || params.style === 'minimal') {
       // Platform bed - low profile solid base

@@ -5,9 +5,9 @@
 
 import { Group, BoxGeometry, CylinderGeometry, MeshStandardMaterial, Color } from 'three';
 import { SeededRandom } from '../../../core/util/math/index';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface WindowParams {
+export interface WindowParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
@@ -21,28 +21,28 @@ export interface WindowParams {
 }
 
 export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
-  protected getDefaultParams(): WindowParams {
+  public getDefaultConfig(): WindowParams {
     return {
-      width: 1.2 + this.random.range(-0.3, 0.6),
-      height: 1.5 + this.random.range(-0.3, 0.8),
-      depth: 0.15 + this.random.range(0, 0.1),
-      type: this.random.choice(['casement', 'double-hung', 'sliding', 'bay', 'skylight', 'arched']),
-      style: this.random.choice(['modern', 'traditional', 'industrial', 'rustic', 'victorian']),
-      paneCount: this.random.int(2, 12),
-      hasShutters: this.random.boolean(0.4),
-      frameMaterial: this.random.choice(['wood', 'metal', 'vinyl', 'aluminum']),
-      glassType: this.random.choice(['clear', 'frosted', 'tinted', 'stained']),
-      sillDepth: 0.1 + this.random.range(0, 0.15),
+      width: 1.2 + this.rng.range(-0.3, 0.6),
+      height: 1.5 + this.rng.range(-0.3, 0.8),
+      depth: 0.15 + this.rng.range(0, 0.1),
+      type: this.rng.choice(['casement', 'double-hung', 'sliding', 'bay', 'skylight', 'arched']),
+      style: this.rng.choice(['modern', 'traditional', 'industrial', 'rustic', 'victorian']),
+      paneCount: this.rng.int(2, 12),
+      hasShutters: this.rng.boolean(0.4),
+      frameMaterial: this.rng.choice(['wood', 'metal', 'vinyl', 'aluminum']),
+      glassType: this.rng.choice(['clear', 'frosted', 'tinted', 'stained']),
+      sillDepth: 0.1 + this.rng.range(0, 0.15),
     };
   }
 
   generate(params?: Partial<WindowParams>): Group {
-    const finalParams = { ...this.getDefaultParams(), ...params };
+    const finalParams = { ...this.getDefaultConfig(), ...params };
     const seed = params?.seed ?? Math.floor(Math.random() * 1000000);
     
     const fixedSeed = new SeededRandom(seed);
     try {
-      this.random.seed = seed;
+      this.rng.seed = seed;
       return this.createWindow(finalParams);
     } finally {
       fixedSeed[Symbol.dispose]?.();
@@ -75,7 +75,7 @@ export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
     group.add(sill);
     
     // Generate collision mesh
-    this.generateCollisionMesh(group, params);
+    // this.generateCollisionMesh(group, params);
     
     return group;
   }
@@ -252,7 +252,7 @@ export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
 
   private getShutterColor(params: WindowParams): Color {
     const colors = [0x2d5016, 0x1a1a1a, 0x4a3728, 0x8b0000, 0x003366];
-    return new Color(this.random.choice(colors));
+    return new Color(this.rng.choice(colors));
   }
 
   validateParams(params: WindowParams): boolean {

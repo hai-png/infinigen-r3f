@@ -40,6 +40,10 @@ export class PillowFactory extends AssetFactory<PillowConfig, PillowResult> {
     super(seed);
   }
 
+  getDefaultConfig(): PillowConfig {
+    return this.generateConfig();
+  }
+
   /**
    * Generate random pillow configuration
    */

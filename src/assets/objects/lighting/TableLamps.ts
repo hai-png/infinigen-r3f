@@ -4,10 +4,10 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 
-export interface TableLampParams {
+export interface TableLampParams extends BaseGeneratorConfig {
   lampType: 'desk' | 'bedside' | 'banker' | 'piano' | 'buffet' | 'accent';
   baseWidth: number;
   baseDepth: number;
@@ -32,7 +32,7 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     this.subcategory = 'table';
   }
 
-  getDefaultParams(): TableLampParams {
+  getDefaultConfig(): TableLampParams {
     return {
       lampType: 'bedside',
       baseWidth: 0.15,
@@ -80,7 +80,7 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     }
     
     // Generate collision mesh
-    const collisionMesh = this.generateCollisionMesh(lamp);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(lamp);
     lamp.userData.collisionMesh = collisionMesh;
     
     // Add light source

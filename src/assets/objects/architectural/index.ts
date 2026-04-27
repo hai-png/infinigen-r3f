@@ -21,20 +21,3 @@ export * from './StaircaseGenerator';
 export * from './WallGenerator';
 export * from './WindowGenerator';
 
-// Re-export key types
-export type { ArchwayConfig, ArchStyle } from './ArchwayGenerator';
-export type { BalconyConfig, BalconyType } from './BalconyGenerator';
-export type { BeamConfig, BeamMaterial } from './BeamGenerator';
-export type { BlindConfig, BlindType } from './BlindGenerator';
-export type { CeilingConfig, CeilingType } from './CeilingGenerator';
-export type { ChimneyConfig, ChimneyStyle } from './ChimneyGenerator';
-export type { ColumnConfig, ColumnOrder } from './ColumnGenerator';
-export type { DoorConfig, DoorStyle } from './DoorGenerator';
-export type { FenceConfig, FenceType } from './FenceGenerator';
-export type { FloorConfig, FloorMaterial } from './FloorGenerator';
-export type { GateConfig, GateStyle } from './GateGenerator';
-export type { RailingConfig, RailingMaterial } from './RailingGenerator';
-export type { RoofConfig, RoofType } from './RoofGenerator';
-export type { StaircaseConfig, StaircaseType } from './StaircaseGenerator';
-export type { WallConfig, WallMaterial } from './WallGenerator';
-export type { WindowConfig, WindowType } from './WindowGenerator';

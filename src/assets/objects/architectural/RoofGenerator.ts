@@ -2,9 +2,9 @@
  * RoofGenerator - Procedural roof generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface RoofParams {
+export interface RoofParams extends BaseGeneratorConfig {
   width: number;
   depth: number;
   roofType: 'gable' | 'hip' | 'mansard' | 'gambrel' | 'flat' | 'shed';
@@ -30,10 +30,10 @@ const DEFAULT_PARAMS: RoofParams = {
 
 export class RoofGenerator extends BaseObjectGenerator<RoofParams> {
   constructor(seed?: number) {
-    super('Roof', seed);
+    super(seed);
   }
 
-  getDefaultParams(): RoofParams {
+  getDefaultConfig(): RoofParams {
     return { ...DEFAULT_PARAMS };
   }
 

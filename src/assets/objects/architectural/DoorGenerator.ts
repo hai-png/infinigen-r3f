@@ -5,9 +5,9 @@
 
 import { Group, BoxGeometry, CylinderGeometry, SphereGeometry, MeshStandardMaterial, Color } from 'three';
 import { SeededRandom } from '../../../core/util/math/index';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface DoorParams {
+export interface DoorParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   thickness: number;
@@ -22,29 +22,29 @@ export interface DoorParams {
 }
 
 export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
-  protected getDefaultParams(): DoorParams {
+  public getDefaultConfig(): DoorParams {
     return {
-      width: 0.9 + this.random.range(-0.1, 0.2),
-      height: 2.1 + this.random.range(-0.1, 0.3),
-      thickness: 0.04 + this.random.range(0, 0.02),
-      type: this.random.choice(['interior', 'exterior', 'sliding', 'french', 'revolving']),
-      style: this.random.choice(['modern', 'traditional', 'industrial', 'rustic', 'victorian']),
-      hasGlass: this.random.boolean(0.3),
-      panelCount: this.random.int(2, 6),
-      handleType: this.random.choice(['knob', 'lever', 'pull']),
-      frameWidth: 0.1 + this.random.range(0, 0.05),
-      frameDepth: 0.08 + this.random.range(0, 0.04),
-      materialType: this.random.choice(['wood', 'metal', 'glass', 'composite']),
+      width: 0.9 + this.rng.range(-0.1, 0.2),
+      height: 2.1 + this.rng.range(-0.1, 0.3),
+      thickness: 0.04 + this.rng.range(0, 0.02),
+      type: this.rng.choice(['interior', 'exterior', 'sliding', 'french', 'revolving']),
+      style: this.rng.choice(['modern', 'traditional', 'industrial', 'rustic', 'victorian']),
+      hasGlass: this.rng.boolean(0.3),
+      panelCount: this.rng.int(2, 6),
+      handleType: this.rng.choice(['knob', 'lever', 'pull']),
+      frameWidth: 0.1 + this.rng.range(0, 0.05),
+      frameDepth: 0.08 + this.rng.range(0, 0.04),
+      materialType: this.rng.choice(['wood', 'metal', 'glass', 'composite']),
     };
   }
 
   generate(params?: Partial<DoorParams>): Group {
-    const finalParams = { ...this.getDefaultParams(), ...params };
+    const finalParams = { ...this.getDefaultConfig(), ...params };
     const seed = params?.seed ?? Math.floor(Math.random() * 1000000);
     
     const fixedSeed = new SeededRandom(seed);
     try {
-      this.random.seed = seed;
+      this.rng.seed = seed;
       return this.createDoor(finalParams);
     } finally {
       fixedSeed[Symbol.dispose]?.();
@@ -79,7 +79,7 @@ export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
     }
     
     // Generate collision mesh
-    this.generateCollisionMesh(group, params);
+    // this.generateCollisionMesh(group, params);
     
     return group;
   }

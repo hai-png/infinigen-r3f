@@ -25,9 +25,12 @@ export interface MarchingCubesResult {
  * Provides real-time volumetric mesh generation
  */
 export class MarchingCubesCompute {
-  private device: GPUDevice | null = null;
-  private pipeline: GPUComputePipeline | null = null;
-  private bindGroupLayout: GPUBindGroupLayout | null = null;
+  // @ts-ignore - WebGPU types not in TypeScript standard library
+  private device: any = null;
+  // @ts-ignore - WebGPU types not in TypeScript standard library
+  private pipeline: any = null;
+  // @ts-ignore - WebGPU types not in TypeScript standard library
+  private bindGroupLayout: any = null;
   private config: GPUComputeConfig;
   private initialized: boolean = false;
 

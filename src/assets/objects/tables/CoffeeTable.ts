@@ -3,12 +3,12 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 import { extrudeShape } from '../../utils/curves';
 
-export interface CoffeeTableParams {
+export interface CoffeeTableParams extends BaseGeneratorConfig {
   width: number;
   depth: number;
   height: number;
@@ -23,7 +23,7 @@ export interface CoffeeTableParams {
 export class CoffeeTable extends BaseObjectGenerator<CoffeeTableParams> {
   static readonly GENERATOR_ID = 'coffee_table';
   
-  getDefaultParams(): CoffeeTableParams {
+  getDefaultConfig(): CoffeeTableParams {
     return {
       width: 1.2,
       depth: 0.6,
@@ -54,7 +54,7 @@ export class CoffeeTable extends BaseObjectGenerator<CoffeeTableParams> {
       group.add(shelf);
     }
     
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     group.userData.params = finalParams;
     group.userData.generatorId = CoffeeTable.GENERATOR_ID;

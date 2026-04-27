@@ -10,10 +10,10 @@
  */
 
 import { Object3D, Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { BBox, SeededRandom } from '../../../core/util/math/index';
 
-export interface ApplianceParams {
+export interface ApplianceParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
@@ -26,7 +26,7 @@ export interface ApplianceParams {
   vented: boolean;
 }
 
-export abstract class ApplianceBase extends BaseObjectGenerator<ApplianceParams> {
+export abstract class ApplianceBase<T extends ApplianceParams = ApplianceParams> extends BaseObjectGenerator<T> {
   protected defaultParams: ApplianceParams = {
     width: 0.6,
     height: 0.85,
@@ -39,6 +39,10 @@ export abstract class ApplianceBase extends BaseObjectGenerator<ApplianceParams>
     doorCount: 1,
     vented: false,
   };
+
+  public getDefaultConfig(): T {
+    return this.defaultParams as unknown as T;
+  }
 
   constructor() {
     super();
@@ -199,10 +203,10 @@ export abstract class ApplianceBase extends BaseObjectGenerator<ApplianceParams>
   }
 
   public getBoundingBox(params: ApplianceParams): BBox {
-    return {
-      min: { x: -params.width / 2, y: 0, z: -params.depth / 2 },
-      max: { x: params.width / 2, y: params.height, z: params.depth / 2 },
-    };
+    return new BBox(
+      { x: -params.width / 2, y: 0, z: -params.depth / 2 },
+      { x: params.width / 2, y: params.height, z: params.depth / 2 }
+    );
   }
 
   public getCollisionMesh(params: ApplianceParams): Object3D {

@@ -94,5 +94,6 @@ export interface SolverState {
   iteration: number;
   energy: number;
   assignments: Map<string, any>;
+  objects?: Map<string, any>;
   temperature?: number;
 }

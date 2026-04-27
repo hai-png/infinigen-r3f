@@ -2,9 +2,9 @@
  * CeilingGenerator - Procedural ceiling generation
  */
 import { Group, Mesh, BoxGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface CeilingParams {
+export interface CeilingParams extends BaseGeneratorConfig {
   width: number;
   depth: number;
   height: number;
@@ -34,10 +34,10 @@ const DEFAULT_PARAMS: CeilingParams = {
 
 export class CeilingGenerator extends BaseObjectGenerator<CeilingParams> {
   constructor(seed?: number) {
-    super('Ceiling', seed);
+    super(seed);
   }
 
-  getDefaultParams(): CeilingParams {
+  getDefaultConfig(): CeilingParams {
     return { ...DEFAULT_PARAMS };
   }
 

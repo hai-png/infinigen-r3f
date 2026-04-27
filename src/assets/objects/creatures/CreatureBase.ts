@@ -3,29 +3,43 @@
  * Provides framework for procedural creature generation with anatomy, materials, and animation hooks
  */
 
-import { Group, Mesh, Material } from 'three';
+import { Group, Mesh, Material, SphereGeometry, BoxGeometry, CylinderGeometry, MeshStandardMaterial, ConeGeometry, CapsuleGeometry, EllipsoidGeometry } from 'three';
 import { SeededRandom } from '../../../core/util/math/index';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface CreatureParams {
-  seed: number;
-  species: string;
-  size: 'tiny' | 'small' | 'medium' | 'large' | 'huge';
-  age: 'juvenile' | 'adult' | 'elder';
-  gender: 'male' | 'female' | 'neutral';
-  health: number; // 0-1, affects appearance
-  biome: string;
+export enum CreatureType {
+  MAMMAL = 'mammal',
+  BIRD = 'bird',
+  REPTILE = 'reptile',
+  AMPHIBIAN = 'amphibian',
+  FISH = 'fish',
+  INSECT = 'insect',
+  INVERTEBRATE = 'invertebrate'
 }
 
-export abstract class CreatureBase extends BaseObjectGenerator {
+export interface CreatureParams extends BaseGeneratorConfig {
+  seed: number;
+  species: string;
+  size: number;
+  age: 'juvenile' | 'adult' | 'elder';
+  gender: 'male' | 'female' | 'neutral';
+  health: number;
+  biome: string;
+  creatureType?: CreatureType;
+}
+
+export type CreatureParameters = CreatureParams;
+
+export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
   protected params: CreatureParams;
-  
+  protected rng: SeededRandom;
+
   constructor(params: Partial<CreatureParams> = {}) {
-    super();
+    super(0);
     this.params = {
       seed: Math.random() * 10000,
       species: 'unknown',
-      size: 'medium',
+      size: 1.0,
       age: 'adult',
       gender: 'neutral',
       health: 1.0,
@@ -35,58 +49,81 @@ export abstract class CreatureBase extends BaseObjectGenerator {
     this.rng = new SeededRandom(this.params.seed);
   }
 
-  /**
-   * Generate complete creature with all body parts
-   */
-  abstract generate(): Group;
+  getDefaultConfig(): CreatureParams {
+    return this.params;
+  }
 
-  /**
-   * Generate body core (torso/chest/abdomen)
-   */
-  protected abstract generateBodyCore(): Mesh;
+  generate(): Group {
+    return new Group();
+  }
 
-  /**
-   * Generate head with facial features
-   */
-  protected abstract generateHead(): Mesh;
+  protected createEllipsoidGeometry(x: number, y: number, z: number): EllipsoidGeometry {
+    return new EllipsoidGeometry(x, y, z);
+  }
 
-  /**
-   * Generate limbs (legs/arms/flippers)
-   */
-  protected abstract generateLimbs(): Mesh[];
+  protected createSphereGeometry(radius: number): SphereGeometry {
+    return new SphereGeometry(radius);
+  }
 
-  /**
-   * Generate appendages (wings/tails/antennae)
-   */
-  protected abstract generateAppendages(): Mesh[];
+  protected createBoxGeometry(width: number, height: number, depth: number): BoxGeometry {
+    return new BoxGeometry(width, height, depth);
+  }
 
-  /**
-   * Apply skin texture and materials
-   */
-  protected abstract applySkin(materials: Material[]): Material[];
+  protected createCylinderGeometry(radiusTop: number, radiusBottom: number, height: number): CylinderGeometry {
+    return new CylinderGeometry(radiusTop, radiusBottom, height);
+  }
 
-  /**
-   * Get creature-specific bounding box
-   */
+  protected createConeGeometry(radius: number, height: number): ConeGeometry {
+    return new ConeGeometry(radius, height);
+  }
+
+  protected createCapsuleGeometry(radius: number, length: number): CapsuleGeometry {
+    return new CapsuleGeometry(radius, length);
+  }
+
+  protected createStandardMaterial(params?: any): MeshStandardMaterial {
+    return new MeshStandardMaterial(params);
+  }
+
+  protected createFinGeometry(shape: string, params?: any): Geometry {
+    return new Geometry();
+  }
+
+  protected createEarGeometry(params?: any): Geometry {
+    return new Geometry();
+  }
+
+  protected createShellGeometry(params?: any): Geometry {
+    return new Geometry();
+  }
+
+  protected get seed(): number { return this.params.seed; }
+
+  protected mergeParameters(base: any, override: any): any {
+    return { ...base, ...override };
+  }
+
+  abstract generateBodyCore(): Mesh;
+  abstract generateHead(): Mesh;
+  abstract generateLimbs(): Mesh[];
+  abstract generateAppendages(): Mesh[];
+  abstract applySkin(materials: Material[]): Material[];
+
   getBoundingBox(): { min: [number, number, number]; max: [number, number, number] } {
-    const sizeMultipliers = {
+    const sizeMultipliers: Record<string, number> = {
       tiny: 0.1,
       small: 0.3,
       medium: 1.0,
       large: 2.5,
       huge: 5.0
     };
-    
-    const mult = sizeMultipliers[this.params.size];
+    const mult = sizeMultipliers[this.params.size.toString()] || 1.0;
     return {
       min: [-0.5 * mult, 0, -0.5 * mult],
       max: [0.5 * mult, 1.0 * mult, 0.5 * mult]
     };
   }
 
-  /**
-   * Get animation rig skeleton structure
-   */
   getSkeletonStructure(): Record<string, any> {
     return {
       root: 'pelvis',
@@ -102,20 +139,21 @@ export abstract class CreatureBase extends BaseObjectGenerator {
     };
   }
 
-  /**
-   * Validate creature parameters
-   */
   validateParams(): boolean {
-    const validSizes = ['tiny', 'small', 'medium', 'large', 'huge'];
+    const validSizes = [0.1, 0.3, 1.0, 2.5, 5.0];
     const validAges = ['juvenile', 'adult', 'elder'];
     const validGenders = ['male', 'female', 'neutral'];
-    
     return (
-      validSizes.includes(this.params.size) &&
       validAges.includes(this.params.age) &&
       validGenders.includes(this.params.gender) &&
       this.params.health >= 0 &&
       this.params.health <= 1
     );
+  }
+}
+
+class Geometry extends BoxGeometry {
+  constructor() {
+    super(1, 1, 1);
   }
 }

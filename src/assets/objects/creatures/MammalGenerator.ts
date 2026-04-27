@@ -3,15 +3,10 @@
  * Generates various mammals with fur, body proportions, and limb structures
  */
 
-import { Group, Mesh, Material } from 'three';
-import { CreatureBase, CreatureParameters, CreatureType } from './CreatureBase';
-import { SeededRandom } from '../../../core/util/math/index';
-import { LegGenerator } from './parts/LegGenerator';
-import { TailGenerator } from './parts/TailGenerator';
-import { EyeGenerator } from './parts/EyeGenerator';
-import { MouthGenerator } from './parts/MouthGenerator';
+import { Group, Mesh, Material, MeshStandardMaterial } from 'three';
+import { CreatureBase, CreatureParams, CreatureType } from './CreatureBase';
 
-export interface MammalParameters extends CreatureParameters {
+export interface MammalParameters extends CreatureParams {
   furLength: number;
   furPattern: 'solid' | 'striped' | 'spotted' | 'gradient';
   earShape: 'rounded' | 'pointed' | 'floppy' | 'tufted';
@@ -23,23 +18,17 @@ export interface MammalParameters extends CreatureParameters {
 
 export type MammalSpecies = 'dog' | 'cat' | 'deer' | 'bear' | 'rabbit' | 'fox' | 'elephant' | 'giraffe';
 
-export class MammalGenerator extends CreatureBase<MammalParameters> {
-  private legGenerator: LegGenerator;
-  private tailGenerator: TailGenerator;
-  private eyeGenerator: EyeGenerator;
-  private mouthGenerator: MouthGenerator;
+export class MammalGenerator extends CreatureBase {
+  private _seed: number = 0;
 
   constructor(seed?: number) {
-    super(seed);
-    this.legGenerator = new LegGenerator(this.seed);
-    this.tailGenerator = new TailGenerator(this.seed);
-    this.eyeGenerator = new EyeGenerator(this.seed);
-    this.mouthGenerator = new MouthGenerator(this.seed);
+    super({ seed: seed || Math.random() * 10000 });
+    this._seed = this.params.seed;
   }
 
-  protected getDefaultParameters(): MammalParameters {
+  getDefaultConfig(): MammalParameters {
     return {
-      ...super.getDefaultParameters(),
+      ...this.params,
       creatureType: CreatureType.MAMMAL,
       furLength: 0.05,
       furPattern: 'solid',
@@ -48,44 +37,55 @@ export class MammalGenerator extends CreatureBase<MammalParameters> {
       legType: 'digitigrade',
       primaryColor: '#8B4513',
       secondaryColor: '#D2691E',
-    };
+    } as MammalParameters;
   }
 
-  generate(species: MammalSpecies, params: Partial<MammalParameters> = {}): Group {
-    const parameters = this.mergeParameters(this.getDefaultParameters(), params);
+  generate(species: MammalSpecies = 'dog', params: Partial<MammalParameters> = {}): Group {
+    const parameters = this.mergeParameters(this.getDefaultConfig(), params);
     this.applySpeciesDefaults(species, parameters);
-    
+
     const mammal = new Group();
     mammal.name = `Mammal_${species}`;
     mammal.userData.parameters = parameters;
 
-    // Generate body
     const body = this.generateBody(parameters);
     mammal.add(body);
 
-    // Generate head
     const head = this.generateHead(parameters);
     head.position.set(0, parameters.size * 0.3, parameters.size * 0.4);
     mammal.add(head);
 
-    // Generate legs
-    const legs = this.legGenerator.generate(parameters.legType, 4, parameters.size * 0.3);
-    legs.position.y = -parameters.size * 0.5;
-    mammal.add(legs);
-
-    // Generate tail
     if (parameters.tailType !== 'none') {
-      const tail = this.tailGenerator.generate(parameters.tailType, parameters.size * 0.4);
+      const tail = this.generateTail(parameters);
       tail.position.z = -parameters.size * 0.4;
       mammal.add(tail);
     }
 
-    // Generate ears
     const ears = this.generateEars(parameters);
     ears.position.copy(head.position);
     mammal.add(ears);
 
     return mammal;
+  }
+
+  generateBodyCore(): Mesh {
+    return this.generateBody(this.getDefaultConfig());
+  }
+
+  generateHead(): Mesh {
+    return this.generateHead(this.getDefaultConfig());
+  }
+
+  generateLimbs(): Mesh[] {
+    return [];
+  }
+
+  generateAppendages(): Mesh[] {
+    return [];
+  }
+
+  applySkin(materials: Material[]): Material[] {
+    return materials;
   }
 
   private applySpeciesDefaults(species: MammalSpecies, params: MammalParameters): void {
@@ -182,27 +182,28 @@ export class MammalGenerator extends CreatureBase<MammalParameters> {
     return new Mesh(headGeometry, headMaterial);
   }
 
+  private generateTail(params: MammalParameters): Mesh {
+    const tailGeometry = this.createCylinderGeometry(params.size * 0.05, params.size * 0.02, params.size * 0.4);
+    const tailMaterial = new MeshStandardMaterial({ color: params.primaryColor });
+    return new Mesh(tailGeometry, tailMaterial);
+  }
+
   private generateEars(params: MammalParameters): Group {
     const ears = new Group();
-    const earGeometry = this.createEarGeometry(params.earShape, params.size * 0.1);
+    const earGeometry = this.createBoxGeometry(params.size * 0.1, params.size * 0.15, params.size * 0.01);
     const earMaterial = this.createFurMaterial(params.secondaryColor, params.furLength * 0.5, 'solid');
-    
+
     const leftEar = new Mesh(earGeometry, earMaterial);
     const rightEar = new Mesh(earGeometry, earMaterial);
-    
+
     leftEar.position.set(-params.size * 0.15, params.size * 0.1, 0);
     rightEar.position.set(params.size * 0.15, params.size * 0.1, 0);
-    
+
     ears.add(leftEar, rightEar);
     return ears;
   }
 
-  private createFurMaterial(color: string, length: number, pattern: string): Material {
-    // Would integrate with SkinGenerator for procedural fur
+  private createFurMaterial(color: string, _length: number, _pattern: string): Material {
     return new MeshStandardMaterial({ color });
-  }
-
-  private createEarGeometry(shape: string, size: number): any {
-    return this.createBoxGeometry(size, size * 1.5, size * 0.1);
   }
 }

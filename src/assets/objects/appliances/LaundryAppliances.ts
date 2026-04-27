@@ -17,16 +17,18 @@ export interface LaundryApplianceParams extends ApplianceParams {
   drumSize?: number;
 }
 
-export class LaundryAppliances extends ApplianceBase {
-  protected defaultParams: LaundryApplianceParams = {
-    ...super.defaultParams,
-    applianceType: 'washer',
-    capacity: 'standard',
-    loadType: 'front',
-    hasSteam: false,
-    hasSmartControls: false,
-    drumSize: 0.35,
-  };
+export class LaundryAppliances extends ApplianceBase<LaundryApplianceParams> {
+  public getDefaultConfig(): LaundryApplianceParams {
+    return {
+      ...super.getDefaultConfig(),
+      applianceType: 'washer',
+      capacity: 'standard',
+      loadType: 'front',
+      hasSteam: false,
+      hasSmartControls: false,
+      drumSize: 0.35,
+    };
+  }
 
   constructor() {
     super();

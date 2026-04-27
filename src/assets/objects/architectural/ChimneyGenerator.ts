@@ -2,9 +2,9 @@
  * ChimneyGenerator - Procedural chimney generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface ChimneyParams {
+export interface ChimneyParams extends BaseGeneratorConfig {
   height: number;
   width: number;
   depth: number;
@@ -32,10 +32,10 @@ const DEFAULT_PARAMS: ChimneyParams = {
 
 export class ChimneyGenerator extends BaseObjectGenerator<ChimneyParams> {
   constructor(seed?: number) {
-    super('Chimney', seed);
+    super(seed);
   }
 
-  getDefaultParams(): ChimneyParams {
+  getDefaultConfig(): ChimneyParams {
     return { ...DEFAULT_PARAMS };
   }
 

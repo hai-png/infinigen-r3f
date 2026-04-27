@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import * as THREE from 'three';
 import { NoiseUtils } from '../../utils/NoiseUtils';
 
@@ -8,7 +9,7 @@ import { NoiseUtils } from '../../utils/NoiseUtils';
  * color morphs, and growth patterns.
  */
 
-export interface CoralParams {
+export interface CoralParams extends BaseGeneratorConfig {
   species: CoralSpecies;
   size: number;
   complexity: number;

@@ -2,9 +2,9 @@
  * BeamGenerator - Procedural beam generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface BeamParams {
+export interface BeamParams extends BaseGeneratorConfig {
   length: number;
   width: number;
   height: number;
@@ -28,10 +28,10 @@ const DEFAULT_PARAMS: BeamParams = {
 
 export class BeamGenerator extends BaseObjectGenerator<BeamParams> {
   constructor(seed?: number) {
-    super('Beam', seed);
+    super(seed);
   }
 
-  getDefaultParams(): BeamParams {
+  getDefaultConfig(): BeamParams {
     return { ...DEFAULT_PARAMS };
   }
 

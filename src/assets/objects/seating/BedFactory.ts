@@ -68,6 +68,10 @@ export class BedFactory extends AssetFactory<BedConfig, BedResult> {
     super(seed);
   }
 
+  getDefaultConfig(): BedConfig {
+    return this.generateConfig();
+  }
+
   /**
    * Generate random bed configuration
    */

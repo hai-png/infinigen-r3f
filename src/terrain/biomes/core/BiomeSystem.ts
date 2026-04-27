@@ -24,14 +24,22 @@ export interface BiomeDefinition {
   vegetationDensity?: number;
   colorPrimary?: THREE.Color;
   colorSecondary?: THREE.Color;
+  climate?: {
+    temperature: number;
+    humidity: number;
+  };
+  assetTags?: string[];
 }
 
 export interface BiomeBlend {
-  primaryBiome?: BiomeDefinition;
+  primaryBiome?: BiomeDefinition | null;
   secondaryBiome?: BiomeDefinition;
-  blendFactor: number; // 0-1, where 0 = fully primary, 1 = fully secondary
+  blendFactor: number;
   position: THREE.Vector3;
   normal: THREE.Vector3;
+  biomes: BiomeDefinition[];
+  weights: number[];
+  transitionFactor: number;
 }
 
 export type BiomeType = 

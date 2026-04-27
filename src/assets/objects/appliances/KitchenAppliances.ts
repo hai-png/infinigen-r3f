@@ -17,16 +17,18 @@ export interface KitchenApplianceParams extends ApplianceParams {
   burnerCount?: 4 | 5 | 6;
 }
 
-export class KitchenAppliances extends ApplianceBase {
-  protected defaultParams: KitchenApplianceParams = {
-    ...super.defaultParams,
-    applianceType: 'refrigerator',
-    capacity: 'standard',
-    fuelType: 'electric',
-    hasIceMaker: false,
-    hasConvection: false,
-    burnerCount: 4,
-  };
+export class KitchenAppliances extends ApplianceBase<KitchenApplianceParams> {
+  public getDefaultConfig(): KitchenApplianceParams {
+    return {
+      ...super.getDefaultConfig(),
+      applianceType: 'refrigerator',
+      capacity: 'standard',
+      fuelType: 'electric',
+      hasIceMaker: false,
+      hasConvection: false,
+      burnerCount: 4,
+    };
+  }
 
   constructor() {
     super();

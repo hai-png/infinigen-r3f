@@ -3,11 +3,11 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 
-export interface ShelfParams {
+export interface ShelfParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
@@ -23,7 +23,7 @@ export interface ShelfParams {
 export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
   static readonly GENERATOR_ID = 'shelf_generator';
   
-  getDefaultParams(): ShelfParams {
+  getDefaultConfig(): ShelfParams {
     return {
       width: 1.0,
       height: 2.0,
@@ -60,7 +60,7 @@ export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
       group.add(doors);
     }
     
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     group.userData.params = finalParams;
     group.userData.generatorId = ShelfGenerator.GENERATOR_ID;

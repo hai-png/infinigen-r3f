@@ -2,9 +2,9 @@
  * WallGenerator - Procedural wall segment generation
  */
 import { Group, Mesh, BoxGeometry, ExtrudeGeometry, Shape } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface WallParams {
+export interface WallParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   thickness: number;
@@ -38,10 +38,10 @@ const DEFAULT_PARAMS: WallParams = {
 
 export class WallGenerator extends BaseObjectGenerator<WallParams> {
   constructor(seed?: number) {
-    super('Wall', seed);
+    super(seed);
   }
 
-  getDefaultParams(): WallParams {
+  getDefaultConfig(): WallParams {
     return { ...DEFAULT_PARAMS };
   }
 

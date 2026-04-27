@@ -3,11 +3,11 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 
-export interface DeskParams {
+export interface DeskParams extends BaseGeneratorConfig {
   width: number;
   depth: number;
   height: number;
@@ -23,7 +23,7 @@ export interface DeskParams {
 export class DeskGenerator extends BaseObjectGenerator<DeskParams> {
   static readonly GENERATOR_ID = 'desk_generator';
   
-  getDefaultParams(): DeskParams {
+  getDefaultConfig(): DeskParams {
     return {
       width: 1.4,
       depth: 0.7,
@@ -65,7 +65,7 @@ export class DeskGenerator extends BaseObjectGenerator<DeskParams> {
       group.add(cableTray);
     }
     
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     group.userData.params = finalParams;
     group.userData.generatorId = DeskGenerator.GENERATOR_ID;

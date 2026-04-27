@@ -6,13 +6,13 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from './ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 import { extrudeShape } from '../../assets/utils/curves';
 import { mirrorMesh, mergeMeshes } from '../../assets/utils/mesh';
 
-export interface StoolParams {
+export interface StoolParams extends BaseGeneratorConfig {
   // Dimensions
   width: number;
   depth: number;
@@ -49,7 +49,7 @@ export class StoolGenerator extends BaseObjectGenerator<StoolParams> {
     super();
   }
 
-  getDefaultParams(): StoolParams {
+  getDefaultConfig(): StoolParams {
     return {
       width: 0.45,
       depth: 0.45,
@@ -104,7 +104,7 @@ export class StoolGenerator extends BaseObjectGenerator<StoolParams> {
     }
     
     // Generate collision mesh
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     
     // Store parameters for reference

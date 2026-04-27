@@ -26,6 +26,10 @@ export class PlantPotGenerator extends BaseObjectGenerator<PlantPotConfig> {
     seed: undefined
   };
 
+  getDefaultConfig(): PlantPotConfig {
+    return { ...this.defaultParams };
+  }
+
   generate(params: Partial<PlantPotConfig> = {}): Group {
     const finalParams = { ...this.defaultParams, ...params };
     const group = new Group();
@@ -75,7 +79,7 @@ export class PlantPotGenerator extends BaseObjectGenerator<PlantPotConfig> {
     return new MeshStandardMaterial(configs[style]);
   }
 
-  getVariations(): Params[] {
+  getVariations(): PlantPotConfig[] {
     const styles: PotStyle[] = ['terracotta', 'ceramic', 'plastic', 'hanging', 'self_watering', 'decorative'];
     const shapes: PotShape[] = ['cylindrical', 'tapered', 'square', 'rectangular', 'spherical'];
     const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];

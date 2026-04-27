@@ -9,11 +9,12 @@
  * - Material slots for silver, stainless steel, gold plating
  */
 
-import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, TorusGeometry, ConeGeometry, Material } from 'three';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
+import * as THREE from 'three';
 
-export interface CutleryParams {
+export interface CutleryParams extends BaseGeneratorConfig {
   type: 'fork' | 'knife' | 'spoon';
   style: 'dinner' | 'salad' | 'dessert' | 'serving' | 'steak' | 'butter' | 'chef' | 'tablespoon' | 'teaspoon' | 'soup';
   handlePattern: 'smooth' | 'fluted' | 'ornate' | 'modern';
@@ -30,6 +31,10 @@ export class CutleryGenerator extends BaseObjectGenerator<CutleryParams> {
     scale: 1.0,
     seed: undefined
   };
+
+  getDefaultConfig(): CutleryParams {
+    return { ...this.defaultParams };
+  }
 
   generate(params: Partial<CutleryParams> = {}): Group {
     const finalParams = this.validateParams({ ...this.defaultParams, ...params });
@@ -211,16 +216,21 @@ export class CutleryGenerator extends BaseObjectGenerator<CutleryParams> {
   }
 
   getVariations(): CutleryParams[] {
-    const types: Array<'fork' | 'knife' | 'spoon'> = ['fork', 'knife', 'spoon'];
-    const styles = ['dinner', 'salad', 'dessert', 'serving', 'steak', 'butter', 'chef', 'tablespoon', 'teaspoon', 'soup'];
+    const typeStyles: Record<string, string[]> = {
+      fork: ['dinner', 'salad', 'dessert', 'serving'],
+      knife: ['steak', 'butter', 'chef'],
+      spoon: ['tablespoon', 'teaspoon', 'soup', 'serving']
+    };
     const patterns: Array<'smooth' | 'fluted' | 'ornate' | 'modern'> = ['smooth', 'fluted', 'ornate', 'modern'];
+    const types: Array<'fork' | 'knife' | 'spoon'> = ['fork', 'knife', 'spoon'];
     
     const variations: CutleryParams[] = [];
     
     for (let i = 0; i < 8; i++) {
+      const type = types[i % 3];
       variations.push({
-        type: types[i % 3],
-        style: styles[i % styles.length] as any,
+        type,
+        style: typeStyles[type][i % typeStyles[type].length],
         handlePattern: patterns[i % 4],
         scale: 0.9 + (i % 3) * 0.1,
         seed: i * 1000
@@ -231,5 +241,4 @@ export class CutleryGenerator extends BaseObjectGenerator<CutleryParams> {
   }
 }
 
-// Import THREE for types
-import * as THREE from 'three';
+

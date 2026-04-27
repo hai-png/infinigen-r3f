@@ -121,12 +121,9 @@ export class StoneGenerator {
       const y = positions[i + 1];
       const z = positions[i + 2];
 
-      // Calculate noise-based displacement
-      const noiseValue = this.noiseUtils.perlin3D(
-        x * 0.5,
-        y * 0.5,
-        z * 0.5,
-        0.05
+      const noiseValue = this.noiseUtils.perlin2D(
+        x * 0.5 + y * 0.5,
+        z * 0.5
       );
 
       const displacement = 1 + (noiseValue * config.variation);
@@ -188,7 +185,7 @@ export class StoneGenerator {
       const y = positions[i + 1];
       const z = positions[i + 2];
 
-      const noise = this.noiseUtils.perlin3D(x * 0.3, y * 0.3, z * 0.3, 0.08);
+      const noise = this.noiseUtils.perlin2D(x * 0.3 + z * 0.3, y * 0.3);
       const erosion = 1 - (Math.abs(noise) * 0.15);
 
       if (Math.abs(x) > width * 0.4) positions[i] *= erosion;

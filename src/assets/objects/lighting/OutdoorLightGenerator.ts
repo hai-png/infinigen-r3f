@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 /**
  * Outdoor Light Generator
  * 
@@ -13,7 +14,7 @@ import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 export type OutdoorLightType = 'street' | 'garden' | 'pathway' | 'flood' | 'bollard' | 'wall' | 'post';
 export type LightStyle = 'modern' | 'vintage' | 'industrial' | 'decorative' | 'minimal';
 
-export interface OutdoorLightParams {
+export interface OutdoorLightParams extends BaseGeneratorConfig {
   type: OutdoorLightType;
   style: LightStyle;
   height: number;
@@ -39,6 +40,22 @@ export class OutdoorLightGenerator {
 
   constructor() {
     this.noise = createNoise3D();
+  }
+
+  getDefaultConfig(): OutdoorLightParams {
+    return {
+      type: 'street',
+      style: 'modern',
+      height: 4,
+      poleThickness: 0.15,
+      lightColor: new THREE.Color(0xffeebb),
+      intensity: 1.5,
+      range: 20,
+      materialType: 'metal',
+      fixtureCount: 1,
+      decorative: false,
+      solarPanel: false,
+    };
   }
 
   /**
@@ -71,7 +88,7 @@ export class OutdoorLightGenerator {
     for (let i = 0; i < finalParams.fixtureCount; i++) {
       const fixture = this.createFixture(finalParams, i);
       group.add(fixture.mesh);
-      lights.push(...fixture.lights);
+      lights.push(...(fixture.lights as THREE.Light[]));
     }
 
     // Add solar panel if requested

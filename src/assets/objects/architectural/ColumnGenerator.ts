@@ -2,9 +2,9 @@
  * ColumnGenerator - Procedural column generation
  */
 import { Group, Mesh, CylinderGeometry, BoxGeometry, TorusGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface ColumnParams {
+export interface ColumnParams extends BaseGeneratorConfig {
   height: number;
   bottomRadius: number;
   topRadius: number;
@@ -32,10 +32,10 @@ const DEFAULT_PARAMS: ColumnParams = {
 
 export class ColumnGenerator extends BaseObjectGenerator<ColumnParams> {
   constructor(seed?: number) {
-    super('Column', seed);
+    super(seed);
   }
 
-  getDefaultParams(): ColumnParams {
+  getDefaultConfig(): ColumnParams {
     return { ...DEFAULT_PARAMS };
   }
 

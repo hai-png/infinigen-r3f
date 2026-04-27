@@ -117,4 +117,38 @@ export abstract class BaseObjectGenerator<TConfig extends BaseGeneratorConfig> {
       seed: userConfig.seed ?? this.seed
     };
   }
+  
+  protected validateAndMergeParams(userConfig: Partial<TConfig> = {}): TConfig {
+    return this.mergeConfig(userConfig);
+  }
+
+  protected validateAndMerge(userConfig: Partial<TConfig> = {}): TConfig {
+    return this.mergeConfig(userConfig);
+  }
+
+  protected seededRandom(): number {
+    return this.rng.random();
+  }
+
+  protected createMesh(geometry: THREE.BufferGeometry, material: THREE.Material): THREE.Mesh {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  protected createPBRMaterial(params: any): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({
+      roughness: 0.8,
+      metalness: 0.2,
+      ...params
+    });
+  }
+
+  protected getCollisionMaterial(): THREE.Material {
+    return new THREE.MeshBasicMaterial({
+      visible: false,
+      wireframe: true
+    });
+  }
 }

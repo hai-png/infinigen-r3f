@@ -2,11 +2,11 @@
  * GroundCoverGenerator - Leaves, twigs, pebbles
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type GroundCoverType = 'leaves' | 'twigs' | 'pebbles' | 'mixed';
-export interface GroundCoverConfig {
+export interface GroundCoverConfig extends BaseGeneratorConfig {
   coverage: number;
   density: number;
   coverType: GroundCoverType;

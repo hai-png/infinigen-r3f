@@ -19,6 +19,10 @@ export class TrinketGenerator extends BaseObjectGenerator<TrinketConfig> {
     type: 'figurine', materialType: 'ceramic', size: 'small', seed: undefined
   };
 
+  getDefaultConfig(): TrinketConfig {
+    return { ...this.defaultParams };
+  }
+
   generate(params: Partial<TrinketConfig> = {}): Group {
     const finalParams = { ...this.defaultParams, ...params };
     const group = new Group();
@@ -56,7 +60,7 @@ export class TrinketGenerator extends BaseObjectGenerator<TrinketConfig> {
     return new MeshStandardMaterial(configs[type]);
   }
 
-  getVariations(): Params[] {
+  getVariations(): TrinketConfig[] {
     const types: TrinketType[] = ['figurine', 'vase_mini', 'crystal', 'coin', 'jewelry', 'ornament'];
     const materials: TrinketMaterial[] = ['ceramic', 'metal', 'glass', 'stone', 'wood'];
     const sizes: ('tiny' | 'small' | 'medium')[] = ['tiny', 'small', 'medium'];

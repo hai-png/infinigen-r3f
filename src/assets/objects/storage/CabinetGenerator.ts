@@ -3,11 +3,11 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 
-export interface CabinetParams {
+export interface CabinetParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
@@ -23,7 +23,7 @@ export interface CabinetParams {
 export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
   static readonly GENERATOR_ID = 'cabinet_generator';
   
-  getDefaultParams(): CabinetParams {
+  getDefaultConfig(): CabinetParams {
     return {
       width: 0.8,
       height: 0.9,
@@ -63,7 +63,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     const countertop = this.createCountertop(finalParams, rng);
     group.add(countertop);
     
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     group.userData.params = finalParams;
     group.userData.generatorId = CabinetGenerator.GENERATOR_ID;

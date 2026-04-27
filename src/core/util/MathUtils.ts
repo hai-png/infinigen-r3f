@@ -263,6 +263,27 @@ export class SeededRandom implements RandomGenerator {
   }
 
   /**
+   * Alias for nextFloat(min, max)
+   */
+  range(min: number, max: number): number {
+    return this.nextFloat(min, max);
+  }
+
+  /**
+   * Alias for nextInt(min, max)
+   */
+  int(min: number, max: number): number {
+    return this.nextInt(min, max);
+  }
+
+  /**
+   * Returns true with the given probability
+   */
+  boolean(chance: number = 0.5): boolean {
+    return this.next() < chance;
+  }
+
+  /**
    * Shuffles an array in place.
    */
   shuffle<T>(array: T[]): T[] {
@@ -282,6 +303,10 @@ export class SeededRandom implements RandomGenerator {
     const u2 = this.next();
     const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
     return z0 * stdDev + mean;
+  }
+
+  [Symbol.dispose](): void {
+    // No-op for cleanup
   }
 }
 

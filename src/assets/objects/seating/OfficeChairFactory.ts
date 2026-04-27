@@ -62,6 +62,10 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
     super(seed);
   }
 
+  getDefaultConfig(): OfficeChairConfig {
+    return this.generateConfig();
+  }
+
   /**
    * Generate random office chair configuration
    */

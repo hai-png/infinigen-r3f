@@ -57,6 +57,10 @@ export class SofaFactory extends AssetFactory {
     this.config = this.generateConfig();
   }
 
+  getDefaultConfig(): SofaConfig {
+    return this.generateConfig();
+  }
+
   /**
    * Generate random sofa configuration
    */

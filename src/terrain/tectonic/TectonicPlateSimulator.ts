@@ -13,6 +13,7 @@
  */
 
 import * as THREE from 'three';
+import { Vector3 } from 'three';
 import { NoiseUtils } from '../../core/util/NoiseUtils';
 
 export interface PlateConfig {
@@ -29,8 +30,8 @@ export interface PlateConfig {
 
 export interface TectonicPlate {
   id: number;
-  centroid: Vector3;
-  velocity: Vector3;
+  centroid: THREE.Vector3;
+  velocity: THREE.Vector3;
   rotation: number;
   angularVelocity: number;
   type: 'continental' | 'oceanic';
@@ -87,7 +88,7 @@ export class TectonicPlateSimulator {
       const angle = (i / this.config.numPlates) * Math.PI * 2;
       const radius = (Math.random() * 0.6 + 0.2) * worldSize / 2;
       
-      const centroid = new Vector3(
+      const centroid = new THREE.Vector3(
         Math.cos(angle) * radius,
         0,
         Math.sin(angle) * radius
@@ -95,7 +96,7 @@ export class TectonicPlateSimulator {
       
       // Random velocity direction
       const velocityAngle = Math.random() * Math.PI * 2;
-      const velocity = new Vector3(
+      const velocity = new THREE.Vector3(
         Math.cos(velocityAngle),
         0,
         Math.sin(velocityAngle)
@@ -123,7 +124,7 @@ export class TectonicPlateSimulator {
         const idx = row * resolution + col;
         const x = col * cellSize - worldSize / 2;
         const z = row * cellSize - worldSize / 2;
-        const pos = new Vector3(x, 0, z);
+        const pos = new THREE.Vector3(x, 0, z);
         
         let minDist = Infinity;
         let nearestPlate = 0;
@@ -246,7 +247,7 @@ export class TectonicPlateSimulator {
           const idx = row * resolution + col;
           const x = col * cellSize - worldSize / 2;
           const z = row * cellSize - worldSize / 2;
-          const pos = new Vector3(x, 0, z);
+          const pos = new THREE.Vector3(x, 0, z);
           
           let minDist = Infinity;
           let nearestPlate = 0;
@@ -349,8 +350,8 @@ export class TectonicPlateSimulator {
     heightmap: Float32Array,
     resolution: number,
     worldSize: number
-  ): { positions: Vector3[]; intensities: number[] } {
-    const positions: Vector3[] = [];
+  ): { positions: THREE.Vector3[]; intensities: number[] } {
+    const positions: THREE.Vector3[] = [];
     const intensities: number[] = [];
     const cellSize = worldSize / resolution;
     
@@ -373,7 +374,7 @@ export class TectonicPlateSimulator {
         const z = row * cellSize - worldSize / 2;
         
         // Volcanoes form 50-200km from trench
-        const distToTrench = new Vector3(x, 0, z)
+        const distToTrench = new THREE.Vector3(x, 0, z)
           .distanceTo(subductingPlate.centroid);
         
         if (distToTrench > 50 && distToTrench < 200) {
@@ -383,7 +384,7 @@ export class TectonicPlateSimulator {
             .normalize();
           
           const offset = 100 * cellSize;
-          const volcanoPos = new Vector3(
+          const volcanoPos = new THREE.Vector3(
             x + direction.x * offset,
             heightmap[idx],
             z + direction.z * offset
@@ -409,7 +410,7 @@ export class TectonicPlateSimulator {
     finalHeightmap: Float32Array;
     plates: TectonicPlate[];
     boundaries: PlateBoundary[];
-    volcanicArcs: { positions: Vector3[]; intensities: number[] };
+    volcanicArcs: { positions: THREE.Vector3[]; intensities: number[] };
   } {
     // Initialize plates
     const plateMap = this.initializePlates(resolution, worldSize);

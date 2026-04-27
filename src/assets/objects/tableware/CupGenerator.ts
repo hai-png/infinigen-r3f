@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
 
-export interface CupParams {
+export interface CupParams extends BaseGeneratorConfig {
   type: 'mug' | 'teacup' | 'coffee' | 'espresso' | 'tumbler' | 'wine' | 'beer';
   capacity: number; // in ml
   material: 'ceramic' | 'glass' | 'metal' | 'plastic' | 'porcelain';
@@ -24,6 +24,10 @@ export class CupGenerator extends BaseObjectGenerator<CupParams> {
     color: '#ffffff',
     transparent: false,
   };
+  public getDefaultConfig(): CupParams {
+    return this.defaultParams;
+  }
+
 
   generate(params: Partial<CupParams> = {}): THREE.Group {
     const finalParams = { ...this.defaultParams, ...params };

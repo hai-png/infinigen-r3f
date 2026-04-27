@@ -10,10 +10,10 @@ import * as THREE from 'three';
  */
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, ExtrudeGeometry, Vector3, Color } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
 
-export interface StaircaseParams {
+export interface StaircaseParams extends BaseGeneratorConfig {
   // Geometry
   totalHeight: number;
   totalRun: number;
@@ -63,10 +63,10 @@ const DEFAULT_PARAMS: StaircaseParams = {
 
 export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
   constructor(seed?: number) {
-    super('Staircase', seed);
+    super(seed);
   }
 
-  getDefaultParams(): StaircaseParams {
+  getDefaultConfig(): StaircaseParams {
     return { ...DEFAULT_PARAMS };
   }
 

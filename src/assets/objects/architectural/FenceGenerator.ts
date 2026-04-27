@@ -2,9 +2,9 @@
  * FenceGenerator - Procedural fence generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface FenceParams {
+export interface FenceParams extends BaseGeneratorConfig {
   length: number;
   height: number;
   fenceType: 'picket' | 'privacy' | 'chain_link' | 'wrought_iron' | 'ranch';
@@ -34,10 +34,10 @@ const DEFAULT_PARAMS: FenceParams = {
 
 export class FenceGenerator extends BaseObjectGenerator<FenceParams> {
   constructor(seed?: number) {
-    super('Fence', seed);
+    super(seed);
   }
 
-  getDefaultParams(): FenceParams {
+  getDefaultConfig(): FenceParams {
     return { ...DEFAULT_PARAMS };
   }
 

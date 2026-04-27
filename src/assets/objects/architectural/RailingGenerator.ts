@@ -2,9 +2,9 @@
  * RailingGenerator - Procedural railing generation
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface RailingParams {
+export interface RailingParams extends BaseGeneratorConfig {
   length: number;
   height: number;
   width: number;
@@ -36,10 +36,10 @@ const DEFAULT_PARAMS: RailingParams = {
 
 export class RailingGenerator extends BaseObjectGenerator<RailingParams> {
   constructor(seed?: number) {
-    super('Railing', seed);
+    super(seed);
   }
 
-  getDefaultParams(): RailingParams {
+  getDefaultConfig(): RailingParams {
     return { ...DEFAULT_PARAMS };
   }
 

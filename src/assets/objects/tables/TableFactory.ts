@@ -59,6 +59,10 @@ export class TableFactory extends AssetFactory {
     this.config = this.generateConfig();
   }
 
+  getDefaultConfig(): TableConfig {
+    return this.generateConfig();
+  }
+
   /**
    * Generate random table configuration
    */

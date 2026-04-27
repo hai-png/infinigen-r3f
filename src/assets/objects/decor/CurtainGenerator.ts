@@ -8,6 +8,7 @@ import {
   PlaneGeometry,
   CylinderGeometry,
   TorusGeometry,
+  SphereGeometry,
   Material,
   MeshStandardMaterial,
   BufferGeometry,
@@ -52,6 +53,10 @@ export class CurtainGenerator extends BaseObjectGenerator<CurtainConfig> {
   constructor() {
     super();
     this.noise = new NoiseUtils();
+  }
+
+  getDefaultConfig(): CurtainConfig {
+    return { ...this.defaultParams };
   }
 
   generate(params: Partial<CurtainConfig> = {}): Group {
@@ -329,7 +334,7 @@ export class CurtainGenerator extends BaseObjectGenerator<CurtainConfig> {
     });
   }
 
-  getVariations(): Params[] {
+  getVariations(): CurtainConfig[] {
     const styles: CurtainStyle[] = ['drapes', 'sheer', 'valance', 'cafe', 'pencil', 'grommet', 'rod_pocket'];
     const materials: CurtainMaterialType[] = ['cotton', 'linen', 'silk', 'velvet', 'polyester', 'lace'];
     const patterns: CurtainPattern[] = ['solid', 'striped', 'floral', 'geometric', 'damask'];

@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 /**
  * Wardrobe Generator
  * 
@@ -16,7 +17,7 @@ export type DoorStyle = 'sliding' | 'hinged' | 'bi-fold' | 'curtain' | 'french';
 export type WardrobeMaterial = 'wood' | 'mdf' | 'metal' | 'glass' | 'mirrored' | 'composite';
 export type InteriorLayout = 'hanging-only' | 'shelves-only' | 'mixed' | 'custom';
 
-export interface WardrobeParams {
+export interface WardrobeParams extends BaseGeneratorConfig {
   type: WardrobeType;
   doorStyle: DoorStyle;
   material: WardrobeMaterial;
@@ -48,6 +49,27 @@ export class WardrobeGenerator {
 
   constructor() {
     this.noise = createNoise3D();
+  }
+
+  getDefaultConfig(): WardrobeParams {
+    return {
+      type: 'freestanding',
+      doorStyle: 'hinged',
+      material: 'wood',
+      width: 1.5,
+      height: 2.2,
+      depth: 0.6,
+      doorCount: 2,
+      color: new THREE.Color(0x8b6f47),
+      handleStyle: 'pull',
+      interiorLayout: 'mixed',
+      shelves: true,
+      drawers: false,
+      mirror: false,
+      decorative: false,
+      feet: true,
+      crown: false,
+    };
   }
 
   /**

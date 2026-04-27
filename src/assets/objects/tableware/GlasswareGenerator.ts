@@ -3,10 +3,11 @@
  */
 
 import { Group, Mesh, CylinderGeometry, SphereGeometry, TorusGeometry, Material } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
+import * as THREE from 'three';
 
-export interface GlasswareParams {
+export interface GlasswareParams extends BaseGeneratorConfig {
   type: 'wine' | 'beer' | 'water' | 'champagne' | 'whiskey' | 'cocktail' | 'bottle_wine' | 'bottle_beer' | 'bottle_spirit';
   style: 'elegant' | 'casual' | 'modern' | 'vintage';
   size: 'small' | 'medium' | 'large';
@@ -21,6 +22,10 @@ export class GlasswareGenerator extends BaseObjectGenerator<GlasswareParams> {
     size: 'medium',
     seed: undefined
   };
+
+  getDefaultConfig(): GlasswareParams {
+    return { ...this.defaultParams };
+  }
 
   generate(params: Partial<GlasswareParams> = {}): Group {
     const finalParams = { ...this.defaultParams, ...params };
@@ -150,5 +155,3 @@ export class GlasswareGenerator extends BaseObjectGenerator<GlasswareParams> {
     }));
   }
 }
-
-import * as THREE from 'three';

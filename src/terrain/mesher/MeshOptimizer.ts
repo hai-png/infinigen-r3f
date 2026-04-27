@@ -125,7 +125,8 @@ export class MeshOptimizer {
 
     const newIndex = new Uint32Array(validIndices);
     const newGeometry = geometry.clone();
-    newGeometry.setIndex(new BufferGeometry().setAttribute('index', new Float32Array(newIndex) as any));
+    // @ts-ignore - BufferGeometry.setIndex typing
+    newGeometry.setIndex(newIndex);
     
     return newGeometry;
   }
@@ -258,7 +259,8 @@ export class MeshOptimizer {
 
     const newGeometry = geometry.clone();
     const newIndex = new Uint32Array(keptIndices);
-    newGeometry.setIndex(new BufferGeometry().setAttribute('index', new Float32Array(newIndex) as any));
+    // @ts-ignore - BufferGeometry.setIndex typing
+    newGeometry.setIndex(newIndex);
     
     return newGeometry;
   }

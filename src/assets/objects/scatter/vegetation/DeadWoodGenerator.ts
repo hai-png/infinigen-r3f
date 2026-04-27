@@ -2,11 +2,11 @@
  * DeadWoodGenerator - Fallen trees and branches
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type DeadWoodType = 'fallen_log' | 'snag' | 'branch_pile' | 'stump';
-export interface DeadWoodConfig {
+export interface DeadWoodConfig extends BaseGeneratorConfig {
   length: number;
   radius: number;
   woodType: DeadWoodType;

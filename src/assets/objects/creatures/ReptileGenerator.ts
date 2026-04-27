@@ -1,81 +1,111 @@
 /**
  * ReptileGenerator - Procedural reptile generation
  */
-import { Group, Mesh, Material } from 'three';
-import { CreatureBase, CreatureParameters, CreatureType } from './CreatureBase';
-import { LegGenerator } from './parts/LegGenerator';
-import { TailGenerator } from './parts/TailGenerator';
-import { EyeGenerator } from './parts/EyeGenerator';
+import { Group, Mesh, MeshStandardMaterial } from 'three';
+import { CreatureBase, CreatureParams, CreatureType } from './CreatureBase';
 
-export type ReptileSpecies = 'snake' | 'lizard' | 'turtle' | 'crocodile' | 'gecko' | 'iguana';
-export interface ReptileParameters extends CreatureParameters {
+export interface ReptileParameters extends CreatureParams {
   scalePattern: 'smooth' | 'keeled' | 'granular';
   limbCount: number;
   hasShell: boolean;
   primaryColor: string;
 }
 
-export class ReptileGenerator extends CreatureBase<ReptileParameters> {
-  constructor(seed?: number) {
-    super(seed);
+export type ReptileSpecies = 'lizard' | 'snake' | 'turtle' | 'crocodile' | 'gecko';
+
+export class ReptileGenerator extends CreatureBase {
+  constructor(params: Partial<ReptileParameters> = {}) {
+    super({ ...params, seed: params.seed || Math.random() * 10000 });
   }
 
-  protected getDefaultParameters(): ReptileParameters {
+  getDefaultConfig(): ReptileParameters {
     return {
-      ...super.getDefaultParameters(),
+      ...this.params,
       creatureType: CreatureType.REPTILE,
-      scalePattern: 'keeled',
+      scalePattern: 'smooth',
       limbCount: 4,
       hasShell: false,
       primaryColor: '#228B22',
-    };
+    } as ReptileParameters;
   }
 
-  generate(species: ReptileSpecies, params: Partial<ReptileParameters> = {}): Group {
-    const parameters = { ...this.getDefaultParameters(), ...params };
+  generate(species: ReptileSpecies = 'lizard', params: Partial<ReptileParameters> = {}): Group {
+    const parameters = this.mergeParameters(this.getDefaultConfig(), params);
     this.applySpeciesDefaults(species, parameters);
-    
+
     const reptile = new Group();
     reptile.name = `Reptile_${species}`;
-    
-    const body = this.generateBody(parameters);
-    reptile.add(body);
-    
-    if (parameters.limbCount > 0) {
-      const legs = new LegGenerator(this.seed).generate('reptilian', parameters.limbCount, parameters.size * 0.25);
-      reptile.add(legs);
-    }
-    
-    const tail = new TailGenerator(this.seed).generate('tapered', parameters.size * 0.5);
-    reptile.add(tail);
-    
+    reptile.add(this.generateBody(parameters));
     return reptile;
+  }
+
+  generateBodyCore(): Mesh {
+    return this.generateBody(this.getDefaultConfig());
+  }
+
+  generateHead(): Mesh {
+    return this.generateBody(this.getDefaultConfig());
+  }
+
+  generateLimbs(): Mesh[] {
+    return [];
+  }
+
+  generateAppendages(): Mesh[] {
+    return [];
+  }
+
+  applySkin(materials: any): any[] {
+    return materials;
   }
 
   private applySpeciesDefaults(species: ReptileSpecies, params: ReptileParameters): void {
     switch (species) {
-      case 'snake': params.limbCount = 0; params.size = 1.5; params.primaryColor = '#8B0000'; break;
-      case 'lizard': params.limbCount = 4; params.size = 0.3; params.primaryColor = '#228B22'; break;
-      case 'turtle': params.hasShell = true; params.limbCount = 4; params.size = 0.4; params.primaryColor = '#556B2F'; break;
-      case 'crocodile': params.limbCount = 4; params.size = 3.0; params.primaryColor = '#2F4F4F'; break;
-      case 'gecko': params.limbCount = 4; params.size = 0.15; params.scalePattern = 'granular'; params.primaryColor = '#DAA520'; break;
-      case 'iguana': params.limbCount = 4; params.size = 0.8; params.primaryColor = '#32CD32'; break;
+      case 'lizard':
+        params.size = 0.3;
+        params.scalePattern = 'smooth';
+        params.limbCount = 4;
+        params.hasShell = false;
+        params.primaryColor = '#228B22';
+        break;
+      case 'snake':
+        params.size = 1.0;
+        params.scalePattern = 'smooth';
+        params.limbCount = 0;
+        params.hasShell = false;
+        params.primaryColor = '#228B22';
+        break;
+      case 'turtle':
+        params.size = 0.5;
+        params.scalePattern = 'keeled';
+        params.limbCount = 4;
+        params.hasShell = true;
+        params.primaryColor = '#2E8B57';
+        break;
+      case 'crocodile':
+        params.size = 2.0;
+        params.scalePattern = 'keeled';
+        params.limbCount = 4;
+        params.hasShell = false;
+        params.primaryColor = '#556B2F';
+        break;
+      case 'gecko':
+        params.size = 0.1;
+        params.scalePattern = 'granular';
+        params.limbCount = 4;
+        params.hasShell = false;
+        params.primaryColor = '#32CD32';
+        break;
     }
   }
 
   private generateBody(params: ReptileParameters): Mesh {
-    const geometry = params.hasShell 
-      ? this.createShellGeometry(params.size)
-      : this.createElongatedGeometry(params.size);
+    const geometry = this.createEllipsoidGeometry(params.size * 0.3, params.size * 0.2, params.size * 0.5);
     const material = new MeshStandardMaterial({ color: params.primaryColor });
     return new Mesh(geometry, material);
   }
 
-  private createShellGeometry(size: number): any {
-    return this.createSphereGeometry(size * 0.5, 16, 8);
-  }
-
-  private createElongatedGeometry(size: number): any {
-    return this.createCylinderGeometry(size * 0.1, size * 0.08, size, 8);
+  private createShellGeometry() {
+    return this.createSphereGeometry(0.5);
   }
 }

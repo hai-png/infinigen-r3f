@@ -6,12 +6,12 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 import { extrudeShape } from '../../utils/curves';
 
-export interface DiningTableParams {
+export interface DiningTableParams extends BaseGeneratorConfig {
   // Dimensions
   width: number;
   depth: number;
@@ -41,7 +41,7 @@ export interface DiningTableParams {
 export class DiningTable extends BaseObjectGenerator<DiningTableParams> {
   static readonly GENERATOR_ID = 'dining_table';
   
-  getDefaultParams(): DiningTableParams {
+  getDefaultConfig(): DiningTableParams {
     return {
       width: 1.2,
       depth: 2.0,
@@ -88,7 +88,7 @@ export class DiningTable extends BaseObjectGenerator<DiningTableParams> {
     }
     
     // Generate collision mesh
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     group.userData.params = finalParams;
     group.userData.generatorId = DiningTable.GENERATOR_ID;

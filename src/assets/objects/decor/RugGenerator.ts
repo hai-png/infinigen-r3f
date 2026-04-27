@@ -23,6 +23,10 @@ export class RugGenerator extends BaseObjectGenerator<RugConfig> {
     pileHeight: 0.02, hasFringe: false, seed: undefined
   };
 
+  getDefaultConfig(): RugConfig {
+    return { ...this.defaultParams };
+  }
+
   generate(params: Partial<RugConfig> = {}): Group {
     const finalParams = { ...this.defaultParams, ...params };
     const group = new Group();
@@ -71,7 +75,7 @@ export class RugGenerator extends BaseObjectGenerator<RugConfig> {
     return new MeshStandardMaterial(configs[style]);
   }
 
-  getVariations(): Params[] {
+  getVariations(): RugConfig[] {
     const styles: RugStyle[] = ['persian', 'modern', 'shag', 'oriental', 'geometric', 'traditional'];
     const shapes: RugShape[] = ['rectangular', 'round', 'oval', 'runner'];
     return styles.map(s => ({

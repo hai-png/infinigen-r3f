@@ -287,7 +287,7 @@ export class MushroomVarieties {
       const z = positions[i + 2];
       
       // Add wavy irregularity
-      const noise = NoiseUtils.perlin3D(x * 5, y * 5, z * 5) * 0.02;
+      const noise = NoiseUtils.perlin2D(x * 5 + z * 5, y * 5) * 0.02;
       positions[i] *= 1 + noise;
       positions[i + 1] *= 1 + noise;
       positions[i + 2] *= 1 + noise;

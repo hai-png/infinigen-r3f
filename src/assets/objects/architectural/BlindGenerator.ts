@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 /**
  * Blind Generator
  * 
@@ -15,7 +16,7 @@ export type BlindType = 'horizontal' | 'vertical' | 'roller' | 'roman' | 'veneti
 export type BlindMaterial = 'aluminum' | 'wood' | 'fabric' | 'vinyl' | 'bamboo';
 export type ControlType = 'manual' | 'motorized' | 'smart';
 
-export interface BlindParams {
+export interface BlindParams extends BaseGeneratorConfig {
   type: BlindType;
   material: BlindMaterial;
   width: number;

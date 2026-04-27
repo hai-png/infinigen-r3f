@@ -3,11 +3,11 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 
-export interface DrawerUnitParams {
+export interface DrawerUnitParams extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
@@ -22,7 +22,7 @@ export interface DrawerUnitParams {
 export class DrawerUnit extends BaseObjectGenerator<DrawerUnitParams> {
   static readonly GENERATOR_ID = 'drawer_unit';
   
-  getDefaultParams(): DrawerUnitParams {
+  getDefaultConfig(): DrawerUnitParams {
     return {
       width: 0.6,
       height: 1.2,
@@ -56,7 +56,7 @@ export class DrawerUnit extends BaseObjectGenerator<DrawerUnitParams> {
     const top = this.createTop(finalParams, rng);
     group.add(top);
     
-    const collisionMesh = this.generateCollisionMesh(group);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(group);
     group.userData.collisionMesh = collisionMesh;
     group.userData.params = finalParams;
     group.userData.generatorId = DrawerUnit.GENERATOR_ID;

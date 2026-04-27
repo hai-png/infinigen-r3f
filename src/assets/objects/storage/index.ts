@@ -9,7 +9,6 @@ export * from './DrawerUnit';
 export * from './ShelfGenerator';
 export * from './WardrobeGenerator';
 
-// Re-export types
 export type { CabinetConfig, CabinetStyle } from './CabinetGenerator';
 export type { DrawerUnitConfig, DrawerType } from './DrawerUnit';
 export type { ShelfConfig, ShelfStyle } from './ShelfGenerator';

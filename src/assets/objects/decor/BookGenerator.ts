@@ -33,6 +33,10 @@ export class BookGenerator extends BaseObjectGenerator<BookConfig> {
     seed: undefined
   };
 
+  getDefaultConfig(): BookConfig {
+    return this.defaultParams;
+  }
+
   private readonly sizeDimensions = {
     small: { width: 0.11, height: 0.175, thickness: 0.02 },
     medium: { width: 0.135, height: 0.205, thickness: 0.025 },
@@ -138,12 +142,13 @@ export class BookGenerator extends BaseObjectGenerator<BookConfig> {
     });
   }
 
-  getVariations(): BookConfig[] {
-    return [
+  getVariations(count: number, _baseConfig?: Partial<BookConfig>): THREE.Object3D[] {
+    const configs: BookConfig[] = [
       { ...this.defaultParams, size: 'small', coverType: 'paperback', coverColor: '#4169E1' },
       { ...this.defaultParams, size: 'medium', coverType: 'hardcover', coverColor: '#8B0000' },
       { ...this.defaultParams, size: 'large', coverType: 'leather', coverColor: '#2F4F4F' },
       { ...this.defaultParams, size: 'folio', coverType: 'leather', coverColor: '#8B4513', hasDustJacket: true }
     ];
+    return configs.slice(0, count).map(config => this.generate(config));
   }
 }

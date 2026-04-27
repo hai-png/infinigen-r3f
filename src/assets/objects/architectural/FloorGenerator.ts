@@ -2,9 +2,9 @@
  * FloorGenerator - Procedural flooring generation
  */
 import { Group, Mesh, BoxGeometry, PlaneGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
-export interface FloorParams {
+export interface FloorParams extends BaseGeneratorConfig {
   width: number;
   depth: number;
   thickness: number;
@@ -34,10 +34,10 @@ const DEFAULT_PARAMS: FloorParams = {
 
 export class FloorGenerator extends BaseObjectGenerator<FloorParams> {
   constructor(seed?: number) {
-    super('Floor', seed);
+    super(seed);
   }
 
-  getDefaultParams(): FloorParams {
+  getDefaultConfig(): FloorParams {
     return { ...DEFAULT_PARAMS };
   }
 

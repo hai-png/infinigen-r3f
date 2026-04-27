@@ -39,6 +39,10 @@ export class CandleGenerator extends BaseObjectGenerator<CandleConfig> {
     seed: undefined
   };
 
+  getDefaultConfig(): CandleConfig {
+    return { ...this.defaultParams };
+  }
+
   generate(params: Partial<CandleConfig> = {}): THREE.Group {
     const config = { ...this.defaultParams, ...params };
     const group = new THREE.Group();

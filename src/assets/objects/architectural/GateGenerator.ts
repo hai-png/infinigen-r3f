@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../core/util/math/index';
 
-export interface GateParams {
+export interface GateParams extends BaseGeneratorConfig {
   type: 'swing' | 'slide' | 'double' | 'ornate' | 'farm' | 'picket';
   width: number;
   height: number;
@@ -32,6 +32,10 @@ export class GateGenerator extends BaseObjectGenerator<GateParams> {
     color: '#4a3728',
     decorativeElements: false,
   };
+  public getDefaultConfig(): GateParams {
+    return this.defaultParams;
+  }
+
 
   generate(params: Partial<GateParams> = {}): THREE.Group {
     const finalParams = { ...this.defaultParams, ...params };

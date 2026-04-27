@@ -9,6 +9,7 @@ import {
   BoxGeometry,
   CylinderGeometry,
   TorusGeometry,
+  SphereGeometry,
   Material,
   MeshStandardMaterial,
   MeshPhysicalMaterial,
@@ -53,6 +54,10 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
   constructor() {
     super();
     this.noise = new NoiseUtils();
+  }
+
+  getDefaultConfig(): MirrorConfig {
+    return { ...this.defaultParams };
   }
 
   generate(params: Partial<MirrorConfig> = {}): Group {
@@ -198,7 +203,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     }
   }
 
-  private createRectangularFrame(group: Group, params: Params, material: Material): void {
+  private createRectangularFrame(group: Group, params: MirrorConfig, material: Material): void {
     const { width, height, frameWidth, frameThickness } = params;
     
     // Top and bottom
@@ -227,7 +232,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     }
   }
 
-  private createRoundFrame(group: Group, params: Params, material: Material): void {
+  private createRoundFrame(group: Group, params: MirrorConfig, material: Material): void {
     const outerRadius = Math.max(params.width, params.height) / 2 + params.frameWidth;
     const innerRadius = Math.max(params.width, params.height) / 2;
     const thickness = params.frameThickness;
@@ -247,7 +252,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     }
   }
 
-  private createOvalFrame(group: Group, params: Params, material: Material): void {
+  private createOvalFrame(group: Group, params: MirrorConfig, material: Material): void {
     // Approximate oval with scaled torus
     const outerRadiusX = params.width / 2 + params.frameWidth;
     const outerRadiusY = params.height / 2 + params.frameWidth;
@@ -268,7 +273,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     group.add(frame);
   }
 
-  private addOrnateDetails(group: Group, params: Params, material: Material): void {
+  private addOrnateDetails(group: Group, params: MirrorConfig, material: Material): void {
     const cornerSize = params.frameWidth * 1.5;
     const cornerGeom = new BoxGeometry(cornerSize, cornerSize, params.frameThickness * 1.2);
     
@@ -356,7 +361,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     return new MeshStandardMaterial(config);
   }
 
-  getVariations(): Params[] {
+  getVariations(): MirrorConfig[] {
     const styles: MirrorStyle[] = ['wall', 'standing', 'vanity', 'decorative', 'round', 'oval', 'sunburst'];
     const frameStyles: FrameStyle[] = ['simple', 'ornate', 'modern', 'vintage', 'rustic', 'gilded'];
     const shapes: MirrorShape[] = ['rectangular', 'square', 'round', 'oval', 'arched'];

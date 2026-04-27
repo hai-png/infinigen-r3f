@@ -12,7 +12,8 @@
  */
 
 import * as THREE from 'three';
-import { NoiseUtils } from '../../../co../../core/util/NoiseUtils';
+import { Vector3 } from 'three';
+import { NoiseUtils } from '../../../core/util/NoiseUtils';
 
 export interface RiverConfig {
   seed: number;
@@ -35,7 +36,7 @@ interface FlowData {
 }
 
 interface RiverPoint {
-  position: Vector3;
+  position: THREE.Vector3;
   width: number;
   depth: number;
   flowRate: number;
@@ -280,7 +281,7 @@ export class RiverNetwork {
       const meanderedZ = z + meanderOffset.z;
       
       riverPoints.push({
-        position: new Vector3(meanderedX, y, meanderedZ),
+        position: new THREE.Vector3(meanderedX, y, meanderedZ),
         width,
         depth,
         flowRate,
@@ -325,12 +326,12 @@ export class RiverNetwork {
     x: number,
     z: number,
     width: number
-  ): Vector3 {
+  ): THREE.Vector3 {
     const meanderScale = 0.01;
     const nx = this.noise.perlin2D(x * meanderScale, z * meanderScale);
     const nz = this.noise.perlin2D(x * meanderScale + 100, z * meanderScale + 100);
     
-    return new Vector3(
+    return new THREE.Vector3(
       nx * this.config.meanderIntensity * width,
       0,
       nz * this.config.meanderIntensity * width

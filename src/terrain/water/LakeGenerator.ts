@@ -11,8 +11,9 @@
  */
 
 import * as THREE from 'three';
+import { Vector3 } from 'three';
 import { TerrainMesher } from '../mesher/TerrainMesher';
-import { NoiseUtils } from '../../../co../../core/util/NoiseUtils';
+import { NoiseUtils } from '../../../core/util/NoiseUtils';
 
 export interface LakeConfig {
   seed: number;
@@ -54,31 +55,31 @@ export interface WaterfallConfig {
 }
 
 export interface RiverPoint {
-  position: Vector3;
+  position: THREE.Vector3;
   width: number;
   depth: number;
   flowRate: number;
 }
 
 export interface Waterfall {
-  position: Vector3;
+  position: THREE.Vector3;
   height: number;
   width: number;
   flowRate: number;
   tiers: WaterfallTier[];
   plungePool: PlungePool;
-  mistParticles: Vector3[];
+  mistParticles: THREE.Vector3[];
 }
 
 export interface WaterfallTier {
-  position: Vector3;
+  position: THREE.Vector3;
   height: number;
   width: number;
   overhang: number;
 }
 
 export interface PlungePool {
-  position: Vector3;
+  position: THREE.Vector3;
   radius: number;
   depth: number;
   erosion: Float32Array;
@@ -117,10 +118,10 @@ export class LakeGenerator {
     heightmap: Float32Array,
     resolution: number,
     worldSize: number
-  ): { basin: Float32Array; shoreline: Vector3[]; depthMap: Float32Array } {
+  ): { basin: Float32Array; shoreline: THREE.Vector3[]; depthMap: Float32Array } {
     const basin = new Float32Array(heightmap.length);
     const depthMap = new Float32Array(heightmap.length);
-    const shoreline: Vector3[] = [];
+    const shoreline: THREE.Vector3[] = [];
     
     const cellSize = worldSize / resolution;
     const baseLevel = this.config.minElevation + 
@@ -192,7 +193,7 @@ export class LakeGenerator {
           }
           
           if (isShoreline) {
-            shoreline.push(new Vector3(x, elevation, z));
+            shoreline.push(new THREE.Vector3(x, elevation, z));
           }
           
           // Add unvisited neighbors
@@ -299,7 +300,7 @@ export class LakeGenerator {
    * Create lake water mesh
    */
   createWaterMesh(
-    shoreline: Vector3[],
+    shoreline: THREE.Vector3[],
     baseLevel: number
   ): THREE.BufferGeometry {
     if (shoreline.length < 3) {
@@ -330,12 +331,12 @@ export class LakeGenerator {
   /**
    * Compute concave hull from shoreline points
    */
-  private computeConcaveHull(points: Vector3[]): Vector3[] {
+  private computeConcaveHull(points: THREE.Vector3[]): THREE.Vector3[] {
     // Simplified alpha shape algorithm
     if (points.length < 3) return points;
     
     // Sort points by angle from centroid
-    const centroid = new Vector3();
+    const centroid = new THREE.Vector3();
     for (const p of points) {
       centroid.add(p);
     }
@@ -354,7 +355,7 @@ export class LakeGenerator {
    * Triangulate polygon for water surface
    */
   private triangulatePolygon(
-    points: Vector3[],
+    points: THREE.Vector3[],
     yLevel: number
   ): THREE.BufferGeometry {
     // Simple ear clipping triangulation for convex-ish polygons
@@ -416,7 +417,7 @@ export class LakeGenerator {
     terrain: Float32Array;
     waterGeometry: THREE.BufferGeometry;
     waterMaterial: THREE.MeshPhysicalMaterial;
-    shoreline: Vector3[];
+    shoreline: THREE.Vector3[];
     depthMap: Float32Array;
   } {
     // Generate lake basin

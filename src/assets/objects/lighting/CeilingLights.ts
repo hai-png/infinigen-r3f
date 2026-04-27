@@ -4,12 +4,12 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { GeometryPipeline } from '../../utils/GeometryPipeline';
 import { UVMapper } from '../../utils/UVMapper';
 
-export interface CeilingLightParams {
+export interface CeilingLightParams extends BaseGeneratorConfig {
   fixtureType: 'flush' | 'semi-flush' | 'pendant' | 'chandelier' | 'track' | 'recessed';
   width: number;
   depth: number;
@@ -32,7 +32,7 @@ export class CeilingLights extends BaseObjectGenerator<CeilingLightParams> {
     this.subcategory = 'ceiling';
   }
 
-  getDefaultParams(): CeilingLightParams {
+  getDefaultConfig(): CeilingLightParams {
     return {
       fixtureType: 'flush',
       width: 0.4,
@@ -80,7 +80,7 @@ export class CeilingLights extends BaseObjectGenerator<CeilingLightParams> {
     }
     
     // Generate collision mesh
-    const collisionMesh = this.generateCollisionMesh(fixture);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(fixture);
     fixture.userData.collisionMesh = collisionMesh;
     
     // Add light source

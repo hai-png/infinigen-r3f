@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 /**
  * Chandelier Generator
  * 
@@ -20,7 +21,7 @@ export type ChandelierStyle = 'classic' | 'modern' | 'rustic' | 'crystal' | 'min
 export type ChandelierMaterial = 'brass' | 'bronze' | 'iron' | 'gold' | 'silver' | 'black_metal' | 'chrome';
 export type BulbType = 'candle' | 'edison' | 'globe' | 'tube' | 'chandelier_bulb';
 
-export interface ChandelierParams {
+export interface ChandelierParams extends BaseGeneratorConfig {
   // Structure
   style: ChandelierStyle;
   armCount: number;

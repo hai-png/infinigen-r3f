@@ -1,3 +1,4 @@
+import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 /**
  * Hanger Generator
  * 
@@ -19,7 +20,7 @@ export type HangerType = 'wire' | 'wooden' | 'plastic' | 'padded' | 'suit' | 'dr
 export type HangerMaterial = 'metal' | 'wood' | 'plastic' | 'velvet' | 'satin' | 'chrome';
 export type HookStyle = 'standard' | 'swivel' | 'rounded' | 'angled';
 
-export interface HangerParams {
+export interface HangerParams extends BaseGeneratorConfig {
   // Type and style
   hangerType: HangerType;
   hookStyle: HookStyle;

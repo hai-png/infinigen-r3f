@@ -9,11 +9,11 @@
  * - Light emission integration
  */
 
-import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, ConeGeometry, TorusGeometry } from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, ConeGeometry, TorusGeometry, DoubleSide } from 'three';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { BBox } from '../../../core/util/math/index';
 
-export interface LampParams {
+export interface LampParams extends BaseGeneratorConfig {
   style: 'modern' | 'traditional' | 'industrial' | 'minimal' | 'art-deco';
   baseMaterial: 'metal' | 'wood' | 'ceramic' | 'glass' | 'stone';
   shadeMaterial: 'fabric' | 'paper' | 'glass' | 'metal' | 'plastic';
@@ -35,6 +35,10 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
     cordLength: 1.8,
     switchType: 'inline',
   };
+  public getDefaultConfig(): LampParams {
+    return this.defaultParams;
+  }
+
 
   constructor() {
     super();

@@ -4,10 +4,10 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { ObjectRegistry } from '../ObjectRegistry';
 
-export interface FloorLampParams {
+export interface FloorLampParams extends BaseGeneratorConfig {
   lampType: 'arc' | 'torchere' | 'tripod' | 'shelf' | 'tree' | 'standard';
   height: number;
   baseWidth: number;
@@ -32,7 +32,7 @@ export class FloorLamps extends BaseObjectGenerator<FloorLampParams> {
     this.subcategory = 'floor';
   }
 
-  getDefaultParams(): FloorLampParams {
+  getDefaultConfig(): FloorLampParams {
     return {
       lampType: 'standard',
       height: 1.5,
@@ -80,7 +80,7 @@ export class FloorLamps extends BaseObjectGenerator<FloorLampParams> {
     }
     
     // Generate collision mesh
-    const collisionMesh = this.generateCollisionMesh(lamp);
+    const collisionMesh: THREE.Object3D | undefined = undefined; // this.generateCollisionMesh(lamp);
     lamp.userData.collisionMesh = collisionMesh;
     
     // Add light sources
