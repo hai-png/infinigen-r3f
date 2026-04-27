@@ -1,1 +1,1 @@
-export { BedGenerator, BedParams } from './BedGenerator';
+export type { BedGenerator, BedParams } from './BedGenerator';

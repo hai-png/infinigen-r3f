@@ -1,1 +1,1 @@
-export { SnowSystem, SnowParams } from './SnowSystem';
+export type { SnowSystem, SnowParams } from './SnowSystem';

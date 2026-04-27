@@ -13,7 +13,7 @@
  */
 
 import * as THREE from 'three';
-import { NoiseUtils } from '../utils/NoiseUtils';
+import { NoiseUtils } from '../../core/util/NoiseUtils';
 
 export interface PlateConfig {
   seed: number;

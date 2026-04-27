@@ -3,14 +3,16 @@
  * Provides backward compatibility for files expecting utils module
  */
 
+import * as THREE from 'three';
+
 // FixedSeed is an alias for SeededRandom for backward compatibility
 export { SeededRandom as FixedSeed } from '../MathUtils';
 export type { RandomGenerator } from '../MathUtils';
 
 // Re-export commonly used utilities
-export { 
-  clamp, 
-  lerp, 
+export {
+  clamp,
+  lerp,
   inverseLerp,
   mapRange,
   degToRad,
@@ -19,3 +21,6 @@ export {
   randomPleasantColor,
   weightedSample
 } from '../MathUtils';
+
+// Re-export THREE types
+export type { Vector3, Vector2, Quaternion, Euler } from 'three';

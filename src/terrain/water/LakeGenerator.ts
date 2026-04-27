@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { TerrainMesher } from '../mesher/TerrainMesher';
-import { NoiseUtils } from '../utils/NoiseUtils';
+import { NoiseUtils } from '../../../co../../core/util/NoiseUtils';
 
 export interface LakeConfig {
   seed: number;

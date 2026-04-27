@@ -23,3 +23,4 @@ export type { NoiseFunction } from './noise';
 export * from './vector';
 export * from './bbox';
 export * from './utils';
+export * from './transforms';

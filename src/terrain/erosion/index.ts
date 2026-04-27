@@ -2,4 +2,4 @@
  * Erosion Module Exports
  */
 
-export { ErosionSystem, ThermalErosion, RiverFormation, ErosionParams } from './ErosionSystem';
+export type { ErosionSystem, ThermalErosion, RiverFormation, ErosionParams } from './ErosionSystem';

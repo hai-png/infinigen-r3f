@@ -5,7 +5,7 @@
 
 import { Group, Mesh, Material } from 'three';
 import { CreatureBase, CreatureParameters, CreatureType } from './CreatureBase';
-import { FixedSeed } from '../../../../core/util/math/utils';
+import { FixedSeed } from '../../../../core/util/MathUtils';
 import { LegGenerator } from './parts/LegGenerator';
 import { TailGenerator } from './parts/TailGenerator';
 import { EyeGenerator } from './parts/EyeGenerator';

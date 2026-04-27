@@ -3,7 +3,7 @@
  */
 import { Color, Texture, CanvasTexture, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
-import { FixedSeed } from '../../../../core/util/math/utils';
+import { FixedSeed } from '../../../../core/util/MathUtils';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface GlassParams {

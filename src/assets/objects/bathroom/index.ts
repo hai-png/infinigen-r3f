@@ -1,1 +1,1 @@
-export { BathroomFixtures, BathroomFixtureParams } from './BathroomFixtures';
+export type { BathroomFixtures, BathroomFixtureParams } from './BathroomFixtures';

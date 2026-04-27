@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 /**
  * StaircaseGenerator - Procedural staircase generation
  * 
@@ -10,7 +11,7 @@
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, ExtrudeGeometry, Vector3, Color } from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/math/utils';
+import { FixedSeed } from '../../../../core/util/MathUtils';
 
 export interface StaircaseParams {
   // Geometry

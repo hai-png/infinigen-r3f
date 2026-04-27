@@ -4,7 +4,7 @@
  */
 
 import { Vector2, Vector3 } from 'three';
-import { SeededRandom } from '../../util/MathUtils';
+import { SeededRandom } from '../../../cor../core/util/MathUtils';
 
 export type HeightMap = Float32Array;
 export type MaskMap = Uint8Array;

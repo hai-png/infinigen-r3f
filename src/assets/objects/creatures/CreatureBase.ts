@@ -4,7 +4,7 @@
  */
 
 import { Group, Mesh, Material } from 'three';
-import { FixedSeed } from '../../../../core/util/math/utils';
+import { FixedSeed } from '../../../../core/util/MathUtils';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 
 export interface CreatureParams {

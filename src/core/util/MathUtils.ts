@@ -755,3 +755,5 @@ export function degToRad(degrees: number): number {
 export function radToDeg(radians: number): number {
   return radians * (180 / Math.PI);
 }
+// Re-export THREE vector types for convenience
+export { Vector3, Vector2, Vector4, Quaternion, Euler, Matrix4, Color } from 'three';

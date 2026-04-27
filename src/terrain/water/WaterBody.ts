@@ -268,7 +268,7 @@ export class WaterBody {
   /**
    * Generate shoreline points where water meets terrain
    */
-  generateShoreline(terrainGeometry: THREE.Geometry | THREE.BufferGeometry): ShorelinePoint[] {
+  generateShoreline(terrainGeometry: THREE.BufferGeometry | THREE.BufferGeometry): ShorelinePoint[] {
     this.shorelinePoints = [];
     
     // Simplified shoreline detection

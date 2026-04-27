@@ -1,14 +1,11 @@
 ```
+# Dependencies
+node_modules/
+
 # Build artifacts
 dist/
-*.js
-*.d.ts
-*.js.map
-*.d.ts.map
-
-# Logs and temp files
-*.log
-*.tmp
+build/
+target/
 
 # Environment
 .env
@@ -19,6 +16,56 @@ dist/
 .vscode/
 .idea/
 
-# Dependencies
-node_modules/
+# Logs
+*.log
+
+# Python cache (if present)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# MyPy cache
+.mypy_cache/
+
+# PyTest cache
+.pytest_cache/
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```

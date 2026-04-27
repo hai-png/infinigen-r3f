@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import { NoiseUtils } from '../utils/NoiseUtils';
+import { NoiseUtils } from '../../../co../../core/util/NoiseUtils';
 import { RiverPoint } from './RiverNetwork';
 
 export interface WaterfallConfig {

@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import { NoiseUtils } from '../utils/NoiseUtils';
+import { NoiseUtils } from '../../../co../../core/util/NoiseUtils';
 
 export interface RiverConfig {
   seed: number;

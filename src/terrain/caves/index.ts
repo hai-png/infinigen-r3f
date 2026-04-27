@@ -1,1 +1,1 @@
-export { CaveGenerator, CaveParams, CaveDecoration } from './CaveGenerator';
+export type { CaveGenerator, CaveParams, CaveDecoration } from './CaveGenerator';

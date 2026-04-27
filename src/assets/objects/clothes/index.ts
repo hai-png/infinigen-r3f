@@ -2,9 +2,9 @@
  * Clothes module exports
  */
 
-export { ClothingGenerator } from './ClothingGenerator';
-export { FabricDrape } from './FabricDrape';
-export { HangerGenerator, HangerParams, HangerType, HangerMaterial, HookStyle } from './HangerGenerator';
+export type { ClothingGenerator } from './ClothingGenerator';
+export type { FabricDrape } from './FabricDrape';
+export type { HangerGenerator, HangerParams, HangerType, HangerMaterial, HookStyle } from './HangerGenerator';
 
 export type { ClothingConfig } from './ClothingGenerator';
 export type { FabricDrapeConfig } from './FabricDrape';

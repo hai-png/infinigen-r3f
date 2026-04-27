@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
-import { FixedSeed } from '../../../../core/util/math/utils';
+import { FixedSeed } from '../../../../core/util/MathUtils';
 
 export interface CupParams {
   type: 'mug' | 'teacup' | 'coffee' | 'espresso' | 'tumbler' | 'wine' | 'beer';
