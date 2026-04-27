@@ -4,7 +4,7 @@
  * Ported from Blender Geometry Nodes
  */
 import { Camera } from 'three';
-import type { NodeBase, Domain } from '../core/types';
+import type { NodeBase, AttributeDomain } from '../core/types';
 export interface CameraNodeBase extends NodeBase {
     category: 'camera';
 }
@@ -23,7 +23,7 @@ export declare class CameraDataNode implements CameraNodeBase {
     readonly nodeType = "camera_data";
     readonly inputs: CameraDataInputs;
     readonly outputs: CameraDataOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: CameraDataInputs);
     execute(camera: Camera): CameraDataOutputs;
 }
@@ -45,7 +45,7 @@ export declare class DepthOfFieldNode implements CameraNodeBase {
     readonly nodeType = "depth_of_field";
     readonly inputs: DepthOfFieldInputs;
     readonly outputs: DepthOfFieldOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: DepthOfFieldInputs);
     execute(camera: Camera): DepthOfFieldOutputs;
 }
@@ -65,7 +65,7 @@ export declare class FocalLengthNode implements CameraNodeBase {
     readonly nodeType = "focal_length";
     readonly inputs: FocalLengthInputs;
     readonly outputs: FocalLengthOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: FocalLengthInputs);
     execute(camera: Camera): FocalLengthOutputs;
 }
@@ -81,7 +81,7 @@ export declare class ViewMatrixNode implements CameraNodeBase {
     readonly nodeType = "view_matrix";
     readonly inputs: ViewMatrixInputs;
     readonly outputs: ViewMatrixOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ViewMatrixInputs);
     execute(camera: Camera): ViewMatrixOutputs;
 }

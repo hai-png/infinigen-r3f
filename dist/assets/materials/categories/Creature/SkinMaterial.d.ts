@@ -30,6 +30,8 @@ export interface SkinMaterialConfig {
     /** Skin type: 'human', 'alien', 'creature' */
     skinType: 'human' | 'alien' | 'creature';
 }
+export type SkinParams = SkinMaterialConfig;
+export type SkinPreset = 'fair' | 'medium' | 'dark' | 'alien' | 'zombie';
 /**
  * Realistic skin material with subsurface scattering
  */

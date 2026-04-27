@@ -6,7 +6,8 @@
  *
  * @module materials/categories/fluid
  */
-export { WaterMaterial, WaterParams, WaterPreset } from './WaterMaterial';
+export { WaterMaterial } from './WaterMaterial';
+export type { WaterParams, WaterPreset } from './WaterMaterial';
 export declare const LavaMaterial: any;
 export type LavaParams = any;
 export type LavaPreset = any;

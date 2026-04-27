@@ -17,40 +17,41 @@ export class CeramicGenerator extends BaseMaterialGenerator {
         const finalParams = this.mergeParams(CeramicGenerator.DEFAULT_PARAMS, params);
         const rng = seed !== undefined ? new FixedSeed(seed) : this.rng;
         const material = this.createBaseMaterial();
+        const mat = material;
         // Generate base ceramic color with subtle variations
         const baseColor = this.generateBaseColor(finalParams.color, finalParams.type, rng);
-        material.map = this.createTextureFromColor(baseColor);
+        mat.map = this.createTextureFromColor(baseColor);
         // Apply glaze effects
-        this.applyGlaze(material, finalParams, rng);
+        this.applyGlaze(mat, finalParams, rng);
         // Add patterns if requested
         if (finalParams.patternType !== 'none') {
-            this.applyPattern(material, finalParams, rng);
+            this.applyPattern(mat, finalParams, rng);
         }
         // Generate roughness based on glaze type and wear
-        this.generateRoughnessMap(material, finalParams, rng);
+        this.generateRoughnessMap(mat, finalParams, rng);
         // Add edge wear
         if (finalParams.edgeWear > 0) {
-            this.applyEdgeWear(material, finalParams, rng);
+            this.applyEdgeWear(mat, finalParams, rng);
         }
         // Add dirt accumulation in crevices
         if (finalParams.dirtAccumulation > 0) {
-            this.applyDirt(material, finalParams, rng);
+            this.applyDirt(mat, finalParams, rng);
         }
         // Handle tile-specific generation
         if (finalParams.type === 'tile' && finalParams.tileGroutWidth !== undefined) {
-            this.applyTileGrout(material, finalParams, rng);
+            this.applyTileGrout(mat, finalParams, rng);
         }
         // Generate normal map for surface detail
-        material.normalMap = this.generateNormalMap(finalParams, rng);
+        mat.normalMap = this.generateNormalMap(finalParams, rng);
         // Generate AO map for depth
-        material.aoMap = this.generateAOMap(finalParams, rng);
+        mat.aoMap = this.generateAOMap(finalParams, rng);
         return {
-            material,
+            material: mat,
             maps: {
-                map: material.map,
-                roughnessMap: material.roughnessMap,
-                normalMap: material.normalMap,
-                aoMap: material.aoMap,
+                map: mat.map,
+                roughnessMap: mat.roughnessMap,
+                normalMap: mat.normalMap,
+                aoMap: mat.aoMap,
             },
             params: finalParams,
         };

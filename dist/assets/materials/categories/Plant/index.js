@@ -6,6 +6,6 @@
  *
  * @module materials/categories/plant
  */
-export { LeafMaterial, LeafParams, LeafPreset } from './LeafMaterial';
-export { BarkMaterial, BarkParams, BarkPreset } from './BarkMaterial';
+export { LeafMaterial } from './LeafMaterial';
+export { BarkMaterial } from './BarkMaterial';
 //# sourceMappingURL=index.js.map

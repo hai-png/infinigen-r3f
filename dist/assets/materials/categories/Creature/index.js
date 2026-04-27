@@ -6,7 +6,7 @@
  *
  * @module materials/categories/creature
  */
-export { FurMaterial, FurParams, FurPreset } from './FurMaterial';
-export { ScaleMaterial, ScaleParams, ScalePreset } from './ScaleMaterial';
-export { SkinMaterial, SkinParams, SkinPreset } from './SkinMaterial';
+export { FurMaterial } from './FurMaterial';
+export { ScaleMaterial } from './ScaleMaterial';
+export { SkinMaterial } from './SkinMaterial';
 //# sourceMappingURL=index.js.map

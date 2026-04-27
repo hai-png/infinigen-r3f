@@ -47,7 +47,7 @@ export class FabricGenerator extends BaseMaterialGenerator {
             material,
             maps: {
                 map: material.map,
-                roughnessMap: material.roughnessMap,
+                roughnessMap: material.roughnessMap || null,
                 normalMap: material.normalMap,
             },
             params: finalParams,

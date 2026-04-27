@@ -190,9 +190,20 @@ export class SeededRandom {
     }
     /**
      * Returns a random float in [min, max).
+     * If no arguments provided, returns a random float in [0, 1).
      */
     nextFloat(min, max) {
+        if (min === undefined || max === undefined) {
+            return this.next();
+        }
         return this.next() * (max - min) + min;
+    }
+    /**
+     * Alias for next() - returns a random float in [0, 1).
+     * For backward compatibility with code expecting uniform().
+     */
+    uniform() {
+        return this.next();
     }
     /**
      * Picks a random element from an array.

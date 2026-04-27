@@ -1,4 +1,18 @@
 import * as THREE from 'three';
+export interface WaterParams {
+    baseColor: THREE.Color;
+    deepColor: THREE.Color;
+    foamColor: THREE.Color;
+    transparency: number;
+    roughness: number;
+    metalness: number;
+    waveHeight: number;
+    waveSpeed: number;
+    enableFoam: boolean;
+    enableCaustics: boolean;
+    [key: string]: unknown;
+}
+export type WaterPreset = 'ocean' | 'lake' | 'river' | 'pool' | 'swamp';
 export interface WaterMaterialConfig {
     baseColor: THREE.Color;
     deepColor: THREE.Color;

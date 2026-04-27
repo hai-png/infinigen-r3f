@@ -6,7 +6,7 @@
  *
  * @module materials/categories/fluid
  */
-export { WaterMaterial, WaterParams, WaterPreset } from './WaterMaterial';
+export { WaterMaterial } from './WaterMaterial';
 // TODO: Implement LavaMaterial - stub exports to prevent TS2307 errors
 export const LavaMaterial = undefined;
 // TODO: Implement SlimeMaterial - stub exports to prevent TS2307 errors

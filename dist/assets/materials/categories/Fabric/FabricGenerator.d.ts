@@ -5,6 +5,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface FabricParams {
+    [key: string]: unknown;
     type: 'cotton' | 'linen' | 'wool' | 'velvet' | 'denim' | 'silk' | 'canvas';
     color: Color;
     weaveType: 'plain' | 'twill' | 'satin' | 'knit';

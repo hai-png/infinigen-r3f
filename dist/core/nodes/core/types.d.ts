@@ -7,6 +7,24 @@
  * This enables procedural material and geometry generation similar to the original Infinigen.
  */
 /**
+ * Base interface for all node classes
+ * Provides common properties shared across all node types
+ */
+export interface NodeBase {
+    readonly nodeType: NodeType;
+    readonly category: NodeCategory;
+    readonly name: string;
+    readonly domain: AttributeDomain;
+    inputs: Record<string, any>;
+    outputs: Record<string, any>;
+    settings: Record<string, any>;
+}
+/**
+ * Attribute domain types for geometry nodes
+ * Matches Blender's attribute domain system
+ */
+export type AttributeDomain = 'point' | 'edge' | 'face' | 'face_corner' | 'spline' | 'curve' | 'instance';
+/**
  * Socket types supported by the node system
  */
 export declare enum SocketType {

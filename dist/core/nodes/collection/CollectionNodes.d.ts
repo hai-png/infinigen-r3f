@@ -4,7 +4,7 @@
  * Ported from Blender Geometry Nodes
  */
 import { Object3D, Group } from 'three';
-import type { NodeBase, Domain } from '../core/types';
+import type { NodeBase, AttributeDomain } from '../core/types';
 export interface CollectionNodeBase extends NodeBase {
     category: 'collection';
 }
@@ -24,7 +24,7 @@ export declare class CollectionInfoNode implements CollectionNodeBase {
     readonly nodeType = "collection_info";
     readonly inputs: CollectionInfoInputs;
     readonly outputs: CollectionInfoOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: CollectionInfoInputs);
     execute(): CollectionInfoOutputs;
 }
@@ -43,7 +43,7 @@ export declare class ObjectInfoNode implements CollectionNodeBase {
     readonly nodeType = "object_info";
     readonly inputs: ObjectInfoInputs;
     readonly outputs: ObjectInfoOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ObjectInfoInputs);
     execute(): ObjectInfoOutputs;
 }
@@ -63,7 +63,7 @@ export declare class InstanceOnPointsNode implements CollectionNodeBase {
     readonly nodeType = "instance_on_points";
     readonly inputs: InstanceOnPointsInputs;
     readonly outputs: InstanceOnPointsOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: InstanceOnPointsInputs);
     execute(): InstanceOnPointsOutputs;
 }
@@ -81,7 +81,7 @@ export declare class DuplicateElementsNode implements CollectionNodeBase {
     readonly nodeType = "duplicate_elements";
     readonly inputs: DuplicateElementsInputs;
     readonly outputs: DuplicateElementsOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: DuplicateElementsInputs);
     execute(): DuplicateElementsOutputs;
 }
@@ -97,7 +97,7 @@ export declare class ChildrenOfSceneNode implements CollectionNodeBase {
     readonly nodeType = "children_of_scene";
     readonly inputs: ChildrenOfSceneInputs;
     readonly outputs: ChildrenOfSceneOutputs;
-    readonly domain: Domain;
+    readonly domain: AttributeDomain;
     constructor(inputs?: ChildrenOfSceneInputs);
     execute(): ChildrenOfSceneOutputs;
 }

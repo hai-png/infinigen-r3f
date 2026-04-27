@@ -4,6 +4,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface StoneParams {
+    [key: string]: unknown;
     type: 'marble' | 'granite' | 'limestone' | 'slate' | 'concrete' | 'travertine';
     color: Color;
     veinColor: Color;

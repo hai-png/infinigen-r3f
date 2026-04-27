@@ -86,7 +86,7 @@ export interface RandomGenerator {
     nextFloat(min: number, max: number): number;
 }
 export declare class SeededRandom implements RandomGenerator {
-    private seed;
+    seed: number;
     constructor(seed: number);
     /**
      * Returns a random float in [0, 1).
@@ -98,8 +98,14 @@ export declare class SeededRandom implements RandomGenerator {
     nextInt(min: number, max: number): number;
     /**
      * Returns a random float in [min, max).
+     * If no arguments provided, returns a random float in [0, 1).
      */
-    nextFloat(min: number, max: number): number;
+    nextFloat(min?: number, max?: number): number;
+    /**
+     * Alias for next() - returns a random float in [0, 1).
+     * For backward compatibility with code expecting uniform().
+     */
+    uniform(): number;
     /**
      * Picks a random element from an array.
      */

@@ -204,15 +204,15 @@ export class StoneTileMaterial {
      * Add moss growth to tiles
      */
     static addMoss(ctx, x, y, width, height, config) {
-        const mossColor = new THREE.Color(0x228b22);
         const numPatches = Math.floor(config.mossCoverage * 10);
         for (let i = 0; i < numPatches; i++) {
             const px = x + Math.random() * width;
             const py = y + Math.random() * height;
             const radius = Math.random() * width * 0.15 + 5;
             const gradient = ctx.createRadialGradient(px, py, 0, px, py, radius);
-            gradient.addColorStop(0, mossColor.clone().setAlpha(0.6).getStyle());
-            gradient.addColorStop(1, mossColor.clone().setAlpha(0).getStyle());
+            // Use rgba color strings directly since Color doesn't have setAlpha
+            gradient.addColorStop(0, 'rgba(34, 139, 34, 0.6)');
+            gradient.addColorStop(1, 'rgba(34, 139, 34, 0)');
             ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(px, py, radius, 0, Math.PI * 2);

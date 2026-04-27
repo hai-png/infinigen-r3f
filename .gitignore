@@ -1,1 +1,24 @@
-(src/assets/core/AssetTypes.ts, src/assets/lighting/LightingSystem.ts, src/assets/loaders/GLTFLoaderExtended.ts, src/assets/materials/MetalMaterial.ts, src/assets/materials/categories/Fabric/FabricGenerator.ts, src/assets/materials/categories/Fluid/WaterMaterial.ts, src/assets/materials/categories/Glass/GlassGenerator.ts, src/assets/materials/categories/Leather/LeatherGenerator.ts, src/assets/materials/categories/Metal/MetalGenerator.ts, src/assets/materials/categories/Plant/BarkMaterial.ts, src/assets/materials/categories/Plant/LeafMaterial.ts, src/assets/materials/categories/Plastic/PlasticGenerator.ts, src/assets/materials/categories/Stone/StoneGenerator.ts, src/assets/materials/categories/Wood/WoodGenerator.ts, src/assets/materials/categories/index.ts, src/assets/materials/coating/CoatingGenerator.ts)
+```
+# Build artifacts
+dist/
+*.js
+*.d.ts
+*.js.map
+*.d.ts.map
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+```

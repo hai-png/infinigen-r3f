@@ -9,6 +9,7 @@ export interface CoatingParams {
     glossiness: number;
     thickness: number;
     clearcoat: number;
+    [key: string]: unknown;
 }
 export declare class CoatingGenerator extends BaseMaterialGenerator<CoatingParams> {
     private static readonly DEFAULT_PARAMS;

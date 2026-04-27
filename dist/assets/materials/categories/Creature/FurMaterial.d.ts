@@ -30,6 +30,8 @@ export interface FurMaterialConfig {
     /** Enable anisotropy for fur sheen */
     anisotropy: number;
 }
+export type FurParams = FurMaterialConfig;
+export type FurPreset = 'cat' | 'dog' | 'tiger' | 'leopard' | 'bear' | 'rabbit';
 /**
  * Realistic fur/hair material with anisotropic shading
  */

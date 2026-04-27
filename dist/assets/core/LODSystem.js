@@ -243,38 +243,33 @@ export class LODSystem {
                 geometries.push(obj.geometry);
                 matrices.push(obj.matrixWorld);
             }
-            return this.simpleMergeGeometries(geometries, matrices);
-        }
-        /**
-         * Fallback geometry merging without BufferGeometryUtils
-         */
-        , 
-        /**
-         * Fallback geometry merging without BufferGeometryUtils
-         */
-        private, simpleMergeGeometries(geometries, THREE.BufferGeometry[], matrices, THREE.Matrix4[]), THREE.BufferGeometry, {
-            const: merged = new THREE.BufferGeometry(),
-            const: allPositions, number, []:  = [],
-            const: allNormals, number, []:  = [],
-            geometries, : .forEach((geo, idx) => {
-                const positions = geo.attributes.position.array;
-                const matrix = matrices[idx];
-                for (let i = 0; i < positions.length; i += 3) {
-                    const v = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]);
-                    v.applyMatrix4(matrix);
-                    allPositions.push(v.x, v.y, v.z);
-                }
-                if (geo.attributes.normal) {
-                    const normals = geo.attributes.normal.array;
-                    for (let i = 0; i < normals.length; i += 3) {
-                        allNormals.push(normals[i], normals[i + 1], normals[i + 2]);
-                    }
-                }
-            }),
-            merged, : .setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3)),
-            if(allNormals) { }, : .length > 0
         });
-        {
+        return this.simpleMergeGeometries(geometries, matrices);
+    }
+    /**
+     * Fallback geometry merging without BufferGeometryUtils
+     */
+    simpleMergeGeometries(geometries, matrices) {
+        const merged = new THREE.BufferGeometry();
+        const allPositions = [];
+        const allNormals = [];
+        geometries.forEach((geo, idx) => {
+            const positions = geo.attributes.position.array;
+            const matrix = matrices[idx];
+            for (let i = 0; i < positions.length; i += 3) {
+                const v = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]);
+                v.applyMatrix4(matrix);
+                allPositions.push(v.x, v.y, v.z);
+            }
+            if (geo.attributes.normal) {
+                const normals = geo.attributes.normal.array;
+                for (let i = 0; i < normals.length; i += 3) {
+                    allNormals.push(normals[i], normals[i + 1], normals[i + 2]);
+                }
+            }
+        });
+        merged.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+        if (allNormals.length > 0) {
             merged.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
         }
         merged.computeVertexNormals();

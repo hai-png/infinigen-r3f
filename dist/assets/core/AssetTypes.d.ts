@@ -30,6 +30,16 @@ export interface AssetMetadata {
     textureResolution?: number;
     memoryUsage?: number;
     tags?: string[];
+    name?: string;
+    url?: string;
+    type?: string;
+    category?: string;
+    triangleCount?: number;
+    vertexCount?: number;
+    materialCount?: number;
+    textureCount?: number;
+    lodLevels?: any[];
+    [key: string]: unknown;
 }
 /**
  * Asset categories for organization and filtering
@@ -51,6 +61,15 @@ export interface LODConfig {
     complexity: 'high' | 'medium' | 'low';
     targetFaceCount: number;
     textureResolution: number;
+}
+/**
+ * LOD description for asset metadata
+ */
+export interface LODDescription {
+    level: number;
+    distance: number;
+    meshUrl?: string;
+    faceCount?: number;
 }
 /**
  * Base interface for procedural object generators

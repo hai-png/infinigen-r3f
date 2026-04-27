@@ -4,6 +4,7 @@
 import { Color } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../../BaseMaterialGenerator';
 export interface PlasticParams {
+    [key: string]: unknown;
     type: 'matte' | 'glossy' | 'textured' | 'translucent' | 'metallic';
     color: Color;
     roughness: number;

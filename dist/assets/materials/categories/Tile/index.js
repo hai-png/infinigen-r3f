@@ -6,7 +6,7 @@
  *
  * @module materials/categories/tile
  */
-export { CeramicTileMaterial, CeramicTileParams, CeramicTilePreset } from './CeramicTileMaterial';
+export { CeramicTileMaterial } from './CeramicTileMaterial';
 // TODO: Implement StoneTileMaterial
 // export { StoneTileMaterial, StoneTileParams, StoneTilePreset } from './StoneTileMaterial';
 // TODO: Implement MosaicMaterial

@@ -6,5 +6,6 @@
  *
  * @module materials/categories/tile
  */
-export { CeramicTileMaterial, CeramicTileParams, CeramicTilePreset } from './CeramicTileMaterial';
+export { CeramicTileMaterial } from './CeramicTileMaterial';
+export type { CeramicTileMaterialConfig as CeramicTileParams, CeramicTileMaterialConfig as CeramicTilePreset } from './CeramicTileMaterial';
 //# sourceMappingURL=index.d.ts.map
