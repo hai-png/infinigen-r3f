@@ -586,10 +586,10 @@ export class BedGenerator extends BaseObjectGenerator<BedParams> {
     const dimensions = this.getBedDimensions(params.size);
     const height = params.style === 'canopy' ? 2.2 : params.hasHeadboard ? 1.4 : 0.6;
     
-    return {
-      min: { x: -dimensions.width / 2 - 0.1, y: 0, z: -dimensions.length / 2 - 0.2 },
-      max: { x: dimensions.width / 2 + 0.1, y: height, z: dimensions.length / 2 + 0.2 },
-    };
+    return new BBox(
+      { x: -dimensions.width / 2 - 0.1, y: 0, z: -dimensions.length / 2 - 0.2 },
+      { x: dimensions.width / 2 + 0.1, y: height, z: dimensions.length / 2 + 0.2 }
+    );
   }
 
   public getCollisionMesh(params: BedParams): Mesh {

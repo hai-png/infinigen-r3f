@@ -406,10 +406,10 @@ export class WallDecor extends BaseObjectGenerator<WallDecorParams> {
   }
 
   public getBoundingBox(params: WallDecorParams): BBox {
-    return {
-      min: { x: -params.width / 2 - 0.05, y: -params.height / 2 - 0.05, z: -0.05 },
-      max: { x: params.width / 2 + 0.05, y: params.height / 2 + 0.05, z: 0.05 },
-    };
+    return new BBox(
+      { x: -params.width / 2 - 0.05, y: -params.height / 2 - 0.05, z: -0.05 },
+      { x: params.width / 2 + 0.05, y: params.height / 2 + 0.05, z: 0.05 }
+    );
   }
 
   public getCollisionMesh(params: WallDecorParams): Mesh {

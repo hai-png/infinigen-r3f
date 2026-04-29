@@ -77,31 +77,5 @@ export class PlantPotGenerator extends BaseObjectGenerator<PlantPotConfig> {
       decorative: { color: 0xd4af37, roughness: 0.3 }
     };
     return new MeshStandardMaterial(configs[style]);
-
-  getVariations(count: number = 4, baseConfig?: Partial<PlantPotConfig>): THREE.Object3D[] {
-    const variations: THREE.Object3D[] = [];
-
-    const styles: PotStyle[] = ['terracotta', 'ceramic', 'plastic', 'hanging', 'self_watering', 'decorative'];
-    const shapes: PotShape[] = ['cylindrical', 'tapered', 'square', 'rectangular', 'spherical'];
-    const sizes: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
-    
-    const configs: PlantPotConfig[] = [];
-    for (let i = 0; i < count; i++) {
-      configs.push({
-        style: styles[Math.floor(Math.random() * styles.length)],
-        shape: shapes[Math.floor(Math.random() * shapes.length)],
-        size: sizes[Math.floor(Math.random() * sizes.length)],
-        hasDrainage: Math.random() > 0.2,
-        hasSaucer: Math.random() > 0.3,
-        seed: Math.floor(Math.random() * 10000)
-      });
-    }
-
-    for (let i = 0; i < count && i < configs.length; i++) {
-      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
-      variations.push(this.generate(config));
-    }
-    
-    return variations;
   }
 }

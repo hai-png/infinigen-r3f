@@ -426,10 +426,10 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   }
 
   public getBoundingBox(params: LampParams): BBox {
-    return {
-      min: { x: -0.3, y: 0, z: -0.3 },
-      max: { x: 0.3, y: params.style === 'floor' ? 1.5 : 0.7, z: 0.3 },
-    };
+    return new BBox(
+      { x: -0.3, y: 0, z: -0.3 },
+      { x: 0.3, y: params.style === 'floor' ? 1.5 : 0.7, z: 0.3 }
+    );
   }
 
   public getCollisionMesh(params: LampParams): Mesh {

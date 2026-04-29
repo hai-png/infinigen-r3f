@@ -151,4 +151,17 @@ export abstract class BaseObjectGenerator<TConfig extends BaseGeneratorConfig> {
       wireframe: true
     });
   }
+
+  protected getMetalMaterial(type: 'steel' | 'aluminum' | 'brass' | 'copper' | 'iron' = 'steel'): THREE.MeshStandardMaterial {
+    const configs: Record<string, { color: number; metalness: number; roughness: number }> = {
+      'steel': { color: 0xaaaaaa, metalness: 0.9, roughness: 0.2 },
+      'aluminum': { color: 0xdddddd, metalness: 0.9, roughness: 0.15 },
+      'brass': { color: 0xffd700, metalness: 0.9, roughness: 0.25 },
+      'copper': { color: 0xb87333, metalness: 0.9, roughness: 0.3 },
+      'iron': { color: 0x666666, metalness: 0.8, roughness: 0.4 },
+    };
+    
+    const config = configs[type] || configs['steel'];
+    return this.createPBRMaterial(config);
+  }
 }
