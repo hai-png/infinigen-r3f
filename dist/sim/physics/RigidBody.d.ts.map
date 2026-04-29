@@ -1,0 +1,1 @@
+{"version":3,"file":"RigidBody.d.ts","sourceRoot":"","sources":["../../../src/sim/physics/RigidBody.ts"],"names":[],"mappings":"AAAA,qBAAa,SAAS;gBAAe,MAAM,EAAE,GAAG;IAAK,UAAU,CAAC,KAAK,EAAE,GAAG;IAAK,YAAY,CAAC,OAAO,EAAE,GAAG;CAAM;AAC9G,eAAe,SAAS,CAAC"}
