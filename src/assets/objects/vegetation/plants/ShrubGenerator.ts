@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NoiseUtils } from '../../../utils/NoiseUtils';
+import { NoiseUtils } from '../utils/NoiseUtils';
 
 /**
  * ShrubGenerator - Procedural shrub and bush generation with species presets

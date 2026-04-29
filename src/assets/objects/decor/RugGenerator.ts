@@ -75,13 +75,31 @@ export class RugGenerator extends BaseObjectGenerator<RugConfig> {
     return new MeshStandardMaterial(configs[style]);
   }
 
-  getVariations(): RugConfig[] {
+
+  getVariations(count: number = 4, baseConfig?: Partial<RugConfig>): THREE.Object3D[] {
+    const variations: THREE.Object3D[] = [];
+
     const styles: RugStyle[] = ['persian', 'modern', 'shag', 'oriental', 'geometric', 'traditional'];
     const shapes: RugShape[] = ['rectangular', 'round', 'oval', 'runner'];
-    return styles.map(s => ({
-      style: s, shape: shapes[Math.floor(Math.random() * 4)],
-      width: 1.5 + Math.random() * 2, length: 2 + Math.random() * 3,
-      pileHeight: 0.01 + Math.random() * 0.05, hasFringe: Math.random() > 0.5, seed: Math.floor(Math.random() * 10000)
-    }));
+    
+    const configs: RugConfig[] = [];
+    for (let i = 0; i < count; i++) {
+      configs.push({
+        style: styles[Math.floor(Math.random() * styles.length)],
+        shape: shapes[Math.floor(Math.random() * shapes.length)],
+        width: 1.5 + Math.random() * 2,
+        length: 2 + Math.random() * 3,
+        pileHeight: 0.01 + Math.random() * 0.05,
+        hasFringe: Math.random() > 0.5,
+        seed: Math.floor(Math.random() * 10000)
+      });
+    }
+
+    for (let i = 0; i < count && i < configs.length; i++) {
+      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
+      variations.push(this.generate(config));
+    }
+    
+    return variations;
   }
 }

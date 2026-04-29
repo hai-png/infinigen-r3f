@@ -13,7 +13,7 @@
 
 import * as THREE from 'three';
 import { Vector3 } from 'three';
-import { NoiseUtils } from '../../../core/util/NoiseUtils';
+import { NoiseUtils } from '../utils/NoiseUtils';
 
 export interface RiverConfig {
   seed: number;

@@ -1,8 +1,42 @@
-# Examples 1:
-# Project with source files only - no artifacts present
-# Output should be empty since only source/config files are in the change list
+```
+# Build artifacts
+dist/
+build/
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
 
-# Example 2:
-# Project with artifacts:
-# *.log
-# Expected output includes compiled files, dependencies, env files, editor configs, etc.
+# Dependencies
+node_modules/
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```

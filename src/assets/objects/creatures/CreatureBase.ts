@@ -3,7 +3,7 @@
  * Provides framework for procedural creature generation with anatomy, materials, and animation hooks
  */
 
-import { Group, Mesh, Material, SphereGeometry, BoxGeometry, CylinderGeometry, MeshStandardMaterial, ConeGeometry, CapsuleGeometry, EllipsoidGeometry } from 'three';
+import { Group, Mesh, Material, SphereGeometry, BoxGeometry, CylinderGeometry, MeshStandardMaterial, ConeGeometry, CapsuleGeometry } from 'three';
 import { SeededRandom } from '../../../core/util/math/index';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
@@ -57,8 +57,11 @@ export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
     return new Group();
   }
 
-  protected createEllipsoidGeometry(x: number, y: number, z: number): EllipsoidGeometry {
-    return new EllipsoidGeometry(x, y, z);
+  protected createEllipsoidGeometry(x: number, y: number, z: number): SphereGeometry {
+    // Three.js doesn't have EllipsoidGeometry, use scaled SphereGeometry instead
+    const geometry = new SphereGeometry(1, 32, 32);
+    geometry.scale(x, y, z);
+    return geometry;
   }
 
   protected createSphereGeometry(radius: number): SphereGeometry {
@@ -85,16 +88,16 @@ export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
     return new MeshStandardMaterial(params);
   }
 
-  protected createFinGeometry(shape: string, params?: any): Geometry {
-    return new Geometry();
+  protected createFinGeometry(shape: string, params?: any): BoxGeometry {
+    return new BoxGeometry(1, 1, 1);
   }
 
-  protected createEarGeometry(params?: any): Geometry {
-    return new Geometry();
+  protected createEarGeometry(params?: any): BoxGeometry {
+    return new BoxGeometry(1, 1, 1);
   }
 
-  protected createShellGeometry(params?: any): Geometry {
-    return new Geometry();
+  protected createShellGeometry(params?: any): BoxGeometry {
+    return new BoxGeometry(1, 1, 1);
   }
 
   protected get seed(): number { return this.params.seed; }
@@ -108,52 +111,4 @@ export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
   abstract generateLimbs(): Mesh[];
   abstract generateAppendages(): Mesh[];
   abstract applySkin(materials: Material[]): Material[];
-
-  getBoundingBox(): { min: [number, number, number]; max: [number, number, number] } {
-    const sizeMultipliers: Record<string, number> = {
-      tiny: 0.1,
-      small: 0.3,
-      medium: 1.0,
-      large: 2.5,
-      huge: 5.0
-    };
-    const mult = sizeMultipliers[this.params.size.toString()] || 1.0;
-    return {
-      min: [-0.5 * mult, 0, -0.5 * mult],
-      max: [0.5 * mult, 1.0 * mult, 0.5 * mult]
-    };
-  }
-
-  getSkeletonStructure(): Record<string, any> {
-    return {
-      root: 'pelvis',
-      spine: ['spine_01', 'spine_02', 'spine_03'],
-      neck: 'neck_01',
-      head: 'head',
-      limbs: {
-        front_left: ['shoulder_l', 'arm_l', 'hand_l'],
-        front_right: ['shoulder_r', 'arm_r', 'hand_r'],
-        back_left: ['hip_l', 'leg_l', 'foot_l'],
-        back_right: ['hip_r', 'leg_r', 'foot_r']
-      }
-    };
-  }
-
-  validateParams(): boolean {
-    const validSizes = [0.1, 0.3, 1.0, 2.5, 5.0];
-    const validAges = ['juvenile', 'adult', 'elder'];
-    const validGenders = ['male', 'female', 'neutral'];
-    return (
-      validAges.includes(this.params.age) &&
-      validGenders.includes(this.params.gender) &&
-      this.params.health >= 0 &&
-      this.params.health <= 1
-    );
-  }
-}
-
-class Geometry extends BoxGeometry {
-  constructor() {
-    super(1, 1, 1);
-  }
 }

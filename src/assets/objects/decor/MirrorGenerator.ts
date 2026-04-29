@@ -361,15 +361,19 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     return new MeshStandardMaterial(config);
   }
 
-  getVariations(): MirrorConfig[] {
-    const styles: MirrorStyle[] = ['wall', 'standing', 'vanity', 'decorative', 'round', 'oval', 'sunburst'];
+  getVariations(count: number = 4, baseConfig?: Partial<MirrorConfig>): THREE.Object3D[] {
+    const variations: THREE.Object3D[] = [];
+
+    const styles: MirrorStyle[] = ['wall', 'standing', 'vanity', 'decorative'];
     const frameStyles: FrameStyle[] = ['simple', 'ornate', 'modern', 'vintage', 'rustic', 'gilded'];
     const shapes: MirrorShape[] = ['rectangular', 'square', 'round', 'oval', 'arched'];
     
-    return styles.flatMap(style =>
-      frameStyles.map(frameStyle => ({
+    const configs: MirrorConfig[] = [];
+    for (let i = 0; i < count; i++) {
+      const style = styles[Math.floor(Math.random() * styles.length)];
+      configs.push({
         style,
-        frameStyle,
+        frameStyle: frameStyles[Math.floor(Math.random() * frameStyles.length)],
         shape: shapes[Math.floor(Math.random() * shapes.length)],
         width: 0.5 + Math.random() * 1.0,
         height: 0.8 + Math.random() * 1.2,
@@ -377,7 +381,14 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
         frameThickness: 0.02 + Math.random() * 0.04,
         hasStand: style === 'standing' || Math.random() > 0.7,
         seed: Math.floor(Math.random() * 10000)
-      }))
-    );
+      });
+    }
+
+    for (let i = 0; i < count && i < configs.length; i++) {
+      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
+      variations.push(this.generate(config));
+    }
+    
+    return variations;
   }
 }

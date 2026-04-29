@@ -256,15 +256,17 @@ export class PictureFrameGenerator extends BaseObjectGenerator<PictureFrameConfi
     return new MeshStandardMaterial({ color, roughness, metalness });
   }
 
-  getVariations(): PictureFrameConfig[] {
+    const variations: THREE.Object3D[] = [];
+
     const styles: FrameStyle[] = ['modern', 'classic', 'ornate', 'minimal', 'rustic', 'gallery'];
     const materials: FrameMaterial[] = ['wood', 'metal', 'plastic', 'composite'];
     const orientations: Orientation[] = ['portrait', 'landscape', 'square'];
-
-    return styles.flatMap(style =>
-      materials.map(material => ({
-        style,
-        materialType: material,
+    
+    const configs: PictureFrameConfig[] = [];
+    for (let i = 0; i < count; i++) {
+      configs.push({
+        style: styles[Math.floor(Math.random() * styles.length)],
+        materialType: materials[Math.floor(Math.random() * materials.length)],
         orientation: orientations[Math.floor(Math.random() * orientations.length)],
         width: 0.2 + Math.random() * 0.4,
         height: 0.2 + Math.random() * 0.5,
@@ -273,7 +275,14 @@ export class PictureFrameGenerator extends BaseObjectGenerator<PictureFrameConfi
         matColor: Math.random() > 0.5 ? 0xffffff : 0xf5f5dc,
         hasGlass: Math.random() > 0.2,
         seed: Math.floor(Math.random() * 10000)
-      }))
-    );
+      });
+    }
+
+    for (let i = 0; i < count && i < configs.length; i++) {
+      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
+      variations.push(this.generate(config));
+    }
+    
+    return variations;
   }
 }

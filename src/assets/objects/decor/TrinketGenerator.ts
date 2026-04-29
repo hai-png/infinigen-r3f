@@ -60,12 +60,29 @@ export class TrinketGenerator extends BaseObjectGenerator<TrinketConfig> {
     return new MeshStandardMaterial(configs[type]);
   }
 
-  getVariations(): TrinketConfig[] {
+
+  getVariations(count: number = 4, baseConfig?: Partial<TrinketConfig>): THREE.Object3D[] {
+    const variations: THREE.Object3D[] = [];
+
     const types: TrinketType[] = ['figurine', 'vase_mini', 'crystal', 'coin', 'jewelry', 'ornament'];
     const materials: TrinketMaterial[] = ['ceramic', 'metal', 'glass', 'stone', 'wood'];
     const sizes: ('tiny' | 'small' | 'medium')[] = ['tiny', 'small', 'medium'];
-    return types.flatMap(t => materials.map(m => ({
-      type: t, materialType: m, size: sizes[Math.floor(Math.random() * 3)], seed: Math.floor(Math.random() * 10000)
-    })));
+    
+    const configs: TrinketConfig[] = [];
+    for (let i = 0; i < count; i++) {
+      configs.push({
+        type: types[Math.floor(Math.random() * types.length)],
+        materialType: materials[Math.floor(Math.random() * materials.length)],
+        size: sizes[Math.floor(Math.random() * sizes.length)],
+        seed: Math.floor(Math.random() * 10000)
+      });
+    }
+
+    for (let i = 0; i < count && i < configs.length; i++) {
+      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
+      variations.push(this.generate(config));
+    }
+    
+    return variations;
   }
 }

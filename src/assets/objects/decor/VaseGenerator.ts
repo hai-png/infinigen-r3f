@@ -502,13 +502,32 @@ export class VaseGenerator extends BaseObjectGenerator<VaseConfig> {
     // Other patterns would use similar approach with textures
   }
 
-  getVariations(): VaseConfig[] {
-    return [
-      { ...this.defaultParams, shape: 'cylinder', material: 'ceramic', color: '#FFFFFF', pattern: 'stripes', patternColor: '#0000FF' },
-      { ...this.defaultParams, shape: 'amphora', material: 'clay', color: '#D2691E', hasHandles: true, handleCount: 2 },
-      { ...this.defaultParams, shape: 'bud', material: 'glass', color: '#87CEEB', surfaceFinish: 'glossy' },
-      { ...this.defaultParams, shape: 'hourglass', material: 'crystal', color: '#FFD700', rimStyle: 'flared' },
-      { ...this.defaultParams, shape: 'flute', material: 'porcelain', color: '#FFB6C1', pattern: 'floral', patternColor: '#FF69B4' }
-    ];
+
+  getVariations(count: number = 4, baseConfig?: Partial<VaseConfig>): THREE.Object3D[] {
+    const variations: THREE.Object3D[] = [];
+
+    const configs: VaseConfig[] = [];
+    for (let i = 0; i < count; i++) {
+      configs.push({
+        ...this.defaultParams,
+        shape: ['cylinder', 'amphora', 'bud', 'hourglass', 'flute'][Math.floor(Math.random() * 5)] as any,
+        material: ['ceramic', 'clay', 'glass', 'crystal', 'porcelain'][Math.floor(Math.random() * 5)] as any,
+        color: '#' + Math.floor(Math.random()*16777215).toString(16),
+        hasHandles: Math.random() > 0.5,
+        handleCount: Math.floor(Math.random() * 3) + 1,
+        surfaceFinish: ['glossy', 'matte', 'textured'][Math.floor(Math.random() * 3)] as any,
+        rimStyle: ['straight', 'flared', 'rolled'][Math.floor(Math.random() * 3)] as any,
+        pattern: ['none', 'stripes', 'floral'][Math.floor(Math.random() * 3)] as any,
+        patternColor: '#' + Math.floor(Math.random()*16777215).toString(16),
+        seed: Math.floor(Math.random() * 10000)
+      });
+    }
+
+    for (let i = 0; i < count && i < configs.length; i++) {
+      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
+      variations.push(this.generate(config));
+    }
+    
+    return variations;
   }
 }

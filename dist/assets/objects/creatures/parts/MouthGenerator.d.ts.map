@@ -1,0 +1,1 @@
+{"version":3,"file":"MouthGenerator.d.ts","sourceRoot":"","sources":["../../../../../src/assets/objects/creatures/parts/MouthGenerator.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,IAAI,EAAmD,MAAM,OAAO,CAAC;AAC9E,qBAAa,cAAc;IACb,OAAO,CAAC,IAAI,CAAC;gBAAL,IAAI,CAAC,EAAE,MAAM,YAAA;IACjC,QAAQ,CAAC,IAAI,EAAE,MAAM,EAAE,IAAI,EAAE,MAAM,GAAG,IAAI;CAI3C;AACD,eAAO,MAAM,aAAa,uBAAiB,CAAC"}

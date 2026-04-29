@@ -334,23 +334,29 @@ export class CurtainGenerator extends BaseObjectGenerator<CurtainConfig> {
     });
   }
 
-  getVariations(): CurtainConfig[] {
+  getVariations(count: number = 7, baseConfig?: Partial<CurtainConfig>): THREE.Object3D[] {
+    const variations: THREE.Object3D[] = [];
     const styles: CurtainStyle[] = ['drapes', 'sheer', 'valance', 'cafe', 'pencil', 'grommet', 'rod_pocket'];
     const materials: CurtainMaterialType[] = ['cotton', 'linen', 'silk', 'velvet', 'polyester', 'lace'];
     const patterns: CurtainPattern[] = ['solid', 'striped', 'floral', 'geometric', 'damask'];
     
-    return styles.flatMap(style =>
-      materials.map(material => ({
-        style,
-        materialType: material,
-        pattern: patterns[Math.floor(Math.random() * patterns.length)],
+    for (let i = 0; i < count && i < styles.length; i++) {
+      const config: CurtainConfig = {
+        style: styles[i],
+        materialType: materials[i % materials.length],
+        pattern: patterns[i % patterns.length],
         width: 1.5 + Math.random() * 2.0,
         height: 2.0 + Math.random() * 1.0,
         folds: 8 + Math.floor(Math.random() * 12),
         hasValance: Math.random() > 0.7,
         hasTieback: Math.random() > 0.5,
         seed: Math.floor(Math.random() * 10000)
-      }))
-    );
+      };
+      
+      const mergedConfig = baseConfig ? { ...config, ...baseConfig } : config;
+      variations.push(this.generate(mergedConfig));
+    }
+    
+    return variations;
   }
 }

@@ -277,12 +277,20 @@ export class CandleGenerator extends BaseObjectGenerator<CandleConfig> {
     return new THREE.Points(geometry, material);
   }
 
-  getVariations(): CandleConfig[] {
-    return [
+  getVariations(count: number = 4, baseConfig?: Partial<CandleConfig>): THREE.Object3D[] {
+    const variations: THREE.Object3D[] = [];
+    const configs: CandleConfig[] = [
       { ...this.defaultParams, style: 'pillar', waxColor: '#FFF8DC', flameSize: 'medium' },
       { ...this.defaultParams, style: 'taper', waxColor: '#DC143C', height: 0.25, radius: 0.01 },
       { ...this.defaultParams, style: 'votive', waxColor: '#4B0082', holderStyle: 'simple' },
       { ...this.defaultParams, style: 'jar', waxType: 'soy', waxColor: '#FFB6C1', holderStyle: 'none' }
     ];
+    
+    for (let i = 0; i < count && i < configs.length; i++) {
+      const config = baseConfig ? { ...configs[i], ...baseConfig } : configs[i];
+      variations.push(this.generate(config));
+    }
+    
+    return variations;
   }
 }
