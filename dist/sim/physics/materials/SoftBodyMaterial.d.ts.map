@@ -1,1 +1,0 @@
-{"version":3,"file":"SoftBodyMaterial.d.ts","sourceRoot":"","sources":["../../../../src/sim/physics/materials/SoftBodyMaterial.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,gBAAgB;IAAG,SAAS,EAAE,MAAM,CAAC;IAAC,OAAO,EAAE,MAAM,CAAC;CAAE;AACzE,eAAO,MAAM,gBAAgB,EAAE,gBAAoD,CAAC;AACpF,eAAe,gBAAgB,CAAC"}

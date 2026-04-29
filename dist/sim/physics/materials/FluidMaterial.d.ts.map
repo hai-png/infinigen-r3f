@@ -1,1 +1,0 @@
-{"version":3,"file":"FluidMaterial.d.ts","sourceRoot":"","sources":["../../../../src/sim/physics/materials/FluidMaterial.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,aAAa;IAAG,SAAS,EAAE,MAAM,CAAC;IAAC,OAAO,EAAE,MAAM,CAAC;CAAE;AACtE,eAAO,MAAM,aAAa,EAAE,aAAmD,CAAC;AAChF,eAAe,aAAa,CAAC"}
