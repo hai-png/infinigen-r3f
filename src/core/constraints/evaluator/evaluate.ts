@@ -67,7 +67,7 @@ function computeNodeVal(node: Node, state: State, memo: Map<any, any>): any {
   }
 
   // Check if node has a registered implementation
-  const implFunc = nodeImpls.get(node.constructor);
+  const implFunc = nodeImpls.get(node.constructor as any);
   if (implFunc) {
     const childVals = new Map(
       Array.from(node.children().entries()).map(([name, child]) => [
@@ -117,7 +117,7 @@ export function relevant(node: Node, filter: Domain | null): boolean {
   // Handle object set expressions
   if (node instanceof cl.ObjectSetExpression) {
     const d = constraintDomain(node, true);
-    if (!domainFinalized(d)) {
+    if (!domainFinalized(d as any)) {
       throw new RuntimeError(`relevant encountered unfinalized domain: ${d}`);
     }
     const res = d.intersects(filter, true);
@@ -388,12 +388,12 @@ export function evaluateProblem(
     const constraintName = constraint.constructor.name;
     
     if (enableLoss) {
-      const loss = violCount(constraint, state, memo, filter);
+      const loss = violCount(constraint as any, state, memo, filter);
       lossVals.set(constraintName, loss);
     }
     
     if (enableViolated) {
-      const violated = violCount(constraint, state, memo, filter) > 0;
+      const violated = violCount(constraint as any, state, memo, filter) > 0;
       violations.set(constraintName, violated);
     }
   }

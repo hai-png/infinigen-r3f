@@ -503,8 +503,4 @@ export class FloorLamps extends BaseObjectGenerator<FloorLampParams> {
 }
 
 // Register the generator
-ObjectRegistry.register('floor_lamps', FloorLamps, {
-  category: 'lighting',
-  subcategory: 'floor',
-  description: 'Floor-standing lamps including arc, torchiere, tripod, and multi-shade designs',
-});
+ObjectRegistry.register('floor_lamps', 'lighting', FloorLamps);

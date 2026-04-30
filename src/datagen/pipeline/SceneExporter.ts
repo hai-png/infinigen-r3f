@@ -276,8 +276,9 @@ export class SceneExporter {
             triangleCount: stats.triangleCount,
             textureCount: stats.textureCount,
             materialCount: stats.materialCount,
+            duration: 0,
             metadata: includeMetadata ? this.scene.userData.exportMetadata : undefined,
-          });
+          } as ExportResult);
         },
         (error) => reject(error),
         options
@@ -535,15 +536,15 @@ export class SceneExporter {
         const geometry = mesh.geometry;
 
         if (geometry.attributes.position) {
-          const positions = geometry.attributes.position.array;
+          const positions = geometry.attributes.position.array as ArrayLike<number>;
           vertices.push(...Array.from(positions));
 
           if (geometry.attributes.color) {
-            colors.push(...Array.from(geometry.attributes.color.array));
+            colors.push(...Array.from(geometry.attributes.color.array as ArrayLike<number>));
           }
 
           if (geometry.attributes.normal) {
-            normals.push(...Array.from(geometry.attributes.normal.array));
+            normals.push(...Array.from(geometry.attributes.normal.array as ArrayLike<number>));
           }
         }
       } else if (object instanceof THREE.Points) {
@@ -551,11 +552,11 @@ export class SceneExporter {
         const geometry = points.geometry;
 
         if (geometry.attributes.position) {
-          const positions = geometry.attributes.position.array;
+          const positions = geometry.attributes.position.array as ArrayLike<number>;
           vertices.push(...Array.from(positions));
 
           if (geometry.attributes.color) {
-            colors.push(...Array.from(geometry.attributes.color.array));
+            colors.push(...Array.from(geometry.attributes.color.array as ArrayLike<number>));
           }
         }
       }

@@ -300,7 +300,7 @@ export function tagDifference(t1: Set<Tag>, t2: Set<Tag>): Set<Tag> {
 
   const result = new Set<Tag>(pos);
   for (const n of neg) {
-    result.add(new NegatedTag(n));
+    result.add(new NegatedTag(n) as Tag);
   }
 
   return result;

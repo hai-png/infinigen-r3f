@@ -245,7 +245,7 @@ export class UrchinGenerator {
     shape.lineTo(0, height);
     shape.lineTo(0, 0);
     
-    const geometry = new THREE.LatheGeometry(shape, 8);
+    const geometry = new THREE.LatheGeometry(shape.getPoints(), 8);
     return geometry;
   }
 

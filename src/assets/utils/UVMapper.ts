@@ -14,7 +14,7 @@ export class UVMapper {
     const uvs: number[] = [];
 
     const box = new Box3();
-    box.setFromBufferAttribute(geometry.attributes.position);
+    box.setFromBufferAttribute(geometry.attributes.position as THREE.BufferAttribute);
     const size = box.getSize(new Vector3());
 
     for (let i = 0; i < positions.length; i += 3) {
@@ -87,7 +87,7 @@ export class UVMapper {
     const uvs: number[] = [];
 
     const box = new Box3();
-    box.setFromBufferAttribute(geometry.attributes.position);
+    box.setFromBufferAttribute(geometry.attributes.position as THREE.BufferAttribute);
     const size = box.getSize(new Vector3());
 
     for (let i = 0; i < positions.length; i += 3) {
@@ -132,7 +132,7 @@ export class UVMapper {
     }
 
     const box = new Box3();
-    box.setFromBufferAttribute(geometry.attributes.position);
+    box.setFromBufferAttribute(geometry.attributes.position as THREE.BufferAttribute);
     const size = box.getSize(new Vector3());
 
     for (let i = 0; i < positions.length; i += 3) {

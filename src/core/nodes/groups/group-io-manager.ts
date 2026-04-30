@@ -230,7 +230,7 @@ export class GroupIOManager {
     }
 
     const name = exposedName || socketName;
-    const groupSocket = this.addGroupInput(groupId, name, socket.type, socket.value);
+    const groupSocket = this.addGroupInput(groupId, name, socket.type as SocketType, socket.value);
     
     this.linkGroupInputToNode(groupId, name, nodeId, socketName);
 
@@ -259,7 +259,7 @@ export class GroupIOManager {
     }
 
     const name = exposedName || socketName;
-    const groupSocket = this.addGroupOutput(groupId, name, socket.type);
+    const groupSocket = this.addGroupOutput(groupId, name, socket.type as SocketType);
     
     this.linkNodeToGroupOutput(groupId, nodeId, socketName, name);
 

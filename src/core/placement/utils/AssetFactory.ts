@@ -65,7 +65,7 @@ export class AssetFactory {
     }
 
     // 4. Apply Semantic Materials based on tags
-    this.applySemanticMaterials(mesh, description.tags || []);
+    this.applySemanticMaterials(mesh, (description.tags instanceof Set ? Array.from(description.tags) : description.tags || []) as string[]);
 
     // 5. Apply State (Transform)
     if (state) {
@@ -155,7 +155,7 @@ export class AssetFactory {
         (error) => {
           console.error(`Failed to load model ${modelId}:`, error);
           // Fallback to primitive on error
-          resolve(this.createPrimitive('box', { type: 'primitive', primitiveType: 'box' }));
+          resolve(this.createPrimitive('box', { type: 'primitive', primitiveType: 'box' } as any));
         }
       );
     });
@@ -213,7 +213,7 @@ export class AssetFactory {
   private applyState(obj: THREE.Object3D, state: ObjectState): void {
     // Apply Position
     if (state.position) {
-      obj.position.copy(state.position);
+      obj.position.copy(state.position instanceof THREE.Vector3 ? state.position : new THREE.Vector3(state.position.x, state.position.y, state.position.z));
     }
 
     // Apply Rotation (Quaternion or Euler)
@@ -221,7 +221,7 @@ export class AssetFactory {
       if (state.rotation instanceof THREE.Quaternion) {
         obj.quaternion.copy(state.rotation);
       } else {
-        obj.rotation.setFromVector3(state.rotation);
+        obj.rotation.setFromVector3(state.rotation instanceof THREE.Vector3 ? state.rotation : new THREE.Vector3(state.rotation.x, state.rotation.y, state.rotation.z));
       }
     } else if (state.yaw !== undefined) {
       // Handle specific yaw constraint if full rotation isn't set
@@ -230,7 +230,7 @@ export class AssetFactory {
 
     // Apply Scale if different from creation scale
     if (state.scale) {
-      obj.scale.copy(state.scale);
+      obj.scale.copy(state.scale instanceof THREE.Vector3 ? state.scale : new THREE.Vector3(state.scale.x, state.scale.y, state.scale.z));
     }
     
     // Mark as active/inactive based on state

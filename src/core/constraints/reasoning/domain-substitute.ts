@@ -12,6 +12,7 @@
 
 import {
   Node,
+  ExpressionNode,
   Variable,
   BinaryOpNode,
   UnaryOpNode,
@@ -60,7 +61,7 @@ export function substituteVariables(
 ): SubstitutionResult {
   const substitutedVars = new Set<string>();
   
-  const substitute = (n: Node): Node => {
+  const substitute = (n: ExpressionNode): ExpressionNode => {
     if (n.type === 'Variable') {
       const varNode = n as Variable;
       if (bindings.has(varNode.name)) {
@@ -222,7 +223,7 @@ export function applyDomainSubstitution(
   node: Node,
   domains: Map<string, Domain>
 ): Node {
-  const substituteWithDomains = (n: Node): Node => {
+  const substituteWithDomains = (n: ExpressionNode): ExpressionNode => {
     if (n.type === 'Variable') {
       const varNode = n as Variable;
       // Variable itself doesn't change, but domain info is used elsewhere
@@ -311,8 +312,8 @@ export function applyDomainSubstitution(
  */
 function simplifyWithDomainInfo(
   node: BinaryOpNode,
-  left: Node,
-  right: Node,
+  left: ExpressionNode,
+  right: ExpressionNode,
   domains: Map<string, Domain>
 ): Node | null {
   // Example: If we know x > 5 and domain of x is [0, 3], contradiction!
@@ -344,7 +345,7 @@ function simplifyWithDomainInfo(
  */
 function simplifyRelationWithDomains(
   node: RelationNode,
-  args: Node[],
+  args: ExpressionNode[],
   domains: Map<string, Domain>
 ): Node | null {
   // Check if all arguments have known domains
@@ -372,7 +373,7 @@ function simplifyRelationWithDomains(
 function extractVariablesFromNode(node: Node): Set<string> {
   const vars = new Set<string>();
   
-  const collect = (n: Node) => {
+  const collect = (n: ExpressionNode) => {
     if (n.type === 'Variable') {
       vars.add((n as Variable).name);
     } else if (n.type === 'BinaryOp') {

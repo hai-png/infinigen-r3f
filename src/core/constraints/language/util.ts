@@ -283,7 +283,7 @@ export function isSatisfiable(
   
   // Try to evaluate with domain bounds
   try {
-    const result = evaluateNode(simplified, domains, state);
+    const result = evaluateNode(simplified as any, domains as any, state as any);
     if (result.type === 'Boolean' && typeof result.value === 'boolean') {
       return result.value;
     }

@@ -17,7 +17,7 @@
 import { Vector3 } from '../../util/math/index';
 import { State, ObjectState } from '../evaluator/state';
 import { Problem } from '../language/constants';
-import { Semantics } from '../tags/index';
+import { Semantics, TagSet } from '../tags/index';
 
 /**
  * Base Move abstraction
@@ -307,7 +307,7 @@ export class ReassignmentMove extends Move {
     
     const newObjState = new ObjectState(
       this.objectName,
-      new Set(this.newTags),
+      new TagSet(new Set(this.newTags)),
       { ...objState.pose }
     );
     
@@ -363,7 +363,7 @@ export class AdditionMove extends Move {
     // Actual mesh instantiation happens via hybrid bridge or R3F components
     const newObjState = new ObjectState(
       this.objectName,
-      new Set(this.tags),
+      new TagSet(new Set(this.tags)),
       { ...this.pose }
     );
     

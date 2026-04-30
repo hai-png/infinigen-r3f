@@ -294,10 +294,10 @@ export function Frames(
   const constraints: ConstraintNode[] = [];
   
   // Camera must have line of sight to subject
-  constraints.push(new Visible(subjectVar, cameraVar));
+  constraints.push(new Visible(subjectVar as any, cameraVar as any));
   
   // Camera should be in front of subject
-  constraints.push(new InFrontOf(cameraVar, subjectVar));
+  constraints.push(new InFrontOf(cameraVar as any, subjectVar as any));
   
   // Add distance constraint based on shot size
   if (shotSize) {
@@ -319,7 +319,7 @@ export function HasLineOfSight(
   const cameraVar = typeof camera === 'string' ? item(camera) : camera;
   const subjectVar = typeof subject === 'string' ? item(subject) : subject;
   
-  return new Visible(subjectVar, cameraVar);
+  return new Visible(subjectVar as any, cameraVar as any);
 }
 
 /**
@@ -352,7 +352,7 @@ export function HasCameraAngle(
   
   // This would need geometry predicate for angle calculation
   // Simplified version using facing constraint
-  return new Facing(cameraVar, subjectVar);
+  return new Facing(cameraVar as any, subjectVar as any);
 }
 
 /**
@@ -369,12 +369,12 @@ export function AvoidsObstruction(
   // Get potential occluders (objects between camera and subject)
   const occluders = new FilterObjects(
     SCENE,
-    new TagCondition('semantics', 'occluder')
+    new TagCondition('semantics', new Set(['occluder']) as any)
   );
   
   // For all occluders, they should not block the view
   return new ForAll(occluders, (occluder: any) =>
-    new Visible(subjectVar, cameraVar)
+    new Visible(subjectVar as any, cameraVar as any)
   );
 }
 
@@ -389,7 +389,7 @@ export function FollowsSubject(
   const cameraVar = typeof camera === 'string' ? item(camera) : camera;
   const subjectVar = typeof subject === 'string' ? item(subject) : subject;
   
-  return new Proximity(cameraVar, subjectVar, followDistance);
+  return new Proximity(cameraVar as any, subjectVar as any, followDistance);
 }
 
 /**

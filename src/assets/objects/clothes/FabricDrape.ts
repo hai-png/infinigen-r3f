@@ -102,7 +102,7 @@ export class FabricDrape {
   /**
    * Apply curtain-style drape
    */
-  private applyCurtainDrape(positions: number[], segments: number, rows: number): void {
+  private applyCurtainDrape(positions: Float32Array | number[], segments: number, rows: number): void {
     const foldCount = this.config.foldCount || 10;
     const foldAmplitude = 0.05 * this.config.width;
     const wrinkleIntensity = this.config.wrinkleIntensity || 0.5;
@@ -133,7 +133,7 @@ export class FabricDrape {
   /**
    * Apply tablecloth-style drape
    */
-  private applyTableclothDrape(positions: number[], segments: number, rows: number): void {
+  private applyTableclothDrape(positions: Float32Array | number[], segments: number, rows: number): void {
     const wrinkleIntensity = this.config.wrinkleIntensity || 0.5;
     const tableWidth = this.config.width * 0.6;
     const tableDepth = this.config.height * 0.6;
@@ -171,7 +171,7 @@ export class FabricDrape {
   /**
    * Apply blanket-style drape
    */
-  private applyBlanketDrape(positions: number[], segments: number, rows: number): void {
+  private applyBlanketDrape(positions: Float32Array | number[], segments: number, rows: number): void {
     const wrinkleIntensity = this.config.wrinkleIntensity || 0.5;
     
     for (let i = 0; i < positions.length; i += 3) {
@@ -196,7 +196,7 @@ export class FabricDrape {
   /**
    * Apply towel-style drape
    */
-  private applyTowelDrape(positions: number[], segments: number, rows: number): void {
+  private applyTowelDrape(positions: Float32Array | number[], segments: number, rows: number): void {
     const wrinkleIntensity = this.config.wrinkleIntensity || 0.5;
     
     for (let i = 0; i < positions.length; i += 3) {
@@ -220,7 +220,7 @@ export class FabricDrape {
   /**
    * Apply sheet-style drape
    */
-  private applySheetDrape(positions: number[], segments: number, rows: number): void {
+  private applySheetDrape(positions: Float32Array | number[], segments: number, rows: number): void {
     const wrinkleIntensity = this.config.wrinkleIntensity || 0.5;
     
     for (let i = 0; i < positions.length; i += 3) {

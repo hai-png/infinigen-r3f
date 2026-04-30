@@ -459,8 +459,4 @@ export class CeilingLights extends BaseObjectGenerator<CeilingLightParams> {
 }
 
 // Register the generator
-ObjectRegistry.register('ceiling_lights', CeilingLights, {
-  category: 'lighting',
-  subcategory: 'ceiling',
-  description: 'Ceiling-mounted light fixtures including flush mounts, pendants, and chandeliers',
-});
+ObjectRegistry.register('ceiling_lights', 'lighting', CeilingLights);

@@ -271,7 +271,7 @@ export class SeededRandom implements RandomGenerator {
   /**
    * Picks a random element from an array.
    */
-  choice<T>(array: T[]): T {
+  choice<T>(array: readonly T[]): T {
     return array[this.nextInt(0, array.length - 1)];
   }
 

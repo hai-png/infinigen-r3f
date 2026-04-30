@@ -44,7 +44,7 @@ export function evictMemoForObj(node: Problem, memo: Map<any, any>, obj: ObjectS
 
   // Handle tagged nodes
   if (node instanceof Tagged) {
-    if (!implies(obj.tags, node.tags)) {
+    if (!implies(obj.tags instanceof Set ? obj.tags : (obj.tags as any).tags || new Set(), node.tags instanceof Set ? node.tags : (node.tags as any).tags || new Set())) {
       res = false;
     }
   }
@@ -55,7 +55,7 @@ export function evictMemoForObj(node: Problem, memo: Map<any, any>, obj: ObjectS
   }
 
   // Remove from memo if needed
-  const key = memoKey(node);
+  const key = memoKey(node as Node);
   if (res && memo.has(key)) {
     memo.delete(key);
   }

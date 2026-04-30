@@ -98,7 +98,7 @@ export function objectsInRoom<T extends string>(
       baseFilter,
       TagCondition.fromKeyValue('semantics', objectType as string)
     ]);
-    return new FilterObjects(SCENE, combinedFilter);
+    return new FilterObjects(SCENE, combinedFilter as any);
   }
   
   return new FilterObjects(SCENE, baseFilter);
@@ -209,7 +209,7 @@ export function RoomHasNaturalLight(
       )
   );
   
-  return new Proximity(visibleWindows, minVisibleWindows);
+  return new Proximity(visibleWindows as any, minVisibleWindows);
 }
 
 /**
@@ -234,7 +234,7 @@ export function ArrangeFurnitureInRoom(
   
   // Each furniture piece must be in the room
   furnitureVars.forEach((furnVar, idx) => {
-    constraints.push(TagCondition.fromKeyValue('semantics', furnitureTypes[idx]));
+    constraints.push(TagCondition.fromKeyValue('semantics', furnitureTypes[idx] as any as string));
     constraints.push(TagCondition.fromKeyValue('room', roomTag as string));
   });
   
@@ -361,8 +361,8 @@ export function FunctionalZones(
     // Tag objects with zone function
     zone.objects.forEach((objType, objIdx) => {
       const objVar = item(`${zonePrefix}${objIdx}`);
-      constraints.push(TagCondition.fromKeyValue('semantics', objType));
-      constraints.push(TagCondition.fromKeyValue('function', zone.function));
+      constraints.push(TagCondition.fromKeyValue('semantics', objType as any as string));
+      constraints.push(TagCondition.fromKeyValue('function', zone.function as any as string));
       constraints.push(TagCondition.fromKeyValue('room', roomTag as string));
     });
     
@@ -459,7 +459,7 @@ export function defineRoom(
     const count = req.count ?? 1;
     for (let i = 0; i < count; i++) {
       const objVar = item(`${name}_${req.type}_${i}`);
-      objects.push(objVar);
+      objects.push(objVar as any);
       constraints.push(TagCondition.fromKeyValue('semantics', req.type as string));
       constraints.push(TagCondition.fromKeyValue('room', name));
       
@@ -508,7 +508,7 @@ export function validateRoomConfig(
   const required = requiredByFunction[roomFunction] || [];
   
   required.forEach(reqObj => {
-    if (!objects.includes(reqObj)) {
+    if (!(objects as any[]).includes(reqObj)) {
       issues.push(`Missing required object: ${reqObj}`);
       suggestions.push(`Add ${reqObj} for ${roomFunction} room`);
     }

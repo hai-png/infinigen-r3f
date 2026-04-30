@@ -161,7 +161,7 @@ export class FogSystem {
       data[i] = Math.floor(Math.random() * 256);
     }
 
-    const texture = new THREE.DataTexture(data, width, height, depth, THREE.RedFormat);
+    const texture = new THREE.DataTexture(data, width, height);
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearFilter;
     texture.wrapS = THREE.RepeatWrapping;

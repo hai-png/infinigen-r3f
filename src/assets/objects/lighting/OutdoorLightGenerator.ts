@@ -154,7 +154,7 @@ export class OutdoorLightGenerator {
     const light = this.createLightSource(params);
     light.position.copy(housing.position).add(new THREE.Vector3(0, -0.2, 0));
     group.add(light);
-    lights.push(light);
+    lights.push(light as THREE.Light);
 
     // Add lens/glass cover
     const lens = this.createLens(params);

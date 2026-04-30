@@ -242,7 +242,7 @@ export class ShaderCompiler {
       };
       
       // Trigger compilation by using the material
-      this.renderer.compile(material, undefined as any);
+      this.renderer.compile(material as any, undefined as any);
       
       return {
         success: true,

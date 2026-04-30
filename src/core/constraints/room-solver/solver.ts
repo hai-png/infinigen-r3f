@@ -174,7 +174,7 @@ export class RoomSolver {
     }
 
     // Position rooms using force-directed layout
-    this.positionRooms(rooms, adjacencyList);
+    this.positionRooms(rooms, new Map(Array.from(adjacencyList.entries()).map(([k, v]) => [k, Array.from(v)])));
 
     return { rooms, graph };
   }
@@ -254,7 +254,7 @@ export class RoomSolver {
 
     if (moveType < 0.3) {
       // Swap two room positions
-      const roomIds = Array.from(neighbor.rooms.keys());
+      const roomIds = neighbor.rooms.map(r => r.id);
       if (roomIds.length >= 2) {
         const i = Math.floor(Math.random() * roomIds.length);
         const j = Math.floor(Math.random() * roomIds.length);
@@ -267,7 +267,7 @@ export class RoomSolver {
       }
     } else if (moveType < 0.6) {
       // Add/remove adjacency edge
-      const roomIds = Array.from(neighbor.rooms.keys());
+      const roomIds = neighbor.rooms.map(r => r.id);
       if (roomIds.length >= 2) {
         const i = Math.floor(Math.random() * roomIds.length);
         const j = Math.floor(Math.random() * roomIds.length);
@@ -282,7 +282,7 @@ export class RoomSolver {
       }
     } else {
       // Modify room properties
-      const roomIds = Array.from(neighbor.rooms.keys());
+      const roomIds = neighbor.rooms.map(r => r.id);
       const roomId = roomIds[Math.floor(Math.random() * roomIds.length)];
       const node = neighbor.rooms.get(roomId)!;
       
@@ -306,7 +306,7 @@ export class RoomSolver {
     
     // Re-position based on new adjacency
     const adjacencyList = graph.getAdjacencyList();
-    this.positionRooms(rooms, adjacencyList);
+    this.positionRooms(rooms, new Map(Array.from(adjacencyList.entries()).map(([k, v]) => [k, Array.from(v)])));
 
     return { rooms, graph };
   }

@@ -196,7 +196,7 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     
     // Oval plate
     const bodyShape = new THREE.Shape();
-    bodyShape.ellipse(0, 0, majorAxis / 2 - params.rimWidth, minorAxis / 2 - params.rimWidth, 0, 0, Math.PI * 2, false);
+    bodyShape.ellipse(0, 0, majorAxis / 2 - params.rimWidth, minorAxis / 2 - params.rimWidth, 0, Math.PI * 2, false);
     
     const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
       depth: params.depth,
@@ -212,8 +212,8 @@ export class PlateGenerator extends BaseObjectGenerator<PlateParams> {
     
     // Oval rim
     const rimShape = new THREE.Shape();
-    rimShape.ellipse(0, 0, majorAxis / 2, minorAxis / 2, 0, 0, Math.PI * 2, false);
-    rimShape.ellipse(0, 0, majorAxis / 2 - params.rimWidth, minorAxis / 2 - params.rimWidth, 0, 0, Math.PI * 2, true);
+    rimShape.ellipse(0, 0, majorAxis / 2, minorAxis / 2, 0, Math.PI * 2, false);
+    rimShape.ellipse(0, 0, majorAxis / 2 - params.rimWidth, minorAxis / 2 - params.rimWidth, 0, Math.PI * 2, true);
     
     const rimGeo = new THREE.ExtrudeGeometry(rimShape, {
       depth: params.depth * 0.5,

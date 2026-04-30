@@ -189,7 +189,7 @@ export function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.Buffe
       if (!attributes[attributeName]) {
         attributes[attributeName] = [];
       }
-      attributes[attributeName].push(geom.attributes[attributeName]);
+      attributes[attributeName].push(geom.attributes[attributeName] as THREE.BufferAttribute);
     }
   }
 

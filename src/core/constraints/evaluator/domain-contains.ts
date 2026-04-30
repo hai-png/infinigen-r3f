@@ -9,14 +9,14 @@
 import { NegatedRelation } from '../language/relations';
 import { Domain } from '../reasoning/domain';
 import { State, ObjectState, RelationState } from './state';
-import { satisfies } from '../tags/index';
+import { satisfies, TagSet } from '../tags/index';
 
 /**
  * Check if a domain contains a specific object
  */
 export function domainContains(dom: Domain, state: State, obj: ObjectState): boolean {
   // Check tag satisfaction first
-  if (!satisfies(obj.tags, dom.tags)) {
+  if (!satisfies(obj.tags instanceof TagSet ? obj.tags.tags : obj.tags, dom.tags instanceof TagSet ? dom.tags.tags : dom.tags)) {
     console.debug(`domainContains failed: ${obj} does not satisfy tags ${obj.tags}`);
     return false;
   }

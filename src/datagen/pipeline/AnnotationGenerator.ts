@@ -536,7 +536,7 @@ export class AnnotationGenerator {
 
       // Extract individual mask for this object
       const instanceId = index + 1; // Instance IDs start at 1
-      const binaryMask = this.extractInstanceMask(segData, instanceId);
+      const binaryMask = this.extractInstanceMask(segData as any as SegmentationData, instanceId);
 
       if (binaryMask) {
         const bbox = this.computeMaskBBox(binaryMask);

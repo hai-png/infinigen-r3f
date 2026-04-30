@@ -391,7 +391,7 @@ export class RockScatterSystem {
       const geometry = this.createRockGeometry();
       
       // Create material
-      const material = this.createRockMaterial(rockType);
+      const material = this.createRockMaterial(rockType as RockType);
       
       // Create instanced mesh
       const mesh = new THREE.InstancedMesh(geometry, material, instances.length);

@@ -164,7 +164,7 @@ function interpolateKeyframes(
       next.position.x, next.position.y, next.position.z
     ]);
     const interp = new LinearInterpolant(times, values, 3, new Float32Array(3));
-    const interpolated = interp.evaluate([t]);
+    const interpolated = interp.evaluate(t);
     result.position = new Vector3(interpolated[0], interpolated[1], interpolated[2]);
   }
   
@@ -181,7 +181,7 @@ function interpolateKeyframes(
       next.scale.x, next.scale.y, next.scale.z
     ]);
     const interp = new LinearInterpolant(times, values, 3, new Float32Array(3));
-    const interpolated = interp.evaluate([t]);
+    const interpolated = interp.evaluate(t);
     result.scale = new Vector3(interpolated[0], interpolated[1], interpolated[2]);
   }
   

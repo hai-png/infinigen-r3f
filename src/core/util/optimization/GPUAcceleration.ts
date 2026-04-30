@@ -436,7 +436,7 @@ export function evaluateConstraintsCPU(
 
   for (let i = 0; i < problem.constraints.length; i++) {
     const constraint = problem.constraints[i];
-    const result = evaluateNode(constraint.expression, state);
+    const result = evaluateNode(constraint.expression as any, state);
     violations[i] = result.violation || 0;
     scores[i] = result.score || 0;
   }

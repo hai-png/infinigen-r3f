@@ -483,7 +483,9 @@ export class InstanceScatterSystem {
     let rejectedCount = 0;
     const selectedObjects = this.selectObjectsForBiome(activeBiome);
     
-    for (const sample of samplePoints) {
+    for (const sample2d of samplePoints) {
+      // Convert 2D sample to 3D
+      const sample = new Vector3(sample2d.x, sample2d.y, 0);
       // Find closest triangle
       let closestTriangle: Triangle | null = null;
       let closestDist = Infinity;

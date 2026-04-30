@@ -135,9 +135,9 @@ export class MeshOptimizer {
    * Weld nearby vertices together
    */
   private weldVertices(geometry: BufferGeometry): BufferGeometry {
-    const positions = geometry.getAttribute('position');
-    const normals = geometry.getAttribute('normal');
-    const uvs = geometry.getAttribute('uv');
+    const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const normals = geometry.getAttribute('normal') as THREE.BufferAttribute | null;
+    const uvs = geometry.getAttribute('uv') as THREE.BufferAttribute | null;
     const index = geometry.getIndex();
 
     const vertexMap = new Map<string, number>();
@@ -200,17 +200,17 @@ export class MeshOptimizer {
     }
 
     const newGeometry = new BufferGeometry();
-    newGeometry.setAttribute('position', new Float32Array(newPositions));
+    newGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(newPositions), 3));
     
     if (newNormals.length > 0) {
-      newGeometry.setAttribute('normal', new Float32Array(newNormals));
+      newGeometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(newNormals), 3));
     }
     
     if (newUvs.length > 0) {
-      newGeometry.setAttribute('uv', new Float32Array(newUvs));
+      newGeometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(newUvs), 2));
     }
     
-    newGeometry.setIndex(new Uint32Array(newIndex));
+    newGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(newIndex), 1));
     newGeometry.computeVertexNormals();
 
     return newGeometry;
@@ -339,7 +339,7 @@ export class MeshOptimizer {
     }
 
     const newGeometry = geometry.clone();
-    newGeometry.setAttribute('normal', new Float32Array(newNormals));
+    newGeometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(newNormals), 3));
     
     return newGeometry;
   }

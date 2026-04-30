@@ -606,7 +606,8 @@ export class MeshOperations {
           );
 
           // Simple distance test (could be improved with proper triangle-voxel test)
-          const closestPoint = triangle.closestPointToPoint(voxelCenter, true);
+          const closestPoint = new Vector3();
+          triangle.closestPointToPoint(voxelCenter, closestPoint);
           const distance = voxelCenter.distanceTo(closestPoint);
 
           if (distance < cellSize * 0.75) {
@@ -831,7 +832,8 @@ export class MeshOperations {
       );
 
       const triangle = new Triangle(p0, p1, p2);
-      const closest = triangle.closestPointToPoint(point, true);
+      const closest = new Vector3();
+      triangle.closestPointToPoint(point, closest);
       const distance = point.distanceTo(closest);
 
       if (distance < threshold) {

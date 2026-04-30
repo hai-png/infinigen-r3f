@@ -534,8 +534,4 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
 }
 
 // Register the generator
-ObjectRegistry.register('table_lamps', TableLamps, {
-  category: 'lighting',
-  subcategory: 'table',
-  description: 'Table-top lamps including desk, bedside, banker, piano, and accent lamps',
-});
+ObjectRegistry.register('table_lamps', 'lighting', TableLamps);

@@ -32,8 +32,8 @@ export function createBoundFromComparison(
   lhs: (() => number) | ScalarExpression,
   rhs: (() => number) | ScalarExpression
 ): Bound {
-  const lhsVal = isConstant(lhs) ? (lhs as any)() : undefined;
-  const rhsVal = isConstant(rhs) ? (rhs as any)() : undefined;
+  const lhsVal = isConstant(lhs as any) ? (lhs as any)() : undefined;
+  const rhsVal = isConstant(rhs as any) ? (rhs as any)() : undefined;
 
   if (lhsVal === undefined && rhsVal === undefined) {
     throw new Error(`Attempted to create bound with neither side constant`);
