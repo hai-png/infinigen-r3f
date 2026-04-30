@@ -125,8 +125,8 @@ export class SurfaceGenerator {
 
       case SurfacePrimitive.CYLINDER:
         geometry = new CylinderGeometry(
-          params.radiusTop ?? params.radius || 0.5,
-          params.radiusBottom ?? params.radius || 0.5,
+          params.radiusTop ?? (params.radius || 0.5),
+          params.radiusBottom ?? (params.radius || 0.5),
           params.height || 1,
           params.radialSegments || this.config.resolution,
           params.heightSegments || this.config.resolution,

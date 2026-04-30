@@ -437,7 +437,11 @@ export const ConstraintEditor: React.FC<ConstraintEditorProps> = ({
   // Add new constraint
   const handleAddConstraint = useCallback(() => {
     const newConstraint: NamedConstraint = {
-      _type: 'NamedConstraint',
+      id: `constraint_${constraints.length + 1}`,
+      type: 'custom',
+      operator: 'eq',
+      left: { type: 'Constant', value: 0 },
+      right: { type: 'Constant', value: 0 },
       name: `Constraint_${constraints.length + 1}`,
       relationType: 'on',
       args: [],

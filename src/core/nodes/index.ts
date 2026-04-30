@@ -47,7 +47,7 @@ export {
   MixShaderDefinition,
   executeMixShader,
   AddShaderDefinition,
-  executeAddShader,
+  executeMixShader as executeAddShader,
   AmbientOcclusionDefinition,
   executeAmbientOcclusion,
   TextureCoordinateDefinition,

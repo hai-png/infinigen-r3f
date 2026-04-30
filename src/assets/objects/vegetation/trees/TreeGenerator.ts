@@ -132,7 +132,7 @@ export interface TreeInstance {
 export class TreeGenerator {
   private noiseUtils: NoiseUtils;
   private materialCache: Map<string, THREE.Material>;
-  private geometryCache: Map<string, THREE.Geometry | THREE.BufferGeometry>;
+  private geometryCache: Map<string, THREE.BufferGeometry>;
 
   constructor() {
     this.noiseUtils = new NoiseUtils();

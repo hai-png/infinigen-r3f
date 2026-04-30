@@ -65,7 +65,7 @@ export class AssetFactory {
     }
 
     // 4. Apply Semantic Materials based on tags
-    this.applySemanticMaterials(mesh, (description.tags instanceof Set ? Array.from(description.tags) : description.tags || []) as string[]);
+    this.applySemanticMaterials(mesh, (description.tags instanceof Set ? Array.from(description.tags) : description.tags || []) as unknown as string[]);
 
     // 5. Apply State (Transform)
     if (state) {

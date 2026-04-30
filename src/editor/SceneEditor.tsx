@@ -21,7 +21,7 @@ export interface SceneObject {
   tags?: string[];
 }
 
-interface SceneEditorProps {
+export interface SceneEditorProps {
   objects: SceneObject[];
   selectedObjectId?: string;
   onObjectSelect?: (objectId: string) => void;

@@ -185,7 +185,7 @@ export class DataPipeline {
     this.annotationGen = new AnnotationGenerator(scene, tempCamera, this.groundTruthGen);
     
     this.jobManager = new JobManager({
-      maxConcurrent: this.config.maxConcurrentJobs,
+      maxConcurrentJobs: this.config.maxConcurrentJobs,
     });
     
     this.batchProcessor = new BatchProcessor(this.jobManager);

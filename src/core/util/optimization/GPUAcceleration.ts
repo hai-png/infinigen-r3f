@@ -12,15 +12,7 @@ import { evaluateNode } from '../../constraints/evaluator/evaluate';
 // WebGPU type declarations (for environments without @webgpu/types)
 declare global {
   interface GPUAdapter {
-    limits: GPUSupportedLimits;
-  }
-  interface GPUSupportedLimits {
-    maxStorageBufferBindingSize: number;
-    maxComputeWorkgroupStorageSize: number;
-    maxComputeInvocationsPerWorkgroup: number;
-    maxStorageBuffersPerShaderStage: number;
-    maxBufferSize: number;
-    maxComputeWorkgroupsPerDimension: number;
+    limits: Record<string, number>;
   }
 }
 

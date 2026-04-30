@@ -24,8 +24,11 @@ export * from './core';
 
 // Asset Library (primary for: ThreePointLightingConfig)
 // Note: ScatterConfig from ./assets/scatters conflicts with ./core/placement
-// The core version takes precedence since ./core is exported first
-export * from './assets';
+// The assets/procedural module now aliases it as AssetScatterConfig
+export * from './assets/procedural/index';
+export * from './assets/materials/index';
+export * from './assets/shaders/index';
+export * from './assets/lighting/index';
 
 // Terrain Generation (primary for: BiomeType, TerrainConfig, LODConfig)
 export * from './terrain';

@@ -107,7 +107,7 @@ export class DepthOfFieldNode implements CameraNodeBase {
   readonly nodeType = 'depth_of_field';
   readonly name = 'Depth of Field';
   readonly inputs: DepthOfFieldInputs;
-  readonly outputs!: DepthOfFieldOutputs;
+  outputs!: DepthOfFieldOutputs;
   readonly domain: AttributeDomain = 'point';
   readonly settings: Record<string, any> = {};
 
@@ -163,7 +163,7 @@ export class FocalLengthNode implements CameraNodeBase {
   readonly nodeType = 'focal_length';
   readonly name = 'Focal Length';
   readonly inputs: FocalLengthInputs;
-  readonly outputs!: FocalLengthOutputs;
+  outputs!: FocalLengthOutputs;
   readonly domain: AttributeDomain = 'point';
   readonly settings: Record<string, any> = {};
 

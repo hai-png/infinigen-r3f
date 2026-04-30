@@ -30,7 +30,7 @@ import {
 export class GTFlatShadingMaterial extends ShaderMaterial {
   constructor(instanceId?: number) {
     const randomColor = instanceId !== undefined
-      ? this.generateRandomColor(instanceId)
+      ? GTFlatShadingMaterial.generateRandomColor(instanceId)
       : new Color().setHSL(Math.random(), 0.7, 0.5);
 
     super({
@@ -64,9 +64,9 @@ export class GTFlatShadingMaterial extends ShaderMaterial {
   /**
    * Generate deterministic random color from instance ID
    */
-  private generateRandomColor(instanceId: number): Color {
+  private static generateRandomColor(instanceId: number): Color {
     // Use instance ID as seed for reproducible colors
-    const hash = this.hashInstanceId(instanceId);
+    const hash = GTFlatShadingMaterial.hashInstanceId(instanceId);
     const h = (hash & 0xFF) / 255.0;
     const s = 0.5 + ((hash >> 8) & 0xFF) / 510.0; // 0.5-1.0
     const l = 0.4 + ((hash >> 16) & 0xFF) / 637.5; // 0.4-0.8
@@ -77,7 +77,7 @@ export class GTFlatShadingMaterial extends ShaderMaterial {
   /**
    * Hash instance ID to get reproducible random value
    */
-  private hashInstanceId(id: number): number {
+  private static hashInstanceId(id: number): number {
     let hash = id;
     hash = ((hash >> 16) ^ hash) * 0x45d9f3b;
     hash = ((hash >> 16) ^ hash) * 0x85ebca6b;
