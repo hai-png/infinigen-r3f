@@ -208,7 +208,7 @@ export function evaluateKnownVars(
   if (node instanceof ObjectSetExpression) {
     const domain = constraintDomain(node);
     const vals = knownVars
-      .filter(([knownDomain]) => domain === knownDomain)
+      .filter(([knownDomain]) => domain as any === knownDomain)
       .map(([, val]) => val);
     
     return vals.length > 0 ? Math.min(...vals) : null;

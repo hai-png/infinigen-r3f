@@ -95,7 +95,7 @@ const ConstraintVisualizer: React.FC<ConstraintVisualizerProps> = ({
       objects.push(sphere);
 
       // Add line to related objects if applicable
-      if (constraint.type === 'Touching' || constraint.type === 'SupportedBy') {
+      if ((constraint as any).type === 'Touching' || (constraint as any).type === 'SupportedBy') {
         const lineGeometry = new THREE.BufferGeometry();
         const positions = new Float32Array([
           sphere.position.x, sphere.position.y, sphere.position.z,
