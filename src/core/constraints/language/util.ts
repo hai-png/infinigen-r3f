@@ -67,7 +67,7 @@ export function simplifyConstraint(node: ConstraintNode): ConstraintNode {
     if (simplified.type === 'Not') {
       return simplified.child; // Double negation
     }
-    return { ...node, child: simplified };
+    return { ...node, child: simplified } as ConstraintNode;
   }
   
   if (node.type === 'Comparison') {
@@ -93,7 +93,7 @@ export function simplifyConstraint(node: ConstraintNode): ConstraintNode {
       return { type: 'Constant', value: result };
     }
     
-    return { ...node, left: simplifiedLeft, right: simplifiedRight };
+    return { ...node, left: simplifiedLeft, right: simplifiedRight } as ConstraintNode;
   }
   
   return node;
@@ -159,7 +159,7 @@ export function simplifyExpression(node: ExpressionNode): ExpressionNode {
       return { type: 'Constant', value: 0 };
     }
     
-    return { ...node, left: simplifiedLeft, right: simplifiedRight };
+    return { ...node, left: simplifiedLeft, right: simplifiedRight } as ExpressionNode;
   }
   
   if (node.type === 'UnaryOp') {
@@ -174,7 +174,7 @@ export function simplifyExpression(node: ExpressionNode): ExpressionNode {
       }
     }
     
-    return { ...node, child: simplifiedChild };
+    return { ...node, child: simplifiedChild } as ExpressionNode;
   }
   
   if (node.type === 'FunctionCall') {
@@ -202,13 +202,13 @@ export function simplifyExpression(node: ExpressionNode): ExpressionNode {
           break;
         default: 
           // Unknown function, keep as is
-          return { ...node, args: simplifiedArgs };
+          return { ...node, args: simplifiedArgs } as ExpressionNode;
       }
       
       return { type: 'Constant', value: result };
     }
     
-    return { ...node, args: simplifiedArgs };
+    return { ...node, args: simplifiedArgs } as ExpressionNode;
   }
   
   if (node.type === 'IfElse') {
@@ -224,7 +224,7 @@ export function simplifyExpression(node: ExpressionNode): ExpressionNode {
       condition: simplifiedCond,
       thenExpr: simplifyExpression(node.thenExpr),
       elseExpr: simplifyExpression(node.elseExpr),
-    };
+    } as ExpressionNode;
   }
   
   return node;
