@@ -31,6 +31,8 @@ export interface GeneratedObject<T extends THREE.Object3D = THREE.Object3D> {
 export abstract class BaseObjectGenerator<TConfig extends BaseGeneratorConfig> {
   protected seed: number;
   protected rng: SeededRandom;
+  protected category: string = 'unknown';
+  protected subcategory: string = 'unknown';
   
   constructor(seed: number = Math.random() * 10000) {
     this.seed = seed;

@@ -14,10 +14,10 @@
  * Moves represent transformations applied to objects during solving.
  */
 
-import { Vector3 } from '../util/math/index.js';
-import { State, ObjectState } from '../constraints/evaluator/state.js';
-import { Problem } from '../language/constants.js';
-import { Semantics } from '../tags/index.js';
+import { Vector3 } from '../../util/math/index';
+import { State, ObjectState } from '../evaluator/state';
+import { Problem } from '../language/constants';
+import { Semantics } from '../tags/index';
 
 /**
  * Base Move abstraction

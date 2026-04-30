@@ -11,13 +11,13 @@ export {
   violCount,
   relevant,
   EvalResult
-} from './evaluate.js';
+} from './evaluate';
 
 // Domain membership testing
 export {
   domainContains,
   objKeysInDom
-} from './domain-contains.js';
+} from './domain-contains';
 
 // Memoization and cache management
 export {
@@ -25,7 +25,7 @@ export {
   evictMemoForObj,
   evictMemoForMove,
   resetBVHCache
-} from './eval-memo.js';
+} from './eval-memo';
 
 // State definitions
 export {
@@ -34,7 +34,7 @@ export {
   RelationState,
   BVHCacheEntry,
   poseAffectsScore
-} from './state.js';
+} from './state';
 
 // Node implementations for geometry-based relations
 export {
@@ -42,7 +42,7 @@ export {
   registerNodeImpl,
   registerGeometryNodeImpls,
   defaultHandler
-} from './node-impl/index.js';
+} from './node-impl/index';
 
 // Geometry relation evaluators
 export {
@@ -57,4 +57,4 @@ export {
   evaluateVisible,
   evaluateHidden,
   geometryNodeImpls
-} from './node-impl/trimesh-geometry.js';
+} from './node-impl/trimesh-geometry';

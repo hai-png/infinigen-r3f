@@ -52,8 +52,19 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     };
   }
 
+  private getMaterial(materialType: string, color: string): THREE.Material {
+    switch (materialType) {
+      case 'metal':
+        return this.getMetalMaterial('steel');
+      case 'wood':
+        return new THREE.MeshStandardMaterial({ color: Number(color), roughness: 0.8, metalness: 0 });
+      default:
+        return new THREE.MeshStandardMaterial({ color: Number(color) });
+    }
+  }
+
   generate(params: Partial<TableLampParams> = {}): THREE.Object3D {
-    const finalParams = { ...this.getDefaultParams(), ...params };
+    const finalParams = { ...this.getDefaultConfig(), ...params };
     const group = new THREE.Group();
     
     let lamp: THREE.Object3D;

@@ -28,46 +28,15 @@ export {
   executeFillCurve,
   FilletCurveDefinition,
   executeFilletCurve,
-} from './CurveNodes';
-
-export type {
-  CurveToMeshNode,
-  CurveToPointsNode,
-  MeshToCurveNode,
-  SampleCurveNode,
-  SetCurveRadiusNode,
-  SetCurveTiltNode,
-  CurveLengthNode,
-  SubdivideCurveNode,
-  ResampleCurveNode,
-  FillCurveNode,
-  FilletCurveNode,
-} from './CurveNodes';
-
-export {
+  
   // Curve Primitives
   CurveCircleDefinition,
   executeCurveCircle,
   CurveLineDefinition,
   executeCurveLine,
-  
-  // Additional exports for completeness
-  executeCurveToMesh,
-  executeCurveToPoints,
-  executeMeshToCurve,
-  executeSampleCurve,
-  executeSetCurveRadius,
-  executeSetCurveTilt,
-  executeCurveLength,
-  executeSubdivideCurve,
-  executeResampleCurve,
-  executeFillCurve,
-  executeFilletCurve,
 } from './CurveNodes';
 
 export type {
-  CurveCircleNode,
-  CurveLineNode,
   CurveToMeshNode,
   CurveToPointsNode,
   MeshToCurveNode,
@@ -79,4 +48,6 @@ export type {
   ResampleCurveNode,
   FillCurveNode,
   FilletCurveNode,
+  CurveCircleNode,
+  CurveLineNode,
 } from './CurveNodes';

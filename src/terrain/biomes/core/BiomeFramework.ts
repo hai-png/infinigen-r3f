@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 import type { BiomeDefinition, BiomeBlend } from './BiomeSystem';
-import type { AssetMetadata } from '../assets/core/AssetTypes';
+import type { AssetMetadata } from '../../../assets/core/AssetTypes';
 
 export interface BiomeTransitionZone {
   startBiome: string;

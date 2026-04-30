@@ -21,12 +21,12 @@ import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 import { NoiseUtils } from '../../utils/NoiseUtils';
 
 export type MirrorStyle = 'wall' | 'standing' | 'vanity' | 'decorative' | 'round' | 'oval' | 'sunburst';
-export type FrameStyle = 'simple' | 'ornate' | 'modern' | 'vintage' | 'rustic' | 'gilded';
+export type MirrorFrameStyle = 'simple' | 'ornate' | 'modern' | 'vintage' | 'rustic' | 'gilded';
 export type MirrorShape = 'rectangular' | 'square' | 'round' | 'oval' | 'arched' | 'custom';
 
 export interface MirrorConfig {
   style: MirrorStyle;
-  frameStyle: FrameStyle;
+  frameStyle: MirrorFrameStyle;
   shape: MirrorShape;
   width: number;
   height: number;
@@ -347,7 +347,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     group.add(rightLeg);
   }
 
-  private getFrameMaterial(style: FrameStyle): Material {
+  private getFrameMaterial(style: MirrorFrameStyle): Material {
     const configs = {
       simple: { color: 0x2a2a2a, roughness: 0.5, metalness: 0.3 },
       ornate: { color: 0x8B4513, roughness: 0.4, metalness: 0.2 },
@@ -365,7 +365,7 @@ export class MirrorGenerator extends BaseObjectGenerator<MirrorConfig> {
     const variations: THREE.Object3D[] = [];
 
     const styles: MirrorStyle[] = ['wall', 'standing', 'vanity', 'decorative'];
-    const frameStyles: FrameStyle[] = ['simple', 'ornate', 'modern', 'vintage', 'rustic', 'gilded'];
+    const frameStyles: MirrorFrameStyle[] = ['simple', 'ornate', 'modern', 'vintage', 'rustic', 'gilded'];
     const shapes: MirrorShape[] = ['rectangular', 'square', 'round', 'oval', 'arched'];
     
     const configs: MirrorConfig[] = [];

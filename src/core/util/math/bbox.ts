@@ -14,7 +14,7 @@
  * spatial queries, and geometric computations.
  */
 
-import { Vector3 } from './vector.js';
+import { Vector3 } from './vector';
 
 /**
  * Axis-Aligned Bounding Box

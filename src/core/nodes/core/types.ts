@@ -82,7 +82,7 @@ export enum NodeCategory {
   SHADER_INPUT = 'SHADER_INPUT',
   SHADER_OUTPUT = 'SHADER_OUTPUT',
   SHADER = 'SHADER',
-  TEXTURE = 'TEXTURE_SHADER',
+  TEXTURE_SHADER = 'TEXTURE_SHADER',
   COLOR = 'COLOR',
   CONVERTER = 'CONVERTER',
   VECTOR = 'VECTOR_SHADER',
@@ -274,9 +274,9 @@ export enum NodeType {
   SeparateXYZ = 'ShaderNodeSeparateXYZ',
   CombineRGBA = 'ShaderNodeCombineRGBA',
   SeparateRGBA = 'ShaderNodeSeparateRGBA',
-  CombineHSV = 'ShaderNodeCombineHSV',
+  // CombineHSV already defined in Color Nodes section
   SeparateHSV = 'ShaderNodeSeparateHSV',
-  ColorRamp = 'ShaderNodeValToRGB',
+  // ColorRamp already defined as ValToRGB alias in Color Nodes section
   
   // Vector Nodes
   Normal = 'ShaderNodeNormal',
@@ -302,7 +302,7 @@ export enum NodeType {
   LayerWeight = 'ShaderNodeLayerWeight',
   HairInfo = 'ShaderNodeHairInfo',
   Wireframe = 'ShaderNodeWireframe',
-  ObjectInfo = 'ShaderNodeObjectInfo',
+  ShaderObjectInfo = 'ShaderNodeObjectInfo',
   ParticleInfo = 'ShaderNodeParticleInfo',
   AddShader = 'ShaderNodeAddShader',
   MixShader = 'ShaderNodeMixShader',

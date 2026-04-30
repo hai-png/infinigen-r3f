@@ -43,9 +43,9 @@ export class GroundCoverGenerator extends BaseObjectGenerator<GroundCoverConfig>
     const mesh = new THREE.InstancedMesh(geom, mat, config.density);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < config.density; i++) {
-      dummy.position.set(rng.uniform(-1, 1), 0.01, rng.uniform(-1, 1));
-      dummy.rotation.set(Math.PI / 2, 0, rng.uniform(0, Math.PI * 2));
-      dummy.scale.setScalar(rng.uniform(0.5, 1.0));
+      dummy.position.set(rng.nextFloat(-1, 1), 0.01, rng.nextFloat(-1, 1));
+      dummy.rotation.set(Math.PI / 2, 0, rng.nextFloat(0, Math.PI * 2));
+      dummy.scale.setScalar(rng.nextFloat(0.5, 1.0));
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }
@@ -59,8 +59,8 @@ export class GroundCoverGenerator extends BaseObjectGenerator<GroundCoverConfig>
     const mesh = new THREE.InstancedMesh(geom, mat, config.density / 2);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < config.density / 2; i++) {
-      dummy.position.set(rng.uniform(-1, 1), 0.02, rng.uniform(-1, 1));
-      dummy.rotation.set(rng.uniform(0, Math.PI), rng.uniform(0, Math.PI), rng.uniform(0, Math.PI));
+      dummy.position.set(rng.nextFloat(-1, 1), 0.02, rng.nextFloat(-1, 1));
+      dummy.rotation.set(rng.nextFloat(0, Math.PI), rng.nextFloat(0, Math.PI), rng.nextFloat(0, Math.PI));
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }
@@ -74,8 +74,8 @@ export class GroundCoverGenerator extends BaseObjectGenerator<GroundCoverConfig>
     const mesh = new THREE.InstancedMesh(geom, mat, config.density / 3);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < config.density / 3; i++) {
-      dummy.position.set(rng.uniform(-1, 1), 0.015, rng.uniform(-1, 1));
-      dummy.scale.setScalar(rng.uniform(0.5, 1.0));
+      dummy.position.set(rng.nextFloat(-1, 1), 0.015, rng.nextFloat(-1, 1));
+      dummy.scale.setScalar(rng.nextFloat(0.5, 1.0));
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     }

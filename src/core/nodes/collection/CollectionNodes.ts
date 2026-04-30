@@ -316,28 +316,3 @@ export function createChildrenOfSceneNode(inputs?: ChildrenOfSceneInputs): Child
   return new ChildrenOfSceneNode(inputs);
 }
 
-// ============================================================================
-// Module Exports
-// ============================================================================
-
-export {
-  CollectionInfoNode,
-  ObjectInfoNode,
-  InstanceOnPointsNode,
-  DuplicateElementsNode,
-  ChildrenOfSceneNode,
-};
-
-export type {
-  CollectionNodeBase,
-  CollectionInfoInputs,
-  CollectionInfoOutputs,
-  ObjectInfoInputs,
-  ObjectInfoOutputs,
-  InstanceOnPointsInputs,
-  InstanceOnPointsOutputs,
-  DuplicateElementsInputs,
-  DuplicateElementsOutputs,
-  ChildrenOfSceneInputs,
-  ChildrenOfSceneOutputs,
-};

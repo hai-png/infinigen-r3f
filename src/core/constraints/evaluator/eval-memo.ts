@@ -7,10 +7,10 @@
  * Handles cache invalidation when objects move or change.
  */
 
-import { Node, Problem, SceneConstant, Tagged } from '../language/types.js';
-import { State, ObjectState } from './state.js';
-import { Move, TranslateMove, RotateMove, Addition, ReinitPoseMove, RelationPlaneChange, Resample, Deletion } from '../constraints/solver/moves.js';
-import { Semantics } from '../tags/index.js';
+import { Node, Problem, SceneConstant, Tagged } from '../language/types';
+import { State, ObjectState } from './state';
+import { Move, TranslateMove, RotateMove, Addition, ReinitPoseMove, RelationPlaneChange, Resample, Deletion } from '../solver/moves';
+import { Semantics } from '../tags/index';
 
 // Static tags that don't change during solving
 const STATIC_TAGS = new Set([Semantics.Room, Semantics.Cutter]);

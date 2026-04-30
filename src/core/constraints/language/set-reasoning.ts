@@ -3,8 +3,8 @@
  * Ported from infinigen/core/constraints/constraint_language/set_reasoning.py
  */
 
-import { Node, Variable, Domain, ObjectSetDomain } from './types.js';
-import { ScalarExpression, BoolExpression, ScalarConstant } from './expression.js';
+import { Node, Variable, Domain, ObjectSetDomain } from './types';
+import { ScalarExpression, BoolExpression, ScalarConstant } from './expression';
 
 /**
  * Base class for object set expressions

@@ -536,7 +536,7 @@ export class BenchGenerator {
     
     chainPositions.forEach(pos => {
       const chain = new THREE.Mesh(chainGeometry, chainMaterial);
-      chain.position.set(...pos);
+      chain.position.set(pos[0], pos[1], pos[2]);
       group.add(chain);
     });
 

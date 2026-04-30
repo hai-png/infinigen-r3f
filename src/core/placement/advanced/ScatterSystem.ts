@@ -10,7 +10,7 @@
  */
 
 import { Vector3, Mesh, BufferGeometry, Material } from 'three';
-import { BBox } from '../util/math/bbox';
+import { BBox } from '../../util/math/bbox';
 import { AdvancedPlacer, PlacementConfig, createDefaultConfig } from './AdvancedPlacer';
 
 // ============================================================================

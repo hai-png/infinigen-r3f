@@ -13,7 +13,7 @@ export type { ClockConfig, ClockStyle, ClockMaterialType, ClockFaceStyle } from 
 export { CurtainGenerator } from './CurtainGenerator';
 export type { CurtainConfig, CurtainStyle, CurtainMaterialType, CurtainPattern } from './CurtainGenerator';
 export { MirrorGenerator } from './MirrorGenerator';
-export type { MirrorConfig, MirrorStyle, FrameStyle, MirrorShape } from './MirrorGenerator';
+export type { MirrorConfig, MirrorStyle, MirrorFrameStyle, MirrorShape } from './MirrorGenerator';
 export { PictureFrameGenerator } from './PictureFrameGenerator';
 export type { PictureFrameConfig, FrameStyle, FrameMaterial } from './PictureFrameGenerator';
 export { PlantPotGenerator } from './PlantPotGenerator';

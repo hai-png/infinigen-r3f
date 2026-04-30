@@ -385,7 +385,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   private createFaucet(style: string, finish: string): Group {
     const group = new Group();
-    const material = this.getMetalMaterial(finish);
+    const material = this.getMetalFinish(finish);
     
     if (style === 'single') {
       // Single lever faucet
@@ -430,7 +430,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   private createDrainPipe(): Group {
     const group = new Group();
-    const material = this.getMetalMaterial('stainless');
+    const material = this.getMetalFinish('stainless');
     
     const pipeGeo = new CylinderGeometry(0.03, 0.03, 0.3, 16);
     const pipe = new Mesh(pipeGeo, material);
@@ -491,7 +491,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
   }
 
   private createTubSkirt(length: number, style: string): Mesh {
-    const material = style === 'modern' ? this.getMetalMaterial('stainless') : this.getCeramicMaterial('white');
+    const material = style === 'modern' ? this.getMetalFinish('stainless') : this.getCeramicMaterial('white');
     
     const skirtGeo = new BoxGeometry(length, 0.5, 0.05);
     return new Mesh(skirtGeo, material);
@@ -499,7 +499,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   private createFloorFaucet(finish: string): Group {
     const group = new Group();
-    const material = this.getMetalMaterial(finish);
+    const material = this.getMetalFinish(finish);
     
     const poleGeo = new CylinderGeometry(0.03, 0.03, 1.0, 16);
     const pole = new Mesh(poleGeo, material);
@@ -517,7 +517,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   private createWallFaucet(finish: string): Group {
     const group = new Group();
-    const material = this.getMetalMaterial(finish);
+    const material = this.getMetalFinish(finish);
     
     const spoutGeo = new CylinderGeometry(0.02, 0.02, 0.25, 16);
     const spout = new Mesh(spoutGeo, material);
@@ -542,7 +542,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
     });
     
     // Door frame
-    const frameMat = this.getMetalMaterial('stainless');
+    const frameMat = this.getMetalFinish('stainless');
     const frameGeo = new BoxGeometry(0.05, height, 0.05);
     const frame = new Mesh(frameGeo, frameMat);
     frame.position.set(size / 2, height / 2, size / 2);
@@ -582,7 +582,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
     group.add(tub);
     
     // Curtain rod or glass
-    const rodMat = this.getMetalMaterial(finish);
+    const rodMat = this.getMetalFinish(finish);
     const rodGeo = new CylinderGeometry(0.015, 0.015, size, 16);
     const rod = new Mesh(rodGeo, rodMat);
     rod.rotation.x = Math.PI / 2;
@@ -599,7 +599,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   private createShowerHead(finish: string): Group {
     const group = new Group();
-    const material = this.getMetalMaterial(finish);
+    const material = this.getMetalFinish(finish);
     
     const headGeo = new CylinderGeometry(0.1, 0.12, 0.05, 32);
     const head = new Mesh(headGeo, material);
@@ -623,7 +623,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
 
   private createFlushHandle(): Mesh {
     const geo = new CylinderGeometry(0.01, 0.01, 0.08, 8);
-    const mat = this.getMetalMaterial('stainless');
+    const mat = this.getMetalFinish('stainless');
     const handle = new Mesh(geo, mat);
     handle.rotation.z = Math.PI / 4;
     return handle;
@@ -667,7 +667,7 @@ export class BathroomFixtures extends BaseObjectGenerator<BathroomFixtureParams>
     });
   }
 
-  private getMetalMaterial(finish: string): any {
+  private getMetalFinish(finish: string): any {
     return this.createPBRMaterial({
       color: finish === 'stainless' ? 0xcccccc : 0x333333,
       metalness: 0.9,

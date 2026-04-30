@@ -72,8 +72,13 @@ export class BedFactory extends AssetFactory<BedConfig, BedResult> {
     return this.generateConfig();
   }
 
+  generate(config?: Partial<BedConfig>): BedResult {
+    const fullConfig = { ...this.getDefaultConfig(), ...config };
+    return this.create(fullConfig);
+  }
+
   /**
-   * Generate random bed configuration
+   * Create bed from configuration
    */
   generateConfig(): BedConfig {
     const rng = new SeededRandom(this.seed);

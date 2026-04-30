@@ -3,7 +3,7 @@
  * Ported from infinigen/core/constraints/constraint_language/expression.py
  */
 
-import { Node, Variable, Domain, NumericDomain, BooleanDomain, ObjectSetDomain } from './types.js';
+import { Node, Variable, Domain, NumericDomain, BooleanDomain, ObjectSetDomain } from './types';
 
 /**
  * Base class for all expressions

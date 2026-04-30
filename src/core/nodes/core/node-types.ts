@@ -136,8 +136,8 @@ export enum NodeTypes {
   UVMap = 'UVMapNode',
   UVWarp = 'UVWarpNode',
   SetUV = 'SetUVNode',
-  StoreNamedAttribute = 'StoreNamedAttributeNode',
-  SetMaterialNode = 'SetMaterialNode',
+  // StoreNamedAttribute already defined in Attribute section
+  // SetMaterial already defined in Material section
 
   // Point
   DistributePointsInVolume = 'DistributePointsInVolumeNode',
@@ -232,7 +232,7 @@ export enum NodeTypes {
   Wireframe = 'WireframeNode',
   Wavelength = 'WavelengthNode',
   LightPath = 'LightPathNode',
-  ObjectInfo = 'ObjectInfoNode',
+  ShaderObjectInfo = 'ShaderObjectInfoNode',
   ParticleInfo_Shader = 'ParticleInfoShaderNode',
   LayerWeight = 'LayerWeightNode',
   UVMap_Shader = 'UVMapShaderNode',

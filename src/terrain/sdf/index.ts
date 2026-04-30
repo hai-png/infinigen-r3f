@@ -2,4 +2,4 @@
  * SDF Operations Module
  */
 
-export * from './sdf-operations.js';
+export * from './sdf-operations';

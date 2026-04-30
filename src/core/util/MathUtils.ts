@@ -248,11 +248,24 @@ export class SeededRandom implements RandomGenerator {
   }
 
   /**
-   * Alias for next() - returns a random float in [0, 1).
-   * For backward compatibility with code expecting uniform().
+   * Returns a random float in [min, max) if min and max are provided.
+   * Alias for nextFloat() - returns a random float in [0,1) if no arguments.
    */
-  uniform(): number {
-    return this.next();
+  uniform(min?: number, max?: number): number {
+    if (min === undefined || max === undefined) {
+      return this.next();
+    }
+    return this.next() * (max - min) + min;
+  }
+
+  /**
+   * Returns a random float with logarithmic distribution in [min, max).
+   */
+  logUniform(min: number, max: number): number {
+    const logMin = Math.log(min);
+    const logMax = Math.log(max);
+    const logValue = this.next() * (logMax - logMin) + logMin;
+    return Math.exp(logValue);
   }
 
   /**
@@ -330,7 +343,7 @@ export function randomChoice<T>(array: T[]): T {
  * If weights are provided, uses them for selection probability.
  * Otherwise falls back to uniform random choice.
  */
-export function weightedSample<T>(items: T[], rng?: SeededRandom, weights?: number[]): T {
+export function weightedSample<T>(items: readonly T[], rng?: SeededRandom, weights?: number[]): T {
   const random = rng || globalRng;
   
   if (!weights || weights.length === 0) {

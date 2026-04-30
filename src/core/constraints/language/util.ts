@@ -14,8 +14,8 @@ import type {
   ObjectSetDomain,
   NumericDomain,
 } from './types';
-import { evaluateNode } from '../constraints/evaluator/evaluate';
-import type { State } from '../constraints/evaluator/state';
+import { evaluateNode } from '../evaluator/evaluate';
+import type { State } from '../evaluator/state';
 
 /**
  * Simplify a constraint node by evaluating constant subexpressions

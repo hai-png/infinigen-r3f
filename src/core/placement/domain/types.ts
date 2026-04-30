@@ -3,7 +3,7 @@
  * Ported from infinigen/core/domain/types.py
  */
 
-import type { Tag } from '../constraints/tags';
+import type { Tag } from '../../constraints/tags';
 
 /**
  * Represents an asset description in the scene

@@ -205,25 +205,3 @@ export function createDensityToAlphaNode(inputs?: DensityToAlphaInputs): Density
   return new DensityToAlphaNode(inputs);
 }
 
-// ============================================================================
-// Module Exports
-// ============================================================================
-
-export {
-  VolumeToMeshNode,
-  SampleVolumeNode,
-  VolumeAttributeStatsNode,
-  DensityToAlphaNode,
-};
-
-export type {
-  VolumeNodeBase,
-  VolumeToMeshInputs,
-  VolumeToMeshOutputs,
-  SampleVolumeInputs,
-  SampleVolumeOutputs,
-  VolumeAttributeStatsInputs,
-  VolumeAttributeStatsOutputs,
-  DensityToAlphaInputs,
-  DensityToAlphaOutputs,
-};

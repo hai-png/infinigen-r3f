@@ -6,11 +6,11 @@
  * Implements evaluation logic for specific constraint node types.
  */
 
-import { Node } from '../../language/types.js';
-import { State } from '../state.js';
-import { Relation } from '../../language/relations.js';
-import { geometryNodeImpls } from './trimesh-geometry.js';
-import { symmetryNodeImpls } from './symmetry.js';
+import { Node } from '../../language/types';
+import { State } from '../state';
+import { Relation } from '../../language/relations';
+import { geometryNodeImpls } from './trimesh-geometry';
+import { symmetryNodeImpls } from './symmetry';
 
 // Registry of node implementation functions
 export const nodeImpls = new Map<typeof Node, Function>();

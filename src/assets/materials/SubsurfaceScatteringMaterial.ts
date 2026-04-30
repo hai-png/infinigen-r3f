@@ -118,8 +118,8 @@ export class SubsurfaceScatteringMaterial extends THREE.MeshPhysicalMaterial {
     // This is an approximation using RGB values
   }
 
-  public clone(): SubsurfaceScatteringMaterial {
-    return new SubsurfaceScatteringMaterial({ ...this.config });
+  public clone(): this {
+    return new SubsurfaceScatteringMaterial({ ...this.config }) as this;
   }
 
   public toJSON(meta?: any): any {

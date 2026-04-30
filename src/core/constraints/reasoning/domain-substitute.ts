@@ -23,10 +23,10 @@ import {
   ArithmeticOperator,
   BooleanOperator,
   ComparisonOperator,
-} from '../language/types.js';
-import { Domain, NumericDomain, ObjectSetDomain, PoseDomain } from '../language/types.js';
-import { constraintDomain } from './constraint-domain.js';
-import { isConstant, evaluateConstant } from './constraint-constancy.js';
+} from '../language/types';
+import { Domain, NumericDomain, ObjectSetDomain, PoseDomain } from '../language/types';
+import { constraintDomain } from './constraint-domain';
+import { isConstant, evaluateConstant } from './constraint-constancy';
 
 /**
  * Substitution result containing the substituted node and success flag

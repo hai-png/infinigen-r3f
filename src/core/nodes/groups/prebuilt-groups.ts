@@ -6,8 +6,8 @@
  * Provides reusable node groups for common procedural generation tasks.
  */
 
-import { NodeWrangler, createGeometryNodeTree, createMaterialNodeTree } from '../core/node-wrangler.js';
-import { NodeType } from '../core/types.js';
+import { NodeWrangler, createGeometryNodeTree, createMaterialNodeTree } from '../core/node-wrangler';
+import { NodeType } from '../core/types';
 
 /**
  * Create a noise-based displacement node group

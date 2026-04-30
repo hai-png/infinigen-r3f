@@ -6,29 +6,58 @@
  * into a single cohesive API.
  */
 
-// Core Constraint Language
-export * from './language/index.js';
+// Core Constraint Language (primary exports)
+export * from './language/index';
 
 // Evaluator - Evaluates constraint violations
-export * from './evaluator/index.js';
+export * from './evaluator/index';
 
 // Solver - Optimization and search algorithms
-export * from './solver/index.js';
+export * from './solver/index';
 
 // Reasoning - Domain propagation and inference
-export * from './reasoning/index.js';
+// Note: Some names overlap with language module (extractVariables, substituteVariable).
+// We re-export with aliases to avoid conflicts.
+export {
+  constraintDomain,
+  // extractVariables — already exported from language
+  containsVariable,
+  getFreeVariables,
+  analyzeConstraintComplexity,
+  isConstant,
+  evaluateConstant,
+  simplifyConstant,
+  Bound,
+  createBoundFromComparison,
+  mapBound,
+  expressionMapBoundBinop,
+  expressionMapBound,
+  evaluateKnownVars,
+  constraintBounds,
+  isValidBound,
+  intersectBounds,
+  unionBounds,
+  satisfiesBound,
+  substituteVariables,
+  // substituteVariable — already exported from language
+  applyDomainSubstitution,
+  composeSubstitutions,
+  isCircularSubstitution,
+  safeSubstituteVariable,
+  normalizeConstraint,
+} from './reasoning/index';
+
+export type {
+  ConstraintComplexity,
+  SubstitutionResult,
+  VariableBinding,
+} from './reasoning/index';
 
 // Room Solver - Specialized room layout solving
-export * from './room-solver/index.js';
+export * from './room-solver/index';
 
 // Tags - Semantic tagging system
-export * from './tags/index.js';
+export * from './tags/index';
 
-// Additional constraint utilities
-export * from './core/index.js';
-export * from './dsl/index.js';
-export * from './moves/index.js';
-export * from './optimizer/index.js';
-export * from './room/index.js';
-export * from './utils/index.js';
-
+// DSL - Constraint DSL
+export * from './dsl/index';

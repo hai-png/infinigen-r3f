@@ -7,8 +7,12 @@
  * @module weather
  */
 
-export { WeatherSystem, WeatherType, WeatherParams, WeatherState } from './WeatherSystem';
-export { RainSystem, RainParams } from './RainSystem';
-export { SnowSystem, SnowParams } from './SnowSystem';
-export { FogSystem, FogParams } from './FogSystem';
+export { WeatherSystem } from './WeatherSystem';
+export type { WeatherType, WeatherParams, WeatherState } from './WeatherSystem';
+export { RainSystem } from './RainSystem';
+export type { RainParams } from './RainSystem';
+export { SnowSystem } from './SnowSystem';
+export type { SnowParams } from './SnowSystem';
+export { FogSystem } from './FogSystem';
+export type { FogParams } from './FogSystem';
 export default WeatherSystem;

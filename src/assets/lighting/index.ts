@@ -1,5 +1,5 @@
-export { SkyLightingSystem } from './SkyLighting.js';
-export type { SkyLightingConfig } from './SkyLighting.js';
+export { SkyLightingSystem } from './SkyLighting';
+export type { SkyLightingConfig } from './SkyLighting';
 
-export { ThreePointLightingSystem } from './ThreePointLighting.js';
-export type { ThreePointLightingConfig } from './ThreePointLighting.js';
+export { ThreePointLightingSystem } from './ThreePointLighting';
+export type { ThreePointLightingConfig } from './ThreePointLighting';

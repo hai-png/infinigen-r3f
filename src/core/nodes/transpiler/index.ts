@@ -3,10 +3,10 @@
  * Converts node graphs to executable code and shader materials
  */
 
-export * from './transpiler.js';
+export * from './transpiler';
 export type {
   TranspilerOptions,
   TranspiledResult,
   ShaderModule,
   VariableBinding,
-} from './transpiler.js';
+} from './transpiler';

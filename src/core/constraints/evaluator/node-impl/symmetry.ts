@@ -10,10 +10,10 @@
  * - Distributed: Objects evenly distributed in a region
  */
 
-import { Node, RelationNode, Variable } from '../../language/types.js';
-import { State } from '../state.js';
+import { Node, RelationNode, Variable } from '../../language/types';
+import { State } from '../state';
 import * as THREE from 'three';
-import { BBox } from '../../../core/util/math/bbox';
+import { BBox } from '../../../util/math/bbox';
 
 /**
  * Symmetry constraint result

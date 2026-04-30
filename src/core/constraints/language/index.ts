@@ -16,7 +16,7 @@ export {
   PoseDomain,
   BBoxDomain,
   BooleanDomain
-} from './types.js';
+} from './types';
 
 // Expressions
 export {
@@ -38,7 +38,7 @@ export {
   BoolNotExpression,
   ScalarIfElse,
   BoolIfElse
-} from './expression.js';
+} from './expression';
 
 // Relations
 export {
@@ -67,7 +67,7 @@ export {
   Stability,
   Containment,
   Proximity
-} from './relations.js';
+} from './relations';
 
 // Set Reasoning
 export {
@@ -87,7 +87,7 @@ export {
   MaxOver,
   MinOver,
   CountExpression
-} from './set-reasoning.js';
+} from './set-reasoning';
 
 // Geometry Predicates
 export {
@@ -111,14 +111,13 @@ export {
   OrientationAlignment,
   Compactness,
   AspectRatio
-} from './geometry.js';
+} from './geometry';
 
 // Constants and Problem Definition
 export {
   scalar,
   bool,
-  ScalarConstant,
-  BoolConstant,
+  // ScalarConstant and BoolConstant already exported from expression.js
   ZERO,
   ONE,
   HALF,
@@ -135,7 +134,7 @@ export {
   NamedConstraint,
   NamedScoreTerm,
   buildProblem
-} from './constants.js';
+} from './constants';
 
 // Utilities
 export {
@@ -151,7 +150,7 @@ export {
   estimateComplexity,
   constraintToString,
   expressionToString
-} from './util.js';
+} from './util';
 
 // Result Types
 export {
@@ -175,7 +174,7 @@ export {
   formatViolationReport,
   mergeEvaluationResults,
   compareSolutions
-} from './result.js';
+} from './result';
 
 // Room-Specific Constraints
 export {
@@ -195,4 +194,4 @@ export {
   type RoomFunction,
   type PrivacyLevel,
   type RoomAdjacency
-} from './rooms.js';
+} from './rooms';

@@ -11,7 +11,7 @@
  */
 
 import * as THREE from 'three';
-import { NoiseUtils } from '../../terrain/utils/NoiseUtils';
+import { NoiseUtils } from '../../../terrain/utils/NoiseUtils';
 
 export interface RockConfig {
   seed: number;

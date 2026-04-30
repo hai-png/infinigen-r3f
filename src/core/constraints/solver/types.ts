@@ -3,8 +3,8 @@
  * Core type definitions for constraint solving system
  */
 
-import type { ObjectState } from '../evaluator/state.js';
-import type { Relation } from '../language/relations.js';
+import type { ObjectState } from '../evaluator/state';
+import type { Relation } from '../language/relations';
 
 /**
  * Represents a proposal for changing an object's state

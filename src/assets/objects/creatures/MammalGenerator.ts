@@ -73,7 +73,7 @@ export class MammalGenerator extends CreatureBase {
   }
 
   generateHead(): Mesh {
-    return this.generateHead(this.getDefaultConfig());
+    return this.generateHeadMesh(this.getDefaultConfig());
   }
 
   generateLimbs(): Mesh[] {
@@ -176,7 +176,7 @@ export class MammalGenerator extends CreatureBase {
     return new Mesh(bodyGeometry, bodyMaterial);
   }
 
-  private generateHead(params: MammalParameters): Mesh {
+  private generateHeadMesh(params: MammalParameters): Mesh {
     const headGeometry = this.createSphereGeometry(params.size * 0.2);
     const headMaterial = this.createFurMaterial(params.primaryColor, params.furLength * 0.8, params.furPattern);
     return new Mesh(headGeometry, headMaterial);

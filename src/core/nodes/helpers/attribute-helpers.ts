@@ -466,6 +466,3 @@ export function hasAttribute(
     socketName: 'Size'
   };
 }
-
-export { AttributeDomain, AttributeType };
-export type { AttributeConfig };

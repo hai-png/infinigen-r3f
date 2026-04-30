@@ -5,9 +5,9 @@
  * Falls back to CPU implementation when WebGPU is unavailable.
  */
 
-import type { Constraint, Problem } from '../constraints/language/types';
-import type { State } from '../constraints/evaluator/state';
-import { evaluateNode } from '../constraints/evaluator/evaluate';
+import type { Constraint, Problem } from '../../constraints/language/types';
+import type { State } from '../../constraints/evaluator/state';
+import { evaluateNode } from '../../constraints/evaluator/evaluate';
 
 // ============================================================================
 // Types & Interfaces

@@ -100,8 +100,6 @@ export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
     return new BoxGeometry(1, 1, 1);
   }
 
-  protected get seed(): number { return this.params.seed; }
-
   protected mergeParameters(base: any, override: any): any {
     return { ...base, ...override };
   }

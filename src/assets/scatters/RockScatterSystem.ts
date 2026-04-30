@@ -28,9 +28,9 @@
  */
 
 import * as THREE from 'three';
-import { RockGenerator, RockConfig, RockType, RockInstance } from './ground/RockGenerator.js';
-import { InstanceScatterSystem, ScatterConfig, ScatterRules, Biome } from '../InstanceScatterSystem.js';
-import { NoiseUtils } from '../../terrain/utils/NoiseUtils.js';
+import { RockGenerator, RockConfig, RockType, RockInstance } from './ground/RockGenerator';
+import { InstanceScatterSystem, ScatterConfig, ScatterRules, Biome } from './InstanceScatterSystem';
+import { NoiseUtils } from '../../terrain/utils/NoiseUtils';
 
 // ============================================================================
 // Type Definitions

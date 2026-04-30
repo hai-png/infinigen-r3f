@@ -6,11 +6,11 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
-import { ObjectRegistry } from './ObjectRegistry';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils';
+import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
-import { extrudeShape } from '../../assets/utils/curves';
-import { mirrorMesh, mergeMeshes } from '../../assets/utils/mesh';
+import { BezierCurveGenerator } from '../../../assets/utils/curves';
+import { MeshUtils } from '../../../assets/utils/mesh';
 
 export interface StoolParams extends BaseGeneratorConfig {
   // Dimensions

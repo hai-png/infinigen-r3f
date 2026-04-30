@@ -7,8 +7,8 @@
  * Note: Removed bpy dependencies, uses three.js equivalents.
  */
 
-import { Relation } from '../language/relations.js';
-import { TagSet } from '../tags/index.js';
+import { Relation } from '../language/relations';
+import { TagSet } from '../tags/index';
 import * as THREE from 'three';
 
 /**

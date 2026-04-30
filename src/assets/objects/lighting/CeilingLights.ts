@@ -50,8 +50,29 @@ export class CeilingLights extends BaseObjectGenerator<CeilingLightParams> {
     };
   }
 
+  private getMaterial(materialType: string, color: string): THREE.Material {
+    switch (materialType) {
+      case 'metal':
+        return this.getMetalMaterial('steel');
+      case 'glass':
+      case 'crystal':
+        return new THREE.MeshPhysicalMaterial({
+          color: Number(color),
+          metalness: 0.0,
+          roughness: 0.0,
+          transmission: 0.9,
+        });
+      case 'wood':
+        return new THREE.MeshStandardMaterial({ color: Number(color), roughness: 0.8, metalness: 0 });
+      case 'fabric':
+        return new THREE.MeshStandardMaterial({ color: Number(color), roughness: 0.9, metalness: 0 });
+      default:
+        return new THREE.MeshStandardMaterial({ color: Number(color) });
+    }
+  }
+
   generate(params: Partial<CeilingLightParams> = {}): THREE.Object3D {
-    const finalParams = { ...this.getDefaultParams(), ...params };
+    const finalParams = { ...this.getDefaultConfig(), ...params };
     const group = new THREE.Group();
     
     let fixture: THREE.Object3D;
@@ -61,7 +82,7 @@ export class CeilingLights extends BaseObjectGenerator<CeilingLightParams> {
         fixture = this.createFlushMount(finalParams);
         break;
       case 'semi-flush':
-        fixture = this.createSemiFlush(finalParams);
+        fixture = this.createSemiFlushMount(finalParams);
         break;
       case 'pendant':
         fixture = this.createPendant(finalParams);
@@ -362,10 +383,14 @@ export class CeilingLights extends BaseObjectGenerator<CeilingLightParams> {
       transmission: 1.0,
     });
     
-    const dropGeometry = new THREE.TeardropShape ? new THREE.LatheGeometry(
-      new Float32Array([0, 0, 0.02, 0.05, 0.01, 0.08, 0, 0.1]),
-      16
-    ) : new THREE.OctahedronGeometry(0.02);
+    // Create teardrop shape using LatheGeometry
+    const teardropPoints = [
+      new THREE.Vector2(0, 0),
+      new THREE.Vector2(0.02, 0.05),
+      new THREE.Vector2(0.01, 0.08),
+      new THREE.Vector2(0, 0.1)
+    ];
+    const dropGeometry = new THREE.LatheGeometry(teardropPoints, 16);
     
     const drop = new THREE.Mesh(dropGeometry, crystalMaterial);
     drop.position.set(x, y, z);

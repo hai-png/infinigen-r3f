@@ -14,7 +14,7 @@ export {
   TrajectoryData,
   EasingFunctions,
   CameraTrajectoryGenerator,
-} from './CameraTrajectoryGenerator.js';
+} from './CameraTrajectoryGenerator';
 
 export {
   Keyframe,
@@ -28,12 +28,12 @@ export {
   createCurveFromTrajectory,
   calculateTrajectoryLength,
   resampleUniform,
-} from './TrajectoryGenerator.js';
+} from './TrajectoryGenerator';
 
 // Shot types
-export { DollyShot } from './DollyShot.js';
-export { CraneShot } from './CraneShot.js';
-export { OrbitShot } from './OrbitShot.js';
-export { PanTilt } from './PanTilt.js';
-export { TrackingShot } from './TrackingShot.js';
-export { HandheldSim } from './HandheldSim.js';
+export { DollyShot } from './DollyShot';
+export { CraneShot } from './CraneShot';
+export { OrbitShot } from './OrbitShot';
+export { PanTilt } from './PanTilt';
+export { TrackingShot } from './TrackingShot';
+export { HandheldSim } from './HandheldSim';

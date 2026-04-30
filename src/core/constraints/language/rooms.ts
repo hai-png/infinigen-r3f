@@ -542,5 +542,4 @@ export function validateRoomConfig(
   };
 }
 
-// Re-export commonly used types
-export type { RoomAdjacency, PrivacyLevel };
+

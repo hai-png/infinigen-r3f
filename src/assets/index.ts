@@ -1,14 +1,14 @@
 // Procedural generators
-export * from './procedural/index.js';
+export * from './procedural/index';
 
 // Material generators
-export * from './materials/index.js';
+export * from './materials/index';
 
 // Specialized shaders
-export * from './shaders/index.js';
+export * from './shaders/index';
 
 // Scatter systems
-export * from './scatters/index.js';
+export * from './scatters/index';
 
 // Lighting systems
-export * from './lighting/index.js';
+export * from './lighting/index';

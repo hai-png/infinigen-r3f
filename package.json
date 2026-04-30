@@ -64,9 +64,15 @@
   "license": "MIT",
   "peerDependencies": {
     "react": ">=18.0.0",
-    "three": ">=0.150.0"
+    "three": "^0.184.0"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.0.4",
+    "@react-three/rapier": "^2.2.0",
+    "lucide-react": "^1.14.0",
+    "recharts": "^3.8.1",
     "simplex-noise": "^4.0.1"
   },
   "devDependencies": {

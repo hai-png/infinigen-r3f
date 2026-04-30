@@ -12,7 +12,7 @@
 
 import { Scene, Object3D } from 'three';
 import { SolverState } from '../constraints/solver/state';
-import { Relation } from '../constraints/language';
+import { Relation } from '../language';
 
 export interface BridgeConfig {
   endpoint: string;

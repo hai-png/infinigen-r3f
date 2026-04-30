@@ -33,21 +33,21 @@ export {
   HasCameraAngle,
   AvoidsObstruction,
   FollowsSubject,
-} from './CameraSystem.js';
+} from './CameraSystem';
 
 // Auto-placement algorithms (to be implemented)
 // export {
 //   AutoPlacementEngine,
 //   ViewpointScorer,
 //   ObstructionDetector,
-// } from './AutoPlacement.js';
+// } from './AutoPlacement';
 
 // Cinematography rules (to be implemented)
 // export {
 //   RuleOfThirdsComposer,
 //   LeadingLinesAnalyzer,
 //   FramingAssistant,
-// } from './Cinematography.js';
+// } from './Cinematography';
 
 // Trajectory generators (to be implemented)
 // export {
@@ -55,4 +55,4 @@ export {
 //   OrbitShotGenerator,
 //   TrackingShotGenerator,
 //   HandheldSimulator,
-// } from './Trajectories.js';
+// } from './Trajectories';

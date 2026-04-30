@@ -3,7 +3,7 @@
  * Ported from infinigen/core/tags.py
  */
 
-import { Node, Variable } from '../constraints/language/types.js';
+import { Node, Variable } from '../language/types';
 
 /**
  * Base class for all tags

@@ -7,7 +7,7 @@
  * @module constraints/dsl
  */
 
-import type { ConstraintType, ConstraintOperator, DomainType } from '../types';
+import type { ConstraintType, ConstraintOperator, DomainType } from '../../../types';
 
 /**
  * Token types for the constraint lexer

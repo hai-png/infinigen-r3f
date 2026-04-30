@@ -4,7 +4,7 @@
  */
 
 import { Vector3, Raycaster, Plane, Box3 } from 'three';
-import { HeightMap, TerrainData } from './core/TerrainGenerator';
+import { HeightMap, TerrainData } from '../core/TerrainGenerator';
 
 export interface WaterConfig {
   level: number;

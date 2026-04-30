@@ -8,6 +8,7 @@ import {
   PlaneGeometry,
   BoxGeometry,
   CylinderGeometry,
+  SphereGeometry,
   Material,
   MeshStandardMaterial,
   MeshPhysicalMaterial

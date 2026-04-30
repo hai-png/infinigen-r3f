@@ -21,10 +21,10 @@ export {
   GreedySolver,
   SimulatedAnnealingConfig,
   GreedyConfig
-} from './moves.js';
+} from './moves';
 
 // Full MCMC Solver Loop
-export { FullSolverLoop, MCMCSolver } from './full-solver-loop.js';
+export { FullSolverLoop, MCMCSolver } from './full-solver-loop';
 
 // Proposal Strategies
 export {
@@ -32,4 +32,4 @@ export {
   DiscreteProposalGenerator,
   HybridProposalGenerator,
   type ProposalStrategyOptions
-} from './proposals/ProposalStrategies.js';
+} from './proposals/ProposalStrategies';

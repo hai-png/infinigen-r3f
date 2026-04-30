@@ -2,4 +2,4 @@
  * Node Groups Module
  */
 
-export * from './prebuilt-groups.js';
+export * from './prebuilt-groups';

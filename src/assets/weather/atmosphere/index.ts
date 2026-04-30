@@ -9,6 +9,9 @@
  * @module atmosphere
  */
 
-export { AtmosphericSky, AtmosphereParams } from './AtmosphericSky';
-export { VolumetricClouds, CloudLayer, CloudParams } from './VolumetricClouds';
-export { AtmosphericScattering, AtmosphereConfig, CloudConfig } from './AtmosphericScattering';
+export { AtmosphericSky } from './AtmosphericSky';
+export type { AtmosphereParams } from './AtmosphericSky';
+export { VolumetricClouds } from './VolumetricClouds';
+export type { CloudLayer, CloudParams } from './VolumetricClouds';
+export { AtmosphericScattering } from './AtmosphericScattering';
+export type { AtmosphereConfig, CloudConfig } from './AtmosphericScattering';

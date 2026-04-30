@@ -491,5 +491,3 @@ export class GroupIOManager {
 export function createGroupIOManager(wrangler: NodeWrangler): GroupIOManager {
   return new GroupIOManager(wrangler);
 }
-
-export { GroupIOManager };

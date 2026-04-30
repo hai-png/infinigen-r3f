@@ -12,7 +12,7 @@ export {
   PoseDomain,
   BBoxDomain,
   BooleanDomain
-} from '../language/types.js';
+} from '../language/types';
 
 // Domain extraction from constraints
 export {
@@ -22,14 +22,14 @@ export {
   getFreeVariables,
   analyzeConstraintComplexity,
   type ConstraintComplexity
-} from './constraint-domain.js';
+} from './constraint-domain';
 
 // Constancy analysis
 export {
   isConstant,
   evaluateConstant,
   simplifyConstant
-} from './constraint-constancy.js';
+} from './constraint-constancy';
 
 // Bounding computations
 export {
@@ -44,7 +44,7 @@ export {
   intersectBounds,
   unionBounds,
   satisfiesBound
-} from './constraint-bounding.js';
+} from './constraint-bounding';
 
 // Domain substitution
 export {
@@ -57,4 +57,4 @@ export {
   normalizeConstraint,
   type SubstitutionResult,
   type VariableBinding
-} from './domain-substitute.js';
+} from './domain-substitute';

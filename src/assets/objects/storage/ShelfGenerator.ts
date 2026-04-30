@@ -3,16 +3,16 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 
-export interface ShelfParams extends BaseGeneratorConfig {
+export interface ShelfConfig extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
   style: ObjectStylePreset;
-  shelfType: 'bookcase' | 'wall_shelf' | 'cube' | 'ladder';
+  shelfType: ShelfStyle;
   shelfCount: number;
   adjustable: boolean;
   hasBack: boolean;
@@ -20,10 +20,12 @@ export interface ShelfParams extends BaseGeneratorConfig {
   variationSeed?: number;
 }
 
-export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
+export type ShelfStyle = 'bookcase' | 'wall_shelf' | 'cube' | 'ladder';
+
+export class ShelfGenerator extends BaseObjectGenerator<ShelfConfig> {
   static readonly GENERATOR_ID = 'shelf_generator';
   
-  getDefaultConfig(): ShelfParams {
+  getDefaultConfig(): ShelfConfig {
     return {
       width: 1.0,
       height: 2.0,
@@ -38,7 +40,7 @@ export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
     };
   }
 
-  generate(params: Partial<ShelfParams> = {}): THREE.Object3D {
+  generate(params: Partial<ShelfConfig> = {}): THREE.Object3D {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const rng = new SeededRandom(finalParams.variationSeed || this.seed);
     const group = new THREE.Group();
@@ -68,7 +70,7 @@ export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
     return group;
   }
 
-  private createFrame(params: ShelfParams, rng: SeededRandom): THREE.Group {
+  private createFrame(params: ShelfConfig, rng: SeededRandom): THREE.Group {
     const frame = new THREE.Group();
     const material = new THREE.MeshStandardMaterial({
       color: this.getWoodColor(rng, params.style),
@@ -118,7 +120,7 @@ export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
     return frame;
   }
 
-  private createShelves(params: ShelfParams, rng: SeededRandom): THREE.Group {
+  private createShelves(params: ShelfConfig, rng: SeededRandom): THREE.Group {
     const shelfGroup = new THREE.Group();
     const material = new THREE.MeshStandardMaterial({
       color: this.getWoodColor(rng, params.style),
@@ -165,7 +167,7 @@ export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
     return shelfGroup;
   }
 
-  private createBack(params: ShelfParams, rng: SeededRandom): THREE.Mesh {
+  private createBack(params: ShelfConfig, rng: SeededRandom): THREE.Mesh {
     const thickness = 0.01;
     const geometry = new THREE.BoxGeometry(params.width - 0.08, params.height, thickness);
     const material = new THREE.MeshStandardMaterial({
@@ -180,7 +182,7 @@ export class ShelfGenerator extends BaseObjectGenerator<ShelfParams> {
     return mesh;
   }
 
-  private createDoors(params: ShelfParams, rng: SeededRandom): THREE.Group {
+  private createDoors(params: ShelfConfig, rng: SeededRandom): THREE.Group {
     const doorGroup = new THREE.Group();
     const doorHeight = params.height * 0.9;
     const doorWidth = (params.width - 0.1) / 2;

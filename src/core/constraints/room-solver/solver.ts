@@ -10,9 +10,9 @@
  * - Topological constraints (connectivity, planarity)
  */
 
-import { RoomGraph, RoomNode, NeighborType } from './base.js';
-import { FloorPlanGenerator, FloorPlanConfig } from './floor-plan.js';
-import { ContourOperations } from './contour.js';
+import { RoomGraph, RoomNode, NeighborType } from './base';
+import { FloorPlanGenerator, FloorPlanConfig } from './floor-plan';
+import { ContourOperations } from './contour';
 import { Vector2 } from 'three';
 
 export interface RoomConstraint {

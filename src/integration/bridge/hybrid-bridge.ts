@@ -11,7 +11,7 @@
  * - Connection pooling & retry logic
  */
 
-import { MeshData, PhysicsConfig } from '../types';
+import { MeshData, PhysicsConfig } from '../../types';
 
 export interface BridgeRequest {
   id: string;

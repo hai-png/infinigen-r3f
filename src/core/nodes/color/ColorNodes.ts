@@ -8,6 +8,9 @@
 import { NodeTypes } from '../core/node-types';
 import type { Color } from 'three';
 
+// Accept both THREE.Color and plain objects for compatibility
+export type ColorLike = Color | { r: number; g: number; b: number };
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -21,30 +24,30 @@ export interface ColorNodeBase {
 
 export interface ColorRampInputs {
   factor?: number;
-  colorRamp?: Array<{ position: number; color: Color }>;
+  colorRamp?: Array<{ position: number; color: ColorLike }>;
   interpolation?: 'constant' | 'linear' | 'b_spline' | 'cardinal' | 'ease' | 'smooth_step';
 }
 
 export interface ColorRampOutputs {
-  color: Color;
+  color: ColorLike;
   alpha: number;
 }
 
 export interface MixRGBInputs {
   blendType?: 'mix' | 'add' | 'multiply' | 'subtract' | 'screen' | 'divide' | 'difference' | 'darken' | 'lighten' | 'overlay' | 'soft_light' | 'linear_light' | 'color_dodge' | 'color_burn' | 'hue' | 'saturation' | 'value' | 'color' | 'luminosity';
-  color1?: Color;
-  color2?: Color;
+  color1?: ColorLike;
+  color2?: ColorLike;
   factor?: number;
   clampResult?: boolean;
   clampFactor?: boolean;
 }
 
 export interface MixRGBOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface RGBCurveInputs {
-  color?: Color;
+  color?: ColorLike;
   curveR?: Array<[number, number]>;
   curveG?: Array<[number, number]>;
   curveB?: Array<[number, number]>;
@@ -52,27 +55,27 @@ export interface RGBCurveInputs {
 }
 
 export interface RGBCurveOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface BrightContrastInputs {
-  color?: Color;
+  color?: ColorLike;
   bright?: number;
   contrast?: number;
 }
 
 export interface BrightContrastOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface ExposureInputs {
-  color?: Color;
+  color?: ColorLike;
   exposure?: number;
   gamma?: number;
 }
 
 export interface ExposureOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface CombineHSVInputs {
@@ -82,11 +85,11 @@ export interface CombineHSVInputs {
 }
 
 export interface CombineHSVOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface SeparateRGBInputs {
-  color?: Color;
+  color?: ColorLike;
 }
 
 export interface SeparateRGBOutputs {
@@ -96,7 +99,7 @@ export interface SeparateRGBOutputs {
 }
 
 export interface SeparateColorInputs {
-  color?: Color;
+  color?: ColorLike;
 }
 
 export interface SeparateColorOutputs {
@@ -113,7 +116,7 @@ export interface CombineRGBInputs {
 }
 
 export interface CombineRGBOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface CombineColorInputs {
@@ -124,11 +127,11 @@ export interface CombineColorInputs {
 }
 
 export interface CombineColorOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface HueSaturationValueInputs {
-  color?: Color;
+  color?: ColorLike;
   hue?: number;
   saturation?: number;
   value?: number;
@@ -136,7 +139,7 @@ export interface HueSaturationValueInputs {
 }
 
 export interface HueSaturationValueOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface BlackBodyInputs {
@@ -144,45 +147,45 @@ export interface BlackBodyInputs {
 }
 
 export interface BlackBodyOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface InvertInputs {
-  color?: Color;
+  color?: ColorLike;
   fac?: number;
 }
 
 export interface InvertOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface PremulAlphaInputs {
-  color?: Color;
+  color?: ColorLike;
   alpha?: number;
 }
 
 export interface PremulAlphaOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface SetAlphaInputs {
-  color?: Color;
+  color?: ColorLike;
   alpha?: number;
   fac?: number;
 }
 
 export interface SetAlphaOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 export interface AlphaOverInputs {
-  color1?: Color;
-  color2?: Color;
+  color1?: ColorLike;
+  color2?: ColorLike;
   fac?: number;
 }
 
 export interface AlphaOverOutputs {
-  color: Color;
+  color: ColorLike;
 }
 
 // ============================================================================
@@ -306,7 +309,7 @@ export class MixRGBNode implements ColorNodeBase {
     const c2 = this.inputs.color2 || { r: 0, g: 0, b: 0 };
     const blendType = this.inputs.blendType || 'mix';
     
-    let result: Color;
+    let result: ColorLike;
     
     switch (blendType) {
       case 'mix':

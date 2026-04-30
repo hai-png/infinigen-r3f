@@ -26,23 +26,23 @@ export interface ShelfConfig {
   width: number;
   depth: number;
   thickness: number;
-  
+
   // Style
   style: ShelfStyle;
   material: ShelfMaterial;
   bracketStyle: BracketStyle;
-  
+
   // Appearance
   color: THREE.Color;
   roughness: number;
   metalness: number;
-  
+
   // Configuration
   tiers: number;
   tierSpacing: number;
   hasBack: boolean;
   hasSides: boolean;
-  
+
   // Mounting
   mountType: 'visible' | 'hidden' | 'french_cleat';
   mountDepth: number;
@@ -68,7 +68,7 @@ const DEFAULT_SHELF_CONFIG: ShelfConfig = {
 
 export class WallShelfGenerator {
   private config: ShelfConfig;
-  
+
   constructor(config: Partial<ShelfConfig> = {}) {
     this.config = { ...DEFAULT_SHELF_CONFIG, ...config };
   }
@@ -78,14 +78,14 @@ export class WallShelfGenerator {
    */
   generateShelf(position?: THREE.Vector3): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Generate shelves based on tier count
     for (let i = 0; i < this.config.tiers; i++) {
       const y = i * this.config.tierSpacing;
       const shelf = this.createShelfBoard();
       shelf.position.y = y;
       group.add(shelf);
-      
+
       // Add supports based on style
       if (this.config.style === 'bracketed') {
         this.addBrackets(group, y);
@@ -93,25 +93,25 @@ export class WallShelfGenerator {
         this.addLedge(group, y);
       }
     }
-    
+
     // Add back panel if configured
     if (this.config.hasBack) {
       const back = this.createBackPanel();
       group.add(back);
     }
-    
+
     // Add side panels if configured
     if (this.config.hasSides) {
       this.addSidePanels(group);
     }
-    
+
     // Add mounting hardware
     this.addMountingHardware(group);
-    
+
     if (position) {
       group.position.copy(position);
     }
-    
+
     return group;
   }
 
@@ -124,15 +124,15 @@ export class WallShelfGenerator {
       this.config.thickness,
       this.config.depth
     );
-    
+
     const material = this.getMaterial();
     const mesh = new THREE.Mesh(geometry, material);
-    
+
     // Add edge detail for certain styles
     if (this.config.style === 'ledged' || this.config.style === 'ornate') {
       this.addEdgeDetail(mesh);
     }
-    
+
     return mesh;
   }
 
@@ -146,11 +146,11 @@ export class WallShelfGenerator {
       0.02,
       this.config.depth + 0.02
     );
-    
+
     const edgeMaterial = this.getMaterial();
     const edgeMesh = new THREE.Mesh(edgeGeometry, edgeMaterial);
     edgeMesh.position.y = -this.config.thickness / 2 - 0.01;
-    
+
     shelf.add(edgeMesh);
   }
 
@@ -160,15 +160,15 @@ export class WallShelfGenerator {
   private addBrackets(group: THREE.Group, shelfY: number): void {
     const bracketCount = Math.max(2, Math.floor(this.config.width / 0.4));
     const spacing = this.config.width / (bracketCount - 1);
-    
+
     for (let i = 0; i < bracketCount; i++) {
       const x = -this.config.width / 2 + i * spacing;
-      
+
       // Skip end brackets for cleaner look
       if (i === 0 || i === bracketCount - 1) {
         x += 0.05;
       }
-      
+
       const bracket = this.createBracket();
       bracket.position.set(x, shelfY - this.config.tierSpacing / 2, -this.config.depth / 2);
       group.add(bracket);
@@ -180,7 +180,7 @@ export class WallShelfGenerator {
    */
   private createBracket(): THREE.Group {
     const group = new THREE.Group();
-    
+
     switch (this.config.bracketStyle) {
       case 'simple':
         this.createSimpleBracket(group);
@@ -199,7 +199,7 @@ export class WallShelfGenerator {
         // No visible bracket
         break;
     }
-    
+
     return group;
   }
 
@@ -208,13 +208,13 @@ export class WallShelfGenerator {
    */
   private createSimpleBracket(group: THREE.Group): void {
     const bracketMaterial = this.getBracketMaterial();
-    
+
     // Vertical part
     const vertGeo = new THREE.BoxGeometry(0.03, 0.15, this.config.depth);
     const vertMesh = new THREE.Mesh(vertGeo, bracketMaterial);
     vertMesh.position.y = -0.075;
     group.add(vertMesh);
-    
+
     // Horizontal part
     const horzGeo = new THREE.BoxGeometry(0.12, 0.03, this.config.depth);
     const horzMesh = new THREE.Mesh(horzGeo, bracketMaterial);
@@ -227,14 +227,14 @@ export class WallShelfGenerator {
    */
   private createOrnateBracket(group: THREE.Group): void {
     const bracketMaterial = this.getBracketMaterial();
-    
+
     // Use torus for curved bracket
     const curveGeo = new THREE.TorusGeometry(0.08, 0.015, 8, 16, Math.PI / 2);
     const curveMesh = new THREE.Mesh(curveGeo, bracketMaterial);
     curveMesh.rotation.z = -Math.PI / 2;
     curveMesh.position.set(0.06, -0.06, 0);
     group.add(curveMesh);
-    
+
     // Add decorative elements
     const decorGeo = new THREE.SphereGeometry(0.02, 8, 8);
     const decorMesh = new THREE.Mesh(decorGeo, bracketMaterial);
@@ -249,20 +249,20 @@ export class WallShelfGenerator {
     const pipeMaterial = this.getBracketMaterial();
     pipeMaterial.metalness = 0.8;
     pipeMaterial.roughness = 0.3;
-    
+
     // Vertical pipe
     const vertGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.15, 8);
     const vertMesh = new THREE.Mesh(vertGeo, pipeMaterial);
     vertMesh.position.y = -0.075;
     group.add(vertMesh);
-    
+
     // Horizontal pipe
     const horzGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8);
     const horzMesh = new THREE.Mesh(horzGeo, pipeMaterial);
     horzMesh.rotation.z = Math.PI / 2;
     horzMesh.position.set(0.06, 0, 0);
     group.add(horzMesh);
-    
+
     // Flange at wall
     const flangeGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.01, 16);
     const flangeMesh = new THREE.Mesh(flangeGeo, pipeMaterial);
@@ -276,7 +276,7 @@ export class WallShelfGenerator {
    */
   private createDecorativeBracket(group: THREE.Group): void {
     const bracketMaterial = this.getBracketMaterial();
-    
+
     // Create scroll pattern using multiple torus segments
     for (let i = 0; i < 3; i++) {
       const scrollGeo = new THREE.TorusGeometry(0.04 + i * 0.02, 0.008, 8, 16, Math.PI);
@@ -297,7 +297,7 @@ export class WallShelfGenerator {
       ledgeHeight,
       0.03
     );
-    
+
     const ledgeMaterial = this.getMaterial();
     const ledgeMesh = new THREE.Mesh(ledgeGeo, ledgeMaterial);
     ledgeMesh.position.set(0, shelfY + ledgeHeight / 2, this.config.depth / 2 - 0.015);
@@ -309,17 +309,17 @@ export class WallShelfGenerator {
    */
   private createBackPanel(): THREE.Mesh {
     const totalHeight = (this.config.tiers - 1) * this.config.tierSpacing + this.config.thickness;
-    
+
     const geometry = new THREE.BoxGeometry(
       this.config.width + 0.04,
       totalHeight,
       0.02
     );
-    
+
     const material = this.getMaterial();
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(0, totalHeight / 2, -this.config.depth / 2 - 0.01);
-    
+
     return mesh;
   }
 
@@ -328,20 +328,20 @@ export class WallShelfGenerator {
    */
   private addSidePanels(group: THREE.Group): void {
     const totalHeight = (this.config.tiers - 1) * this.config.tierSpacing + this.config.thickness;
-    
+
     const sideGeometry = new THREE.BoxGeometry(
       0.03,
       totalHeight,
       this.config.depth
     );
-    
+
     const material = this.getMaterial();
-    
+
     // Left side
     const leftSide = new THREE.Mesh(sideGeometry, material);
     leftSide.position.set(-this.config.width / 2 - 0.015, totalHeight / 2, 0);
     group.add(leftSide);
-    
+
     // Right side
     const rightSide = new THREE.Mesh(sideGeometry, material);
     rightSide.position.set(this.config.width / 2 + 0.015, totalHeight / 2, 0);
@@ -360,13 +360,13 @@ export class WallShelfGenerator {
         metalness: 0.9,
         roughness: 0.2
       });
-      
+
       for (let i = 0; i < this.config.tiers; i++) {
         const y = i * this.config.tierSpacing;
-        
+
         // Two mounting rods per shelf
         const offsets = [-this.config.width / 3, this.config.width / 3];
-        
+
         for (const offset of offsets) {
           const rod = new THREE.Mesh(rodGeometry, rodMaterial);
           rod.rotation.x = Math.PI / 2;
@@ -382,14 +382,14 @@ export class WallShelfGenerator {
         metalness: 0.8,
         roughness: 0.3
       });
-      
+
       for (let i = 0; i < this.config.tiers; i++) {
         const y = i * this.config.tierSpacing;
         const positions = [
           [-this.config.width / 2 + 0.05, -this.config.depth / 2],
           [this.config.width / 2 - 0.05, -this.config.depth / 2]
         ];
-        
+
         for (const [x, z] of positions) {
           const screw = new THREE.Mesh(screwGeometry, screwMaterial);
           screw.rotation.x = Math.PI / 2;
@@ -423,7 +423,7 @@ export class WallShelfGenerator {
         metalness: 0.8
       });
     }
-    
+
     return new THREE.MeshStandardMaterial({
       color: this.config.color,
       roughness: this.config.roughness,
@@ -436,14 +436,14 @@ export class WallShelfGenerator {
    */
   generateCornerShelf(position?: THREE.Vector3): THREE.Group {
     const group = new THREE.Group();
-    
+
     // Triangular shelf for corner
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
     shape.lineTo(this.config.depth, 0);
     shape.lineTo(0, this.config.depth);
     shape.closePath();
-    
+
     const extrudeSettings = {
       depth: this.config.width * 0.7,
       bevelEnabled: true,
@@ -451,26 +451,26 @@ export class WallShelfGenerator {
       bevelSize: 0.01,
       bevelThickness: 0.01
     };
-    
+
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     const material = this.getMaterial();
     const mesh = new THREE.Mesh(geometry, material);
-    
+
     // Rotate for corner placement
     mesh.rotation.y = -Math.PI / 4;
-    
+
     group.add(mesh);
-    
+
     // Add corner bracket
     const bracket = this.createBracket();
     bracket.rotation.y = -Math.PI / 4;
     bracket.position.y = -this.config.tierSpacing / 2;
     group.add(bracket);
-    
+
     if (position) {
       group.position.copy(position);
     }
-    
+
     return group;
   }
 

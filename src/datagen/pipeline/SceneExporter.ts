@@ -19,8 +19,8 @@
  */
 
 import * as THREE from 'three';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-import { DRACOEncoder } from 'three/examples/jsm/libs/draco/draco_encoder.js';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
+import { DRACOEncoder } from 'three/examples/jsm/libs/draco/draco_encoder';
 
 // ============================================================================
 // Type Definitions

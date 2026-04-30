@@ -425,6 +425,14 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
     return this.createPBRMaterial(config);
   }
 
+  protected createEmissiveMaterial(color: number, intensity: number = 1.0): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: intensity,
+    });
+  }
+
   public getBoundingBox(params: LampParams): BBox {
     return new BBox(
       { x: -0.3, y: 0, z: -0.3 },

@@ -3,11 +3,11 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
 
-export interface CabinetParams extends BaseGeneratorConfig {
+export interface CabinetConfig extends BaseGeneratorConfig {
   width: number;
   height: number;
   depth: number;
@@ -20,10 +20,10 @@ export interface CabinetParams extends BaseGeneratorConfig {
   variationSeed?: number;
 }
 
-export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
+export class CabinetGenerator extends BaseObjectGenerator<CabinetConfig> {
   static readonly GENERATOR_ID = 'cabinet_generator';
   
-  getDefaultConfig(): CabinetParams {
+  getDefaultConfig(): CabinetConfig {
     return {
       width: 0.8,
       height: 0.9,
@@ -38,7 +38,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     };
   }
 
-  generate(params: Partial<CabinetParams> = {}): THREE.Object3D {
+  generate(params: Partial<CabinetConfig> = {}): THREE.Object3D {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const rng = new SeededRandom(finalParams.variationSeed || this.seed);
     const group = new THREE.Group();
@@ -71,7 +71,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     return group;
   }
 
-  private createCarcass(params: CabinetParams, rng: SeededRandom): THREE.Group {
+  private createCarcass(params: CabinetConfig, rng: SeededRandom): THREE.Group {
     const carcass = new THREE.Group();
     const material = new THREE.MeshStandardMaterial({
       color: this.getWoodColor(rng, params.style),
@@ -110,7 +110,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     return carcass;
   }
 
-  private createDrawers(params: CabinetParams, rng: SeededRandom): THREE.Group {
+  private createDrawers(params: CabinetConfig, rng: SeededRandom): THREE.Group {
     const drawerGroup = new THREE.Group();
     const drawerWidth = params.width - 0.06;
     const drawerHeight = (params.height - 0.1) / (params.drawerCount + 1);
@@ -175,7 +175,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     return drawerGroup;
   }
 
-  private createDoors(params: CabinetParams, rng: SeededRandom): THREE.Group {
+  private createDoors(params: CabinetConfig, rng: SeededRandom): THREE.Group {
     const doorGroup = new THREE.Group();
     const doorHeight = params.height - (params.drawerCount > 0 ? (params.drawerCount * ((params.height - 0.1) / (params.drawerCount + 1))) + 0.05 : 0.02);
     const doorWidth = (params.width - 0.04) / params.doorCount;
@@ -265,7 +265,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     return doorGroup;
   }
 
-  private createInteriorShelves(params: CabinetParams, rng: SeededRandom): THREE.Group {
+  private createInteriorShelves(params: CabinetConfig, rng: SeededRandom): THREE.Group {
     const shelfGroup = new THREE.Group();
     const material = new THREE.MeshStandardMaterial({
       color: this.getWoodColor(rng, params.style),
@@ -286,7 +286,7 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetParams> {
     return shelfGroup;
   }
 
-  private createCountertop(params: CabinetParams, rng: SeededRandom): THREE.Mesh {
+  private createCountertop(params: CabinetConfig, rng: SeededRandom): THREE.Mesh {
     if (params.cabinetType === 'wall') return null as any;
     
     const overhang = 0.03;

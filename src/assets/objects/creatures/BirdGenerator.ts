@@ -10,7 +10,7 @@ export interface BirdParameters extends CreatureParams {
   wingSpan: number;
   beakType: 'hooked' | 'conical' | 'probing' | 'filter';
   featherPattern: 'solid' | 'striped' | 'spotted' | 'iridescent';
-  flightStyle: 'soaring' | 'flapping' | 'hovering' | 'gliding';
+  flightStyle: 'soaring' | 'flapping' | 'hovering' | 'gliding' | 'silent' | 'swimming';
   tailShape: 'forked' | 'rounded' | 'square' | 'pointed';
   primaryColor: string;
   secondaryColor: string;
@@ -60,7 +60,7 @@ export class BirdGenerator extends CreatureBase {
   }
 
   generateHead(): Mesh {
-    return this.generateHead(this.getDefaultConfig());
+    return this.generateHeadMesh(this.getDefaultConfig());
   }
 
   generateLimbs(): Mesh[] {
@@ -155,7 +155,7 @@ export class BirdGenerator extends CreatureBase {
     return new Mesh(bodyGeometry, bodyMaterial);
   }
 
-  private generateHead(params: BirdParameters): Mesh {
+  private generateHeadMesh(params: BirdParameters): Mesh {
     const headGeometry = this.createSphereGeometry(params.size * 0.15);
     const headMaterial = new MeshStandardMaterial({ color: params.primaryColor });
     return new Mesh(headGeometry, headMaterial);

@@ -1,7 +1,7 @@
 /**
  * Noise utilities for terrain generation
  */
-import { noise3D, noise2D } from '../../core/util/math/noise';
+import { noise3D, noise2D } from '../core/util/math/noise';
 
 export { noise3D, noise2D };
 

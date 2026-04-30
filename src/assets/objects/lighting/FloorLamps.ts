@@ -52,8 +52,29 @@ export class FloorLamps extends BaseObjectGenerator<FloorLampParams> {
     };
   }
 
+  private getMaterial(materialType: string, color: string): THREE.Material {
+    switch (materialType) {
+      case 'metal':
+        return this.getMetalMaterial('steel');
+      case 'glass':
+      case 'crystal':
+        return new THREE.MeshPhysicalMaterial({
+          color: Number(color),
+          metalness: 0.0,
+          roughness: 0.0,
+          transmission: 0.9,
+        });
+      case 'wood':
+        return new THREE.MeshStandardMaterial({ color: Number(color), roughness: 0.8, metalness: 0 });
+      case 'fabric':
+        return new THREE.MeshStandardMaterial({ color: Number(color), roughness: 0.9, metalness: 0 });
+      default:
+        return new THREE.MeshStandardMaterial({ color: Number(color) });
+    }
+  }
+
   generate(params: Partial<FloorLampParams> = {}): THREE.Object3D {
-    const finalParams = { ...this.getDefaultParams(), ...params };
+    const finalParams = { ...this.getDefaultConfig(), ...params };
     const group = new THREE.Group();
     
     let lamp: THREE.Object3D;

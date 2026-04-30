@@ -6,10 +6,10 @@
  * Tests whether objects satisfy domain constraints.
  */
 
-import { NegatedRelation } from '../language/relations.js';
-import { Domain } from '../constraints/reasoning/domain.js';
-import { State, ObjectState, RelationState } from './state.js';
-import { satisfies } from '../tags/index.js';
+import { NegatedRelation } from '../language/relations';
+import { Domain } from '../constraints/reasoning/domain';
+import { State, ObjectState, RelationState } from './state';
+import { satisfies } from '../tags/index';
 
 /**
  * Check if a domain contains a specific object

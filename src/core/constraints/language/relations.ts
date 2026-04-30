@@ -3,9 +3,9 @@
  * Ported from infinigen/core/constraints/constraint_language/relations.py
  */
 
-import { Node, Variable, Domain, ObjectSetDomain } from './types.js';
-import { BoolExpression, ScalarExpression, BoolConstant } from './expression.js';
-import { ObjectSetExpression } from './set-reasoning.js';
+import { Node, Variable, Domain, ObjectSetDomain } from './types';
+import { BoolExpression, ScalarExpression, BoolConstant } from './expression';
+import { ObjectSetExpression } from './set-reasoning';
 
 /**
  * Base class for all relations (constraints)

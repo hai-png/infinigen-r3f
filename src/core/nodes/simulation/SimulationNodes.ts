@@ -490,40 +490,4 @@ export function createClothPinGroupNode(inputs?: ClothPinGroupInputs): ClothPinG
   return new ClothPinGroupNode(inputs);
 }
 
-// ============================================================================
-// Module Exports
-// ============================================================================
 
-export {
-  RigidBodyWorldNode,
-  RigidBodyConstraintsNode,
-  SoftBodySetupNode,
-  ParticleSystemNode,
-  ParticleCollisionNode,
-  FluidDomainNode,
-  FluidFlowNode,
-  ClothSetupNode,
-  ClothPinGroupNode,
-};
-
-export type {
-  SimulationNodeBase,
-  RigidBodyWorldInputs,
-  RigidBodyWorldOutputs,
-  RigidBodyConstraintsInputs,
-  RigidBodyConstraintsOutputs,
-  SoftBodySetupInputs,
-  SoftBodySetupOutputs,
-  ParticleSystemInputs,
-  ParticleSystemOutputs,
-  ParticleCollisionInputs,
-  ParticleCollisionOutputs,
-  FluidDomainInputs,
-  FluidDomainOutputs,
-  FluidFlowInputs,
-  FluidFlowOutputs,
-  ClothSetupInputs,
-  ClothSetupOutputs,
-  ClothPinGroupInputs,
-  ClothPinGroupOutputs,
-};

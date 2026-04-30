@@ -12,9 +12,9 @@
  */
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { ObjectState } from '../../constraints/solver/types';
-import type { AssetDescription } from '../../domain/types';
+import type { AssetDescription } from '../domain/types';
 
 export interface AssetFactoryOptions {
   usePhysics?: boolean;

@@ -105,7 +105,7 @@ export class ReptileGenerator extends CreatureBase {
     return new Mesh(geometry, material);
   }
 
-  private createShellGeometry() {
-    return this.createSphereGeometry(0.5);
+  protected createShellGeometry(params?: any): THREE.BoxGeometry {
+    return new THREE.BoxGeometry(1, 1, 1); 
   }
 }

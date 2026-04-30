@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry';
 
 // ============================================================================
 // Mesh Bevelling

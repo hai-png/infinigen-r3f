@@ -292,10 +292,11 @@ export class TwigGenerator {
     for (let i = 0; i < mesh.count; i++) {
       if (Math.random() < coverage) {
         const baseColor = new THREE.Color();
-        (colors as THREE.InstancedBufferAttribute).getColorAt(i, baseColor);
+        // Read color directly from the array buffer
+        baseColor.fromArray(colors.array, i * 3);
         
         baseColor.lerp(TwigGenerator.MOSS_COLOR, 0.3 + Math.random() * 0.4);
-        (colors as THREE.InstancedBufferAttribute).setColorAt(i, baseColor);
+        colors.setXYZ(i, baseColor.r, baseColor.g, baseColor.b);
       }
     }
     colors.needsUpdate = true;
@@ -311,10 +312,11 @@ export class TwigGenerator {
     for (let i = 0; i < mesh.count; i++) {
       if (Math.random() < coverage) {
         const baseColor = new THREE.Color();
-        (colors as THREE.InstancedBufferAttribute).getColorAt(i, baseColor);
+        // Read color directly from the array buffer
+        baseColor.fromArray(colors.array, i * 3);
         
         baseColor.lerp(TwigGenerator.LICHEN_COLOR, 0.2 + Math.random() * 0.3);
-        (colors as THREE.InstancedBufferAttribute).setColorAt(i, baseColor);
+        colors.setXYZ(i, baseColor.r, baseColor.g, baseColor.b);
       }
     }
     colors.needsUpdate = true;

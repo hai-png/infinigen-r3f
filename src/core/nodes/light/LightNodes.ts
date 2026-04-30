@@ -6,8 +6,8 @@
  */
 
 import { Color, Vector3 } from 'three';
-import { Node, NodeSocket } from '../../core/types';
-import { NodeTypes } from '../../core/node-types';
+import { Node, NodeSocket } from '../core/types';
+import { NodeTypes } from '../core/node-types';
 
 // ============================================================================
 // Light Source Nodes

@@ -237,25 +237,3 @@ export function createViewMatrixNode(inputs?: ViewMatrixInputs): ViewMatrixNode 
   return new ViewMatrixNode(inputs);
 }
 
-// ============================================================================
-// Module Exports
-// ============================================================================
-
-export {
-  CameraDataNode,
-  DepthOfFieldNode,
-  FocalLengthNode,
-  ViewMatrixNode,
-};
-
-export type {
-  CameraNodeBase,
-  CameraDataInputs,
-  CameraDataOutputs,
-  DepthOfFieldInputs,
-  DepthOfFieldOutputs,
-  FocalLengthInputs,
-  FocalLengthOutputs,
-  ViewMatrixInputs,
-  ViewMatrixOutputs,
-};

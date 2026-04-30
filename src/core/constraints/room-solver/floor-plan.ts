@@ -3,7 +3,7 @@
  * Ports: core/indoor/floor_plan.py
  */
 
-import { RoomGraph } from './base.js';
+import { RoomGraph } from './base';
 import { Vector2 } from 'three';
 
 export interface FloorPlanParams {

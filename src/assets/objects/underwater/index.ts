@@ -7,9 +7,15 @@
  * @module objects/underwater
  */
 
-export { CoralGenerator, CoralParams, CoralSpecies, CoralPreset } from './CoralGenerator';
-export { SeaweedGenerator, SeaweedType, SeaweedConfig } from './SeaweedGenerator';
-export { SeaGrassGenerator, SeaGrassType, SeaGrassConfig } from './SeaGrassGenerator';
-export { SeashellGenerator, SeashellType, SeashellConfig } from './SeashellGenerator';
-export { UrchinGenerator, UrchinType, UrchinConfig } from './UrchinGenerator';
-export { StarfishGenerator, StarfishType, StarfishConfig } from './StarfishGenerator';
+export { CoralGenerator } from './CoralGenerator';
+export type { CoralParams, CoralSpecies, CoralPreset } from './CoralGenerator';
+export { SeaweedGenerator } from './SeaweedGenerator';
+export type { SeaweedType, SeaweedConfig } from './SeaweedGenerator';
+export { SeaGrassGenerator } from './SeaGrassGenerator';
+export type { SeaGrassType, SeaGrassConfig } from './SeaGrassGenerator';
+export { SeashellGenerator } from './SeashellGenerator';
+export type { SeashellType, SeashellConfig } from './SeashellGenerator';
+export { UrchinGenerator } from './UrchinGenerator';
+export type { UrchinType, UrchinConfig } from './UrchinGenerator';
+export { StarfishGenerator } from './StarfishGenerator';
+export type { StarfishType, StarfishConfig } from './StarfishGenerator';

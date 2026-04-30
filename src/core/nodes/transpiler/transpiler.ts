@@ -13,7 +13,7 @@ import {
   NodeInstance,
   NodeLink,
   SocketType,
-} from '../core/types.js';
+} from '../core/types';
 
 export interface TranspilerOptions {
   outputFormat: 'typescript' | 'javascript' | 'shader-material' | 'three-nodes';
@@ -259,7 +259,7 @@ export class NodeTranspiler {
   private transpileToThreeNodes(tree: NodeTree): string {
     const lines: string[] = [];
     
-    lines.push('import { Nodes } from "three/examples/jsm/nodes/Nodes.js";');
+    lines.push('import { Nodes } from "three/examples/jsm/nodes/Nodes";');
     lines.push('import * as THREE from "three";');
     lines.push('');
     lines.push(`// Node-based Material: ${tree.name}`);

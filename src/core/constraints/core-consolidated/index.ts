@@ -26,14 +26,14 @@ export type {
   PoseDomain,
   BBoxDomain,
   BooleanDomain
-} from '../../language/types.js';
+} from '../language/types';
 
 export type {
   State,
   ObjectState,
   RelationState,
   BVHCacheEntry
-} from '../../constraints/evaluator/state.js';
+} from '../../constraints/evaluator/state';
 
 export type {
   Move,
@@ -45,7 +45,7 @@ export type {
   AdditionMove,
   PoseMoveConfig,
   SolverState
-} from '../../constraints/solver/moves.js';
+} from '../../constraints/solver/moves';
 
 // ============================================================================
 // Expression System
@@ -70,7 +70,7 @@ export {
   BoolIfElse,
   type ScalarOperator,
   type BoolOperator
-} from '../../language/expression.js';
+} from '../language/expression';
 
 // ============================================================================
 // Constraint Relations
@@ -102,7 +102,7 @@ export {
   Stability,
   Containment,
   Proximity
-} from '../../language/relations.js';
+} from '../language/relations';
 
 // ============================================================================
 // Set Reasoning & Quantifiers
@@ -125,7 +125,7 @@ export {
   MaxOver,
   MinOver,
   CountExpression
-} from '../../language/set-reasoning.js';
+} from '../language/set-reasoning';
 
 // ============================================================================
 // Geometry Predicates
@@ -152,7 +152,7 @@ export {
   OrientationAlignment,
   Compactness,
   AspectRatio
-} from '../../language/geometry.js';
+} from '../language/geometry';
 
 // ============================================================================
 // Room Constraints
@@ -175,7 +175,7 @@ export {
   type RoomFunction,
   type PrivacyLevel,
   type RoomAdjacency
-} from '../../language/rooms.js';
+} from '../language/rooms';
 
 // ============================================================================
 // Problem Definition & Constants
@@ -200,7 +200,7 @@ export {
   NamedConstraint,
   NamedScoreTerm,
   buildProblem
-} from '../../language/constants.js';
+} from '../language/constants';
 
 // ============================================================================
 // Constraint Evaluation
@@ -212,30 +212,30 @@ export {
   violCount,
   relevant,
   type EvalResult
-} from '../../constraints/evaluator/evaluate.js';
+} from '../../constraints/evaluator/evaluate';
 
 export {
   domainContains,
   objKeysInDom
-} from '../../constraints/evaluator/domain-contains.js';
+} from '../../constraints/evaluator/domain-contains';
 
 export {
   memoKey,
   evictMemoForObj,
   evictMemoForMove,
   resetBVHCache
-} from '../../constraints/evaluator/eval-memo.js';
+} from '../../constraints/evaluator/eval-memo';
 
 export {
   poseAffectsScore
-} from '../../constraints/evaluator/state.js';
+} from '../../constraints/evaluator/state';
 
 export {
   nodeImpls,
   registerNodeImpl,
   registerGeometryNodeImpls,
   defaultHandler
-} from '../../constraints/evaluator/node-impl/index.js';
+} from '../../constraints/evaluator/node-impl/index';
 
 export {
   evaluateDistance,
@@ -249,7 +249,7 @@ export {
   evaluateVisible,
   evaluateHidden,
   geometryNodeImpls
-} from '../../constraints/evaluator/node-impl/trimesh-geometry.js';
+} from '../../constraints/evaluator/node-impl/trimesh-geometry';
 
 // ============================================================================
 // Domain Reasoning & Analysis
@@ -262,13 +262,13 @@ export {
   getFreeVariables,
   analyzeConstraintComplexity,
   type ConstraintComplexity
-} from '../../constraints/reasoning/constraint-domain.js';
+} from '../../constraints/reasoning/constraint-domain';
 
 export {
   isConstant,
   evaluateConstant,
   simplifyConstant
-} from '../../constraints/reasoning/constraint-constancy.js';
+} from '../../constraints/reasoning/constraint-constancy';
 
 export {
   Bound,
@@ -282,7 +282,7 @@ export {
   intersectBounds,
   unionBounds,
   satisfiesBound
-} from '../../constraints/reasoning/constraint-bounding.js';
+} from '../../constraints/reasoning/constraint-bounding';
 
 export {
   substituteVariables,
@@ -294,7 +294,7 @@ export {
   normalizeConstraint,
   type SubstitutionResult,
   type VariableBinding
-} from '../../constraints/reasoning/domain-substitute.js';
+} from '../../constraints/reasoning/domain-substitute';
 
 // ============================================================================
 // Constraint Solvers
@@ -305,19 +305,19 @@ export {
   GreedySolver,
   type SimulatedAnnealingConfig,
   type GreedyConfig
-} from '../../constraints/solver/moves.js';
+} from '../../constraints/solver/moves';
 
 export {
   FullSolverLoop,
   MCMCSolver
-} from '../../constraints/solver/full-solver-loop.js';
+} from '../../constraints/solver/full-solver-loop';
 
 export {
   ContinuousProposalGenerator,
   DiscreteProposalGenerator,
   HybridProposalGenerator,
   type ProposalStrategyOptions
-} from '../../constraints/solver/proposals/ProposalStrategies.js';
+} from '../../constraints/solver/proposals/ProposalStrategies';
 
 // ============================================================================
 // Room Layout Generation
@@ -327,24 +327,24 @@ export {
   RoomGraph,
   RoomNode,
   RoomEdge
-} from '../../constraints/room-solver/base.js';
+} from '../../constraints/room-solver/base';
 
 export {
   FloorPlanGenerator,
   FloorPlanParams,
   RoomContour
-} from '../../constraints/room-solver/floor-plan.js';
+} from '../../constraints/room-solver/floor-plan';
 
 export {
   ContourOperations,
   type Contour
-} from '../../constraints/room-solver/contour.js';
+} from '../../constraints/room-solver/contour';
 
 export {
   SegmentDivider,
   type Segment,
   type RoomSegment
-} from '../../constraints/room-solver/segment.js';
+} from '../../constraints/room-solver/segment';
 
 // ============================================================================
 // Utility Functions
@@ -363,13 +363,13 @@ export {
   estimateComplexity,
   constraintToString,
   expressionToString
-} from '../../language/util.js';
+} from '../language/util';
 
 export {
   constraintBounded,
   constraintUnbounded,
   boundAnalysis
-} from '../../constraints/reasoning/constraint-bounding.js';
+} from '../../constraints/reasoning/constraint-bounding';
 
 // ============================================================================
 // Result Types
@@ -396,7 +396,7 @@ export {
   formatViolationReport,
   mergeEvaluationResults,
   compareSolutions
-} from '../../language/result.js';
+} from '../language/result';
 
 // ============================================================================
 // Legacy DSL (for backward compatibility)
@@ -411,7 +411,7 @@ export {
   type ASTNode,
   type Program,
   type ConstraintDeclaration
-} from '../dsl/ConstraintDSL.js';
+} from '../dsl/ConstraintDSL';
 
 // ============================================================================
 // React Integration Hook
@@ -421,4 +421,4 @@ export {
   useInfinigenSolver,
   type UseInfinigenSolverParams,
   type UseInfinigenSolverResult
-} from '../../integration/use-solver.js';
+} from '../../../integration/use-solver';

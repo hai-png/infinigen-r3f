@@ -1,13 +1,13 @@
-export { GrassScatterSystem } from './GrassScatterSystem.js';
-export type { GrassScatterConfig } from './GrassScatterSystem.js';
+export { GrassScatterSystem } from './GrassScatterSystem';
+export type { GrassScatterConfig } from './GrassScatterSystem';
 
-export { InstanceScatterSystem } from './InstanceScatterSystem.js';
+export { InstanceScatterSystem } from './InstanceScatterSystem';
 export type {
   ScatterConfig,
   ScatterMode,
   BiomeRule,
   ScatterResult
-} from './InstanceScatterSystem.js';
+} from './InstanceScatterSystem';
 
-export { RockScatterSystem } from './RockScatterSystem.js';
-export type { RockScatterConfig, RockScatterStats } from './RockScatterSystem.js';
+export { RockScatterSystem } from './RockScatterSystem';
+export type { RockScatterConfig, RockScatterStats } from './RockScatterSystem';

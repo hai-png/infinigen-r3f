@@ -7,14 +7,14 @@
  * Supports loss computation, violation counting, and memoization.
  */
 
-import { Node, Problem, ForAll, SumOver, MeanOver, Item, SceneConstant, DebugPrint } from '../language/types.js';
-import { BoolOperatorExpression, InRange, Constant } from '../language/expression.js';
-import { Domain } from '../constraints/reasoning/domain.js';
-import { constraintDomain, domainFinalized } from '../constraints/reasoning/constraint-domain.js';
-import { State, ObjectState } from './state.js';
-import { memoKey, evictMemoForMove, resetBVHCache } from './eval-memo.js';
-import { nodeImpls } from './node-impl/index.js';
-import * as cl from '../language/index.js';
+import { Node, Problem, ForAll, SumOver, MeanOver, Item, SceneConstant, DebugPrint } from '../language/types';
+import { BoolOperatorExpression, InRange, Constant } from '../language/expression';
+import { Domain } from '../constraints/reasoning/domain';
+import { constraintDomain, domainFinalized } from '../reasoning/constraint-domain';
+import { State, ObjectState } from './state';
+import { memoKey, evictMemoForMove, resetBVHCache } from './eval-memo';
+import { nodeImpls } from './node-impl/index';
+import * as cl from '../language/index';
 
 // Special case nodes that require custom evaluation logic
 const SPECIAL_CASE_NODES = new Set([
