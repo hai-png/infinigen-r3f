@@ -139,7 +139,7 @@ export class OutdoorLightGenerator {
     const lights: THREE.Light[] = [];
 
     const fixtureHeight = params.height - 0.3 - (index * 0.5);
-    
+
     // Create arm/bracket
     const arm = this.createArm(params);
     arm.position.y = fixtureHeight;
@@ -150,17 +150,11 @@ export class OutdoorLightGenerator {
     housing.position.copy(arm.position).add(this.getArmEndPosition(params));
     group.add(housing);
 
-    // Create actual light source group (bulb + light)
-    const lightContainer = this.createLightSource(params);
-    lightContainer.position.copy(housing.position).add(new THREE.Vector3(0, -0.2, 0));
-    group.add(lightContainer);
-    
-    // Find the actual light object within the group to add to results
-    lightContainer.traverse((child) => {
-      if (child instanceof THREE.Light) {
-        lights.push(child);
-      }
-    });
+    // Create actual light source
+    const light = this.createLightSource(params);
+    light.position.copy(housing.position).add(new THREE.Vector3(0, -0.2, 0));
+    group.add(light);
+    lights.push(light);
 
     // Add lens/glass cover
     const lens = this.createLens(params);
@@ -238,7 +232,7 @@ export class OutdoorLightGenerator {
 
     // Main spotlight/point light
     let light: THREE.Light;
-    
+
     if (params.type === 'flood' || params.coneAngle) {
       const coneAngle = params.coneAngle || Math.PI / 6;
       light = new THREE.SpotLight(
@@ -397,7 +391,7 @@ export class OutdoorLightGenerator {
 
     for (let i = 0; i < count; i++) {
       const lightParams = { ...params };
-      
+
       if (alternating && i % 2 === 1) {
         // Alternate sides for vintage style
         lightParams.style = 'vintage';
@@ -405,7 +399,7 @@ export class OutdoorLightGenerator {
 
       const light = this.generate(lightParams);
       light.mesh.position.x = i * spacing;
-      
+
       // Merge lights into single group
       group.add(light.mesh);
     }

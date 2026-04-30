@@ -1,19 +1,18 @@
 import * as THREE from 'three';
 
 export interface RegistrableObject {
-  new (...args: any[]): THREE.Object3D;
+  new(...args: any[]): THREE.Object3D;
   type: string;
 }
 
 export class ObjectRegistry {
   private static registry: Map<string, RegistrableObject> = new Map();
 
-  static register(id: string, generatorClass: any, metadata: any) {
-    if (this.registry.has(id)) {
-      console.warn(`Object type ${id} is already registered`);
-      return;
+  static register(obj: RegistrableObject) {
+    if (this.registry.has(obj.type)) {
+      throw new Error(`Object type ${obj.type} is already registered`);
     }
-    this.registry.set(id, { generatorClass, metadata } as any);
+    this.registry.set(obj.type, obj);
   }
 
   static get(type: string): RegistrableObject | undefined {
