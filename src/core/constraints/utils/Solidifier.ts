@@ -14,8 +14,8 @@
  */
 
 import * as THREE from 'three';
-import { Room, RoomType, Door, Window } from './RoomTypes';
-import { Direction } from './FloorPlanMoves';
+import { Room, RoomType, Door, Window } from '../room/RoomTypes';
+import { Direction } from '../room/FloorPlanMoves';
 
 /**
  * Configuration for solidifier output

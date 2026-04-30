@@ -8,7 +8,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, TransformControls, GridHelper, AxesHelper } from '@react-three/drei';
 import * as THREE from 'three';
 
-interface SceneObject {
+export interface SceneObject {
   id: string;
   type: 'mesh' | 'light' | 'camera';
   name: string;

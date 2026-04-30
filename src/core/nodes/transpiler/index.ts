@@ -4,9 +4,3 @@
  */
 
 export * from './transpiler';
-export type {
-  TranspilerOptions,
-  TranspiledResult,
-  ShaderModule,
-  VariableBinding,
-} from './transpiler';

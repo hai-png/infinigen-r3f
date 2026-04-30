@@ -2,6 +2,9 @@
  * Base Node class for constraint language AST
  */
 export abstract class Node {
+  /** Node type discriminator for pattern matching */
+  abstract readonly type: string;
+
   /**
    * Get all children of this node as a Map of field names to child nodes
    */
@@ -46,6 +49,7 @@ export abstract class Node {
  * Represents a variable in the constraint language
  */
 export class Variable extends Node {
+  readonly type = 'Variable';
   constructor(public readonly name: string) {
     super();
   }
@@ -130,7 +134,9 @@ export class ObjectSetDomain extends Domain {
   constructor(
     public readonly includes?: Set<string>,
     public readonly excludes?: Set<string>,
-    public readonly tagFilter?: any // TagExpression
+    public readonly tagFilter?: any, // TagExpression
+    /** Alias for includes - objects in this domain */
+    public readonly objects?: Set<string>
   ) {
     super();
   }

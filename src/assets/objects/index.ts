@@ -2,6 +2,9 @@
  * Asset Objects Index
  *
  * Central export point for all procedural asset generators.
+ * 
+ * Note: ShelfConfig and ShelfStyle are defined in both ./storage and ./decor.
+ * We keep ./storage as the primary source and exclude them from ./decor.
  */
 
 // Furniture & Seating
@@ -13,8 +16,52 @@ export * from './storage';
 // Tableware (Phase 2A)
 export * from './tableware';
 
-// Decor Items (Phase 2B)
-export * from './decor';
+// Decor Items (Phase 2B) - exclude ShelfConfig and ShelfStyle (already from ./storage)
+export {
+  WallDecor,
+  type WallDecorParams,
+  WallShelfGenerator,
+  // ShelfStyle and ShelfConfig excluded — already exported from ./storage
+  type ShelfMaterial,
+  type BracketStyle,
+  BookGenerator,
+  type BookConfig,
+  CandleGenerator,
+  type CandleConfig,
+  VaseGenerator,
+  type VaseConfig,
+  ClockGenerator,
+  type ClockConfig,
+  type ClockStyle,
+  type ClockMaterialType,
+  type ClockFaceStyle,
+  CurtainGenerator,
+  type CurtainConfig,
+  type CurtainStyle,
+  type CurtainMaterialType,
+  type CurtainPattern,
+  MirrorGenerator,
+  type MirrorConfig,
+  type MirrorStyle,
+  type MirrorFrameStyle,
+  type MirrorShape,
+  PictureFrameGenerator,
+  type PictureFrameConfig,
+  type FrameStyle,
+  type FrameMaterial,
+  PlantPotGenerator,
+  type PlantPotConfig,
+  type PotStyle,
+  type PotShape,
+  RugGenerator,
+  type RugConfig,
+  type RugStyle,
+  type RugShape,
+  TrinketGenerator,
+  type TrinketConfig,
+  type TrinketType,
+  type TrinketMaterial,
+} from './decor';
 
 // Architectural Elements (Phase 2C)
 export * from './architectural';

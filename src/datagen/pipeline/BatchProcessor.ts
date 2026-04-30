@@ -556,4 +556,17 @@ ${batch.completedAt ? `Completed: ${batch.completedAt.toISOString()}` : ''}
   }
 }
 
+/** Batch configuration type alias */
+export type BatchConfig = BatchProcessorOptions;
+
+/** Batch result type */
+export interface BatchResult {
+  batchId: string;
+  status: BatchStatus;
+  totalJobs: number;
+  completedJobs: number;
+  failedJobs: number;
+  duration: number;
+}
+
 export default BatchProcessor;

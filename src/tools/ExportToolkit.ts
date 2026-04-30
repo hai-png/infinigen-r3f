@@ -307,6 +307,29 @@ export class ExportToolkit {
   getProgress(): number { return this.progress; }
 }
 
+/** Transform settings for export */
+export interface ExportTransform {
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
+  applyModifiers?: boolean;
+}
+
+/** LOD settings for export */
+export interface LODSettings {
+  enabled: boolean;
+  levels: number;
+  distanceFactor: number;
+}
+
+/** Texture export settings */
+export interface TextureExportSettings {
+  format: 'png' | 'jpg' | 'webp' | 'basis';
+  quality: number;
+  maxSize: number;
+  generateMipmaps: boolean;
+}
+
 export function createExportToolkit(onProgress?: (progress: number, message: string) => void): ExportToolkit {
   return new ExportToolkit(onProgress);
 }

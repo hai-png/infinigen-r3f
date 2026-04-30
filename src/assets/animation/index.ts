@@ -15,7 +15,7 @@ export type {
   Updatable 
 } from './core/AnimationEngine';
 
-export { Timeline, AnimationTrack, Easings, getEasing, lerp } from './core/Timeline';
+export { Timeline, AnimationTrack, Easings, getEasing, lerp as animationLerp } from './core/Timeline';
 export type { 
   EasingType, 
   EasingFunction, 

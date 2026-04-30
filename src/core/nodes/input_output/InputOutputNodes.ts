@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { NodeSocket, SocketType, NodeDomain } from '../core/types';
+// NodeDefinition is re-exported from node-base for compatibility
 import { NodeDefinition } from '../core/node-base';
 import { Geometry } from '../core/geometry-types';
 import { SceneObject } from '../../scene/object';
@@ -584,21 +585,4 @@ export const InputOutputNodes = {
   SelfObject: SelfObjectNode,
   JoinGeometry: JoinGeometryNode,
   GroupOutput: GroupOutputNode
-};
-
-export type {
-  ValueNodeData,
-  IntegerNodeData,
-  FloatNodeData,
-  VectorNodeData,
-  RotationNodeData,
-  ScaleNodeData,
-  BooleanNodeData,
-  ColorNodeData,
-  StringNodeData,
-  ObjectInfoNodeData,
-  CollectionInfoNodeData,
-  SelfObjectNodeData,
-  JoinGeometryNodeData,
-  GroupOutputNodeData
 };

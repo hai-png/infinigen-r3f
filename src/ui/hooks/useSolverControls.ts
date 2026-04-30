@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SolverState } from '../../constraints/solver/moves';
+import { SolverState } from '../../core/constraints/solver/moves';
 
 interface UseSolverControlsOptions {
   initialState?: Partial<SolverState>;

@@ -354,7 +354,7 @@ export class MixRGBNode implements ColorNodeBase {
     return this.outputs;
   }
 
-  private mix(c1: Color, c2: Color, f: number): Color {
+  private mix(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (c2.r - c1.r),
       g: c1.g + f * (c2.g - c1.g),
@@ -362,7 +362,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private add(c1: Color, c2: Color, f: number): Color {
+  private add(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * c2.r,
       g: c1.g + f * c2.g,
@@ -370,7 +370,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private multiply(c1: Color, c2: Color, f: number): Color {
+  private multiply(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (c1.r * c2.r - c1.r),
       g: c1.g + f * (c1.g * c2.g - c1.g),
@@ -378,7 +378,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private subtract(c1: Color, c2: Color, f: number): Color {
+  private subtract(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r - f * c2.r,
       g: c1.g - f * c2.g,
@@ -386,7 +386,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private screen(c1: Color, c2: Color, f: number): Color {
+  private screen(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (1 - (1 - c1.r) * (1 - c2.r) - c1.r),
       g: c1.g + f * (1 - (1 - c1.g) * (1 - c2.g) - c1.g),
@@ -394,7 +394,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private divide(c1: Color, c2: Color, f: number): Color {
+  private divide(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (c2.r !== 0 ? c1.r / c2.r - c1.r : 0),
       g: c1.g + f * (c2.g !== 0 ? c1.g / c2.g - c1.g : 0),
@@ -402,7 +402,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private difference(c1: Color, c2: Color, f: number): Color {
+  private difference(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (Math.abs(c1.r - c2.r) - c1.r),
       g: c1.g + f * (Math.abs(c1.g - c2.g) - c1.g),
@@ -410,7 +410,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private darken(c1: Color, c2: Color, f: number): Color {
+  private darken(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (Math.min(c1.r, c2.r) - c1.r),
       g: c1.g + f * (Math.min(c1.g, c2.g) - c1.g),
@@ -418,7 +418,7 @@ export class MixRGBNode implements ColorNodeBase {
     };
   }
 
-  private lighten(c1: Color, c2: Color, f: number): Color {
+  private lighten(c1: ColorLike, c2: ColorLike, f: number): ColorLike {
     return {
       r: c1.r + f * (Math.max(c1.r, c2.r) - c1.r),
       g: c1.g + f * (Math.max(c1.g, c2.g) - c1.g),
@@ -593,7 +593,7 @@ export class CombineHSVNode implements ColorNodeBase {
     return this.outputs;
   }
 
-  private hsvToRgb(h: number, s: number, v: number): Color {
+  private hsvToRgb(h: number, s: number, v: number): ColorLike {
     const i = Math.floor(h * 6);
     const f = h * 6 - i;
     const p = v * (1 - s);
@@ -787,7 +787,7 @@ export class HueSaturationValueNode implements ColorNodeBase {
     return [h, s, v];
   }
 
-  private hsvToRgb(h: number, s: number, v: number): Color {
+  private hsvToRgb(h: number, s: number, v: number): ColorLike {
     const i = Math.floor(h * 6);
     const f = h * 6 - i;
     const p = v * (1 - s);
@@ -828,7 +828,7 @@ export class BlackBodyNode implements ColorNodeBase {
     return this.outputs;
   }
 
-  private temperatureToRGB(temp: number): Color {
+  private temperatureToRGB(temp: number): ColorLike {
     const t = temp / 100;
     
     let r: number, g: number, b: number;

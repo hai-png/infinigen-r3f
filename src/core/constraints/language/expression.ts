@@ -189,6 +189,7 @@ export abstract class BoolExpression extends Expression {
  * Constant scalar value
  */
 export class ScalarConstant extends ScalarExpression {
+  readonly type = 'ScalarConstant';
   constructor(public readonly value: number) {
     super();
   }
@@ -214,6 +215,7 @@ export class ScalarConstant extends ScalarExpression {
  * Constant boolean value
  */
 export class BoolConstant extends BoolExpression {
+  readonly type = 'BoolConstant';
   constructor(public readonly value: boolean) {
     super();
   }
@@ -239,6 +241,7 @@ export class BoolConstant extends BoolExpression {
  * Variable reference as scalar expression
  */
 export class ScalarVariable extends ScalarExpression {
+  readonly type = 'ScalarVariable';
   constructor(public readonly variable: Variable) {
     super();
   }
@@ -268,6 +271,7 @@ export class ScalarVariable extends ScalarExpression {
  * Variable reference as boolean expression
  */
 export class BoolVariable extends BoolExpression {
+  readonly type = 'BoolVariable';
   constructor(public readonly variable: Variable) {
     super();
   }
@@ -307,6 +311,7 @@ export type BoolOperator = 'and' | 'or' | 'xor' | 'implies' | 'eq' | 'neq' | 'lt
  * Binary scalar operator expression
  */
 export class ScalarOperatorExpression extends ScalarExpression {
+  readonly type = 'ScalarOperatorExpression';
   constructor(
     public readonly left: ScalarExpression,
     public readonly operator: ScalarOperator,
@@ -357,6 +362,7 @@ export class ScalarOperatorExpression extends ScalarExpression {
  * Binary boolean operator expression
  */
 export class BoolOperatorExpression extends BoolExpression {
+  readonly type = 'BoolOperatorExpression';
   constructor(
     public readonly left: Expression,
     public readonly operator: BoolOperator,
@@ -378,7 +384,7 @@ export class BoolOperatorExpression extends BoolExpression {
 
     if (!this.right) {
       // Unary operators
-      if (this.operator === 'not') {
+      if ((this.operator as string) === 'not') {
         return !leftVal;
       }
       throw new Error(`Binary operator ${this.operator} requires right operand`);
@@ -403,9 +409,9 @@ export class BoolOperatorExpression extends BoolExpression {
 
   clone(): BoolOperatorExpression {
     return new BoolOperatorExpression(
-      this.left.clone(),
+      this.left.clone() as Expression,
       this.operator,
-      this.right?.clone()
+      this.right?.clone() as Expression | undefined
     );
   }
 
@@ -425,6 +431,7 @@ export class BoolOperatorExpression extends BoolExpression {
  * Scalar negation expression
  */
 export class ScalarNegateExpression extends ScalarExpression {
+  readonly type = 'ScalarNegateExpression';
   constructor(public readonly operand: ScalarExpression) {
     super();
   }
@@ -450,6 +457,7 @@ export class ScalarNegateExpression extends ScalarExpression {
  * Absolute value expression
  */
 export class ScalarAbsExpression extends ScalarExpression {
+  readonly type = 'ScalarAbsExpression';
   constructor(public readonly operand: ScalarExpression) {
     super();
   }
@@ -475,6 +483,7 @@ export class ScalarAbsExpression extends ScalarExpression {
  * Minimum of two scalars
  */
 export class ScalarMinExpression extends ScalarExpression {
+  readonly type = 'ScalarMinExpression';
   constructor(
     public readonly left: ScalarExpression,
     public readonly right: ScalarExpression
@@ -509,6 +518,7 @@ export class ScalarMinExpression extends ScalarExpression {
  * Maximum of two scalars
  */
 export class ScalarMaxExpression extends ScalarExpression {
+  readonly type = 'ScalarMaxExpression';
   constructor(
     public readonly left: ScalarExpression,
     public readonly right: ScalarExpression
@@ -543,6 +553,7 @@ export class ScalarMaxExpression extends ScalarExpression {
  * Boolean NOT expression
  */
 export class BoolNotExpression extends BoolExpression {
+  readonly type = 'BoolNotExpression';
   constructor(public readonly operand: BoolExpression) {
     super();
   }
@@ -568,6 +579,7 @@ export class BoolNotExpression extends BoolExpression {
  * If-then-else expression for scalars
  */
 export class ScalarIfElse extends ScalarExpression {
+  readonly type = 'ScalarIfElse';
   constructor(
     public readonly condition: BoolExpression,
     public readonly thenExpr: ScalarExpression,
@@ -577,10 +589,10 @@ export class ScalarIfElse extends ScalarExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['condition', this.condition],
-      ['then', this.thenExpr],
-      ['else', this.elseExpr]
+    return new Map<string, Node>([
+      ['condition', this.condition as Node],
+      ['then', this.thenExpr as Node],
+      ['else', this.elseExpr as Node]
     ]);
   }
 
@@ -607,6 +619,7 @@ export class ScalarIfElse extends ScalarExpression {
  * If-then-else expression for booleans
  */
 export class BoolIfElse extends BoolExpression {
+  readonly type = 'BoolIfElse';
   constructor(
     public readonly condition: BoolExpression,
     public readonly thenExpr: BoolExpression,

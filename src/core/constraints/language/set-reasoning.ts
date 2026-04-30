@@ -65,6 +65,7 @@ export abstract class ObjectSetExpression extends Node {
  * Constant set of object IDs
  */
 export class ObjectSetConstant extends ObjectSetExpression {
+  readonly type = 'ObjectSetConstant';
   constructor(public readonly objectIds: Set<string>) {
     super();
   }
@@ -98,6 +99,7 @@ export class ObjectSetConstant extends ObjectSetExpression {
  * Variable reference as object set
  */
 export class ObjectSetVariable extends ObjectSetExpression {
+  readonly type = 'ObjectSetVariable';
   constructor(public readonly variable: Variable) {
     super();
   }
@@ -135,6 +137,7 @@ export class ObjectSetVariable extends ObjectSetExpression {
  * Union of two object sets
  */
 export class UnionObjects extends ObjectSetExpression {
+  readonly type = 'UnionObjects';
   constructor(
     public readonly left: ObjectSetExpression,
     public readonly right: ObjectSetExpression
@@ -182,6 +185,7 @@ export class UnionObjects extends ObjectSetExpression {
  * Intersection of two object sets
  */
 export class IntersectionObjects extends ObjectSetExpression {
+  readonly type = 'IntersectionObjects';
   constructor(
     public readonly left: ObjectSetExpression,
     public readonly right: ObjectSetExpression
@@ -235,6 +239,7 @@ export class IntersectionObjects extends ObjectSetExpression {
  * Difference of two object sets (left - right)
  */
 export class DifferenceObjects extends ObjectSetExpression {
+  readonly type = 'DifferenceObjects';
   constructor(
     public readonly left: ObjectSetExpression,
     public readonly right: ObjectSetExpression
@@ -294,6 +299,7 @@ export abstract class ObjectCondition extends Node {
  * Filter objects by condition
  */
 export class FilterObjects extends ObjectSetExpression {
+  readonly type = 'FilterObjects';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly condition: ObjectCondition
@@ -302,9 +308,9 @@ export class FilterObjects extends ObjectSetExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['condition', this.condition]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['condition', this.condition as Node]
     ]);
   }
 
@@ -347,6 +353,7 @@ export class FilterObjects extends ObjectSetExpression {
  * Tag-based object condition
  */
 export class TagCondition extends ObjectCondition {
+  readonly type = 'TagCondition';
   constructor(
     public readonly requiredTags: Set<string>,
     public readonly excludedTags?: Set<string>
@@ -383,6 +390,7 @@ export class TagCondition extends ObjectCondition {
  * ForAll quantifier: ∀x ∈ objects. predicate(x)
  */
 export class ForAll extends BoolExpression {
+  readonly type = 'ForAll';
   constructor(
     public readonly variable: Variable,
     public readonly objects: ObjectSetExpression,
@@ -392,9 +400,9 @@ export class ForAll extends BoolExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['predicate', this.predicate]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['predicate', this.predicate as Node]
     ]);
   }
 
@@ -427,6 +435,7 @@ export class ForAll extends BoolExpression {
  * Exists quantifier: ∃x ∈ objects. predicate(x)
  */
 export class Exists extends BoolExpression {
+  readonly type = 'Exists';
   constructor(
     public readonly variable: Variable,
     public readonly objects: ObjectSetExpression,
@@ -436,9 +445,9 @@ export class Exists extends BoolExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['predicate', this.predicate]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['predicate', this.predicate as Node]
     ]);
   }
 
@@ -471,6 +480,7 @@ export class Exists extends BoolExpression {
  * SumOver aggregator: Σx ∈ objects. scalar_expr(x)
  */
 export class SumOver extends ScalarExpression {
+  readonly type = 'SumOver';
   constructor(
     public readonly variable: Variable,
     public readonly objects: ObjectSetExpression,
@@ -480,9 +490,9 @@ export class SumOver extends ScalarExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['expression', this.expression]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['expression', this.expression as Node]
     ]);
   }
 
@@ -514,6 +524,7 @@ export class SumOver extends ScalarExpression {
  * MeanOver aggregator: mean of scalar_expr over objects
  */
 export class MeanOver extends ScalarExpression {
+  readonly type = 'MeanOver';
   constructor(
     public readonly variable: Variable,
     public readonly objects: ObjectSetExpression,
@@ -523,9 +534,9 @@ export class MeanOver extends ScalarExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['expression', this.expression]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['expression', this.expression as Node]
     ]);
   }
 
@@ -561,6 +572,7 @@ export class MeanOver extends ScalarExpression {
  * MaxOver aggregator: max of scalar_expr over objects
  */
 export class MaxOver extends ScalarExpression {
+  readonly type = 'MaxOver';
   constructor(
     public readonly variable: Variable,
     public readonly objects: ObjectSetExpression,
@@ -570,9 +582,9 @@ export class MaxOver extends ScalarExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['expression', this.expression]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['expression', this.expression as Node]
     ]);
   }
 
@@ -611,6 +623,7 @@ export class MaxOver extends ScalarExpression {
  * MinOver aggregator: min of scalar_expr over objects
  */
 export class MinOver extends ScalarExpression {
+  readonly type = 'MinOver';
   constructor(
     public readonly variable: Variable,
     public readonly objects: ObjectSetExpression,
@@ -620,9 +633,9 @@ export class MinOver extends ScalarExpression {
   }
 
   children(): Map<string, Node> {
-    return new Map([
-      ['objects', this.objects],
-      ['expression', this.expression]
+    return new Map<string, Node>([
+      ['objects', this.objects as Node],
+      ['expression', this.expression as Node]
     ]);
   }
 
@@ -661,6 +674,7 @@ export class MinOver extends ScalarExpression {
  * Count expression: |objects|
  */
 export class CountExpression extends ScalarExpression {
+  readonly type = 'CountExpression';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }

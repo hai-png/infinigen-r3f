@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SolverDebuggerConfig } from '../types';
-import { SolverState, Move } from '../../constraints/solver/moves';
+import { SolverState, Move } from '../../core/constraints/solver/moves';
 
-interface SolverDebuggerProps {
+export interface SolverDebuggerProps {
   solverState?: SolverState;
   config?: Partial<SolverDebuggerConfig>;
   onRestart?: () => void;

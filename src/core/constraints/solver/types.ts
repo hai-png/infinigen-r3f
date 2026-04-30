@@ -4,6 +4,7 @@
  */
 
 import type { ObjectState } from '../evaluator/state';
+export type { ObjectState };
 import type { Relation } from '../language/relations';
 
 /**

@@ -14,6 +14,7 @@ export interface NodeDefinition {
   inputs: SocketDefinition[];
   outputs: SocketDefinition[];
   properties?: Record<string, any>;
+  defaultData?: any;
 }
 
 export interface NodeInstance {
@@ -48,6 +49,7 @@ export interface NodeGroup {
 }
 
 export class NodeWrangler {
+
   private nodeGroups: Map<string, NodeGroup>;
   private activeGroup: string;
   private nodeCounter: number;
@@ -398,6 +400,136 @@ export class NodeWrangler {
   }
 
   /**
+   * Add a node to the graph - convenience method matching Python API
+   * Creates a node instance and adds it to the active group
+   */
+  addNode(nodeType: any, params?: Record<string, any>): NodeInstance {
+    const properties = params || {};
+    const node = this.newNode(nodeType, undefined, undefined, properties);
+    
+    // Apply params to node properties
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        node.properties[key] = value;
+      }
+    }
+    
+    return node;
+  }
+
+  /**
+   * Link two node sockets together - convenience method matching Python API
+   * Connects an output socket of one node to an input socket of another
+   */
+  link(
+    fromNode: any,
+    fromSocket: number | string,
+    toNode: any,
+    toSocket: number | string
+  ): NodeLink {
+    const fromNodeId = typeof fromNode === 'string' ? fromNode : fromNode.id;
+    const toNodeId = typeof toNode === 'string' ? toNode : toNode.id;
+
+    const group = this.getActiveGroup();
+    const fromNodeInst = group.nodes.get(fromNodeId);
+    const toNodeInst = group.nodes.get(toNodeId);
+
+    if (!fromNodeInst) {
+      throw new Error(`Source node "${fromNodeId}" not found`);
+    }
+    if (!toNodeInst) {
+      throw new Error(`Target node "${toNodeId}" not found`);
+    }
+
+    // Resolve socket by index or name
+    const fromSocketName = this.resolveSocketName(fromNodeInst.outputs, fromSocket, 'output');
+    const toSocketName = this.resolveSocketName(toNodeInst.inputs, toSocket, 'input');
+
+    return this.connect(fromNodeId, fromSocketName, toNodeId, toSocketName);
+  }
+
+  /**
+   * Set the value of a node input
+   */
+  setInputValue(node: any, inputIndex: number | string, value: any): void {
+    const nodeId = typeof node === 'string' ? node : node.id;
+    const group = this.getActiveGroup();
+    const nodeInst = group.nodes.get(nodeId);
+
+    if (!nodeInst) {
+      throw new Error(`Node "${nodeId}" not found`);
+    }
+
+    const socketName = this.resolveSocketName(nodeInst.inputs, inputIndex, 'input');
+    const socket = nodeInst.inputs.get(socketName);
+    if (socket) {
+      socket.value = value;
+    } else {
+      // Create the socket if it doesn't exist
+      nodeInst.inputs.set(socketName, {
+        id: `${nodeId}_in_${socketName}`,
+        name: socketName,
+        type: 'ANY',
+        value,
+        isInput: true,
+      });
+    }
+  }
+
+  /**
+   * Find all nodes of a given type in the active group
+   */
+  findNodesByType(type: any): NodeInstance[] {
+    const group = this.getActiveGroup();
+    const typeStr = typeof type === 'string' ? type : String(type);
+    const results: NodeInstance[] = [];
+
+    for (const node of group.nodes.values()) {
+      if (node.type === typeStr || String(node.type) === typeStr) {
+        results.push(node);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Resolve a socket identifier (index or name) to a socket name
+   */
+  private resolveSocketName(
+    sockets: Map<string, NodeSocket>,
+    socketRef: number | string,
+    direction: 'input' | 'output'
+  ): string {
+    if (typeof socketRef === 'string') {
+      // If it's already a name, check if it exists
+      if (sockets.has(socketRef)) {
+        return socketRef;
+      }
+      // Try as a numeric index passed as string
+      const numIdx = parseInt(socketRef, 10);
+      if (!isNaN(numIdx)) {
+        return this.getSocketByIndex(sockets, numIdx);
+      }
+      return socketRef;
+    }
+
+    // Numeric index
+    return this.getSocketByIndex(sockets, socketRef);
+  }
+
+  /**
+   * Get a socket name by its numeric index
+   */
+  private getSocketByIndex(sockets: Map<string, NodeSocket>, index: number): string {
+    const keys = Array.from(sockets.keys());
+    if (index >= 0 && index < keys.length) {
+      return keys[index];
+    }
+    return String(index);
+  }
+
+  /**
    * Export node graph to JSON
    */
   toJSON(): string {
@@ -451,6 +583,19 @@ export class NodeWrangler {
     
     return wrangler;
   }
+}
+
+/** Re-export NodeSocket from socket-types for convenience */
+export { NodeSocket } from './socket-types';
+
+/** Create a new NodeWrangler pre-configured for geometry node trees */
+export function createGeometryNodeTree(): NodeWrangler {
+  return new NodeWrangler();
+}
+
+/** Create a new NodeWrangler pre-configured for material node trees */
+export function createMaterialNodeTree(): NodeWrangler {
+  return new NodeWrangler();
 }
 
 export default NodeWrangler;

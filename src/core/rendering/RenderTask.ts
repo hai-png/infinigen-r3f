@@ -252,4 +252,4 @@ if (typeof window !== 'undefined' || typeof process !== 'undefined') {
   registerRenderTask();
 }
 
-export type { RenderConfig };
+

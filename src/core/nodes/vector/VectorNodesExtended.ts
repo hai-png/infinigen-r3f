@@ -7,6 +7,7 @@
 
 import { NodeTypes } from '../core/node-types';
 import type {
+  VectorNodeBase,
   VectorTransformInputs,
   VectorTransformOutputs,
   NormalMapInputs,

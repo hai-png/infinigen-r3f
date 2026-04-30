@@ -9,6 +9,7 @@ export enum SocketType {
   COLOR = 'COLOR',
   FLOAT = 'FLOAT',
   INTEGER = 'INTEGER',
+  INT = 'INT',
   BOOLEAN = 'BOOLEAN',
   STRING = 'STRING',
   TEXTURE = 'TEXTURE',
@@ -17,6 +18,7 @@ export enum SocketType {
   SHADER = 'SHADER',
   VOLUME = 'VOLUME',
   VALUE = 'VALUE',
+  ANY = 'ANY',
   RGB = 'RGB',
   RGBA = 'RGBA',
   UV = 'UV',
@@ -28,6 +30,9 @@ export enum SocketType {
   CURVE = 'CURVE',
   MESH = 'MESH',
   POINT_CLOUD = 'POINT_CLOUD',
+  POINTS = 'POINTS',
+  INSTANCE = 'INSTANCE',
+  INSTANCES = 'INSTANCES',
   VOLUME_DATA = 'VOLUME_DATA',
   COLLECTION = 'COLLECTION',
   OBJECT = 'OBJECT',
@@ -52,22 +57,34 @@ export enum SocketType {
 
 export interface SocketDefinition {
   name: string;
-  type: SocketType;
-  defaultValue?: number | string | boolean | number[];
+  type: SocketType | string;
+  defaultValue?: any;
+  default?: any;
   min?: number;
   max?: number;
   required?: boolean;
   description?: string;
+  [key: string]: any; // Allow additional properties
 }
 
-export interface NodeSocket {
-  id: string;
+export interface NodeSocket<T = any> {
+  id?: string;
   name: string;
-  type: SocketType;
-  value?: any;
+  type: SocketType | string;
+  value?: T;
+  defaultValue?: T;
+  default?: T;
   connectedTo?: string; // ID of connected socket
-  isInput: boolean;
-  definition: SocketDefinition;
+  isInput?: boolean;
+  definition?: SocketDefinition;
+  required?: boolean;
+  min?: number;
+  max?: number;
+  description?: string;
+  [key: string]: any; // Allow additional properties for flexibility
 }
+
+/** Geometry data type classification */
+export type GeometryDataType = 'mesh' | 'curve' | 'point_cloud' | 'volume' | 'instances';
 
 export default SocketType;

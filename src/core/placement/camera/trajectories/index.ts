@@ -30,10 +30,10 @@ export {
   resampleUniform,
 } from './TrajectoryGenerator';
 
-// Shot types
-export { DollyShot } from './DollyShot';
-export { CraneShot } from './CraneShot';
-export { OrbitShot } from './OrbitShot';
-export { PanTilt } from './PanTilt';
-export { TrackingShot } from './TrackingShot';
-export { HandheldSim } from './HandheldSim';
+// Shot types (re-export defaults as named exports)
+export { default as DollyShot } from './DollyShot';
+export { default as CraneShot } from './CraneShot';
+export { default as OrbitShot } from './OrbitShot';
+export { default as PanTilt } from './PanTilt';
+export { default as TrackingShot } from './TrackingShot';
+export { default as HandheldSim } from './HandheldSim';

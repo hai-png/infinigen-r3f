@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AssetCategory, AssetItem } from '../types';
 
-interface AssetBrowserProps {
+export interface AssetBrowserProps {
   categories?: AssetCategory[];
   assets?: AssetItem[];
   onAssetSelect?: (asset: AssetItem) => void;

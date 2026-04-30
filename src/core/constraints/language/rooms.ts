@@ -487,7 +487,7 @@ export function validateRoomConfig(
   const suggestions: string[] = [];
   
   // Common room requirements
-  const requiredByFunction: Record<RoomFunction, SemanticsTag[]> = {
+  const requiredByFunction: Record<RoomFunction, string[]> = {
     sleeping: ['bed', 'nightstand'],
     cooking: ['stove', 'sink', 'counter'],
     dining: ['table', 'chair'],

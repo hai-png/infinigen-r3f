@@ -6,7 +6,8 @@
  */
 
 import { NodeTypes } from '../core/node-types';
-import type { Geometry, Color } from 'three';
+import type { Geometry } from 'three';
+import type { ColorLike } from '../color/ColorNodes';
 
 // ============================================================================
 // Type Definitions
@@ -33,7 +34,7 @@ export interface TextureBrickInputs {
 }
 
 export interface TextureBrickOutputs {
-  color: Color;
+  color: ColorLike;
   float: number;
 }
 
@@ -43,7 +44,7 @@ export interface TextureCheckerInputs {
 }
 
 export interface TextureCheckerOutputs {
-  color: Color;
+  color: ColorLike;
   float: number;
 }
 
@@ -54,7 +55,7 @@ export interface TextureGradientInputs {
 }
 
 export interface TextureGradientOutputs {
-  color: Color;
+  color: ColorLike;
   float: number;
 }
 
@@ -70,7 +71,7 @@ export interface TextureNoiseInputs {
 }
 
 export interface TextureNoiseOutputs {
-  color: Color;
+  color: ColorLike;
   float: number;
 }
 
@@ -88,7 +89,7 @@ export interface TextureVoronoiInputs {
 export interface TextureVoronoiOutputs {
   distance: number;
   position: [number, number, number];
-  color: Color;
+  color: ColorLike;
 }
 
 export interface TextureWaveInputs {
@@ -104,7 +105,7 @@ export interface TextureWaveInputs {
 }
 
 export interface TextureWaveOutputs {
-  color: Color;
+  color: ColorLike;
   float: number;
 }
 
@@ -115,7 +116,7 @@ export interface TextureWhiteNoiseInputs {
 
 export interface TextureWhiteNoiseOutputs {
   value: number;
-  color: Color;
+  color: ColorLike;
 }
 
 export interface TextureMusgraveInputs {
@@ -141,7 +142,7 @@ export interface TextureMagicInputs {
 }
 
 export interface TextureMagicOutputs {
-  color: Color;
+  color: ColorLike;
   float: number;
 }
 

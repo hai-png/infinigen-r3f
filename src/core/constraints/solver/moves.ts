@@ -372,6 +372,8 @@ export interface SolverState {
   score: number;
   iteration: number;
   temperature?: number; // For simulated annealing
+  /** Alias - some consumers access objects directly */
+  objects?: Map<string, ObjectState>;
 }
 
 /**

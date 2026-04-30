@@ -8,7 +8,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { BVHNode, BVHCacheEntry } from '../constraints/evaluator/state';
+import type { BVHNode, BVHCacheEntry } from '../../core/constraints/evaluator/state';
 
 export interface BVHViewerProps {
   /** BVH root node to visualize */

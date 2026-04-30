@@ -65,7 +65,7 @@ export enum ASTNodeType {
  * Base AST Node
  */
 export interface ASTNode {
-  type: ASTNodeType;
+  type: ASTNodeType | string;
   loc?: {
     start: { line: number; column: number };
     end: { line: number; column: number };

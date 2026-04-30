@@ -7,7 +7,7 @@
 
 import { ConstraintSystem } from '../language/constraint-system';
 import { Variable, Domain } from '../language/types';
-import { Evaluator } from '../constraints/evaluator/evaluator';
+import { evaluateNode as Evaluator } from '../evaluator/evaluate';
 import { 
   ContinuousProposalGenerator as ContinuousProposer, 
   DiscreteProposalGenerator as DiscreteProposer,

@@ -7,7 +7,7 @@
 import { GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module';
+import MeshoptDecoder from 'three/examples/jsm/libs/meshopt_decoder.module';
 import * as THREE from 'three';
 import type { AssetMetadata, LODDescription } from '../core/AssetTypes';
 

@@ -5,25 +5,165 @@
  * adapted for use with React Three Fiber and the React ecosystem.
  * 
  * @packageDocumentation
+ * 
+ * Note: Several names exist in multiple sub-modules. Conflicts are resolved here:
+ * - ScatterConfig: from ./core (placement) is primary; ./assets has InstanceScatterSystem.ScatterConfig
+ * - LODConfig: from ./terrain is primary; ./assets and ./datagen have their own versions
+ * - BiomeType, TerrainConfig: from ./terrain is primary; ./datagen has its own versions
+ * - ThreePointLightingConfig: from ./assets/lighting is primary; ./datagen has its own version
+ * - ExportFormat: from ./tools is primary; ./datagen has its own version
+ * - SolverState: from ./types is primary; ./core/constraints/solver has its own version
+ * - BBox: from ./types is primary; ./core/util/math has its own class version
+ * - Vector3: from three.js (via core) is primary; ./core/util/math has custom interface
+ * - lerp: from core (number lerp) is primary; animation and math/vector have their own
+ * - ZERO: from core/constraints (ScalarConstant) is primary; math/vector has Vector3 ZERO
  */
 
-// Core Engine Systems
+// Core Engine Systems (primary for: Node, Tag, VariableBinding, Expression)
 export * from './core';
 
-// Asset Library
+// Asset Library (primary for: ThreePointLightingConfig)
+// Note: ScatterConfig from ./assets/scatters conflicts with ./core/placement
+// The core version takes precedence since ./core is exported first
 export * from './assets';
 
-// Terrain Generation
+// Terrain Generation (primary for: BiomeType, TerrainConfig, LODConfig)
 export * from './terrain';
 
 // Simulation System
 export * from './sim';
 
-// Data Generation (placeholder)
-export * from './datagen';
+// Data Generation - export selectively to avoid conflicts with core, assets, terrain, tools
+export {
+  // Types from pipeline/types - exclude conflicting names
+  type JobStatus,
+  type JobPriority,
+  type JobConfig,
+  type JobProgress,
+  type JobError,
+  type JobResult as PipelineJobResult,
+  type JobMetadata as PipelineJobMetadata,
+  type SceneGenerationConfig,
+  type TerrainFeatureConfig,
+  type ObjectGenerationConfig,
+  type CreatureConfig,
+  type CreatureType,
+  type PlantConfig,
+  type PlantType,
+  type StructureConfig,
+  type StructureType,
+  type PropConfig,
+  type PropType,
+  type LightingConfig,
+  type LightingType,
+  type VolumetricConfig,
+  type CameraConfig,
+  type CameraType,
+  type OrbitConfig,
+  type CameraPathConfig,
+  type EnvironmentConfig,
+  type WeatherType,
+  type GroundCoverConfig,
+  type ClimbingPlantConfig,
+  type SurfaceType,
+  type UnderwaterScatterConfig,
+  type OutputConfig,
+  type OutputFormat as PipelineOutputFormat,
+  type GroundTruthConfig,
+  type GeneratedAsset,
+  type AssetType,
+  type AssetMetadata as PipelineAssetMetadata,
+  type RenderConfig as PipelineRenderConfig,
+  type RenderEngine,
+  type ToneMappingType,
+  type PipelineMetrics,
+  type ResourceUtilization,
+  type PipelineHealth,
+  type HealthIssue,
+  type CloudProvider,
+  type CloudProviderName,
+  type CloudCredentials,
+  type CloudStorageConfig,
+  type StorageACL,
+  type CloudComputeConfig,
+  type BatchJob as PipelineBatchJob,
+  type CloudIntegrationConfig,
+  type NotificationConfig,
+  type SlackConfig,
+  type WebhookConfig,
+  type BatchStatus,
+  type BatchProgress as PipelineBatchProgress,
+  type PipelineEvent,
+  type JobCreatedEvent,
+  type JobStartedEvent,
+  type JobProgressEvent,
+  type JobCompletedEvent,
+  type JobFailedEvent,
+  type BatchStartedEvent,
+  type BatchCompletedEvent,
+  type PipelineHealthEvent,
+  type PaginationParams,
+  type PaginatedResult,
+  type QueryParams,
+  // ScatterConfig from datagen conflicts with core/placement — alias it
+  type ScatterConfig as PipelineScatterConfig,
+  // These conflict with terrain module — alias them
+  type TerrainConfig as PipelineTerrainConfig,
+  type BiomeType as PipelineBiomeType,
+  // This conflicts with assets/lighting — alias it
+  type ThreePointLightingConfig as PipelineThreePointLightingConfig,
+} from './datagen';
 
-// Utility Tools (placeholder)
-export * from './tools';
+// Also export the non-type items from datagen/pipeline
+export {
+  JobManager,
+  type JobManagerOptions,
+  BatchProcessor,
+  type BatchProcessorOptions,
+  GroundTruthGenerator,
+  type GroundTruthOptions,
+  type GroundTruthResult,
+  ConfigParser,
+  type SceneConfig,
+  TaskRegistry,
+  taskRegistry,
+  TaskFunction,
+  TaskResult,
+  TaskConfig,
+  TaskMetadata,
+  TaskParamType,
+  renderTask,
+  renderTaskMetadata,
+  registerRenderTask,
+  executeRender,
+  type RenderConfig,
+  saveMeshesTask,
+  saveMeshesTaskMetadata,
+  registerSaveMeshesTask,
+  executeSaveMeshes,
+  isStaticObject,
+  triangulateGeometry,
+  triangulateScene,
+  getMeshStats,
+  type MeshExportConfig,
+  type ExportFormat as MeshExportFormat,
+  type MeshExportInfo,
+} from './datagen';
+
+// Utility Tools (primary for: ExportFormat)
+export {
+  ExportToolkit,
+  createExportToolkit,
+  type ExportOptions,
+  type ExportResult,
+  type ExportTransform,
+  type LODSettings,
+  type TextureExportSettings,
+  TOOLS_VERSION,
+} from './tools';
+
+// Re-export ExportFormat from tools as the primary one
+export type { ExportFormat } from './tools';
 
 // GPL Module (placeholder)
 export * from './infinigen_gpl';
@@ -38,13 +178,37 @@ export * from './assets/animation';
 export * from './assets/particles';
 export * from './assets/utils/streaming';
 export * from './core/constraints/tags';
-export * from './core/util/math';
+// core/util/math is already exported via core → util → math
+// No need to re-export separately to avoid duplicate conflicts
+
+// Rendering IO
 export * from './core/rendering/io';
+// Optimization
 export * from './core/util/optimization';
-export * from './core/rendering/lod';
-export * from './datagen/pipeline';
-export * from './integration/bridge';
+// LOD - export selectively to avoid LODConfig conflict with terrain
+export {
+  LODManager,
+  InstancedLODManager,
+  LODSystem,
+  LODLevel,
+  DEFAULT_LOD_CONFIG,
+  generateLODLevels,
+  selectLODByDistance,
+  selectLODByScreenSpace,
+  updateLODWithHysteresis,
+  calculateMemorySavings,
+  estimateRenderingImprovement,
+  type LODConfig as RenderingLODConfig,
+  type LODMesh,
+  type LODObject,
+  type InstancedLODConfig,
+} from './core/rendering/lod';
+
+// Shaders
 export * from './core/rendering/shaders';
 
-// Types
+// Integration bridge
+export * from './integration/bridge';
+
+// Types (primary for: SolverState, BBox, MeshData, etc.)
 export type * from './types';

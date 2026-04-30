@@ -282,6 +282,74 @@ export enum NodeTypes {
   ImageOutput = 'ImageOutputNode',
   MovieOutput = 'MovieOutputNode',
   SoundOutput = 'SoundOutputNode',
+
+  // Light
+  PointLight = 'PointLightNode',
+  SpotLight = 'SpotLightNode',
+  SunLight = 'SunLightNode',
+  AreaLight = 'AreaLightNode',
+  LightFalloff = 'LightFalloffNode',
+  LightAttenuation = 'LightAttenuationNode',
+
+  // Boolean
+  BooleanUnion = 'BooleanUnionNode',
+  BooleanIntersect = 'BooleanIntersectNode',
+  BooleanDifference = 'BooleanDifferenceNode',
+
+  // Extended Vector
+  CombineXYZ = 'CombineXYZNode',
+  SeparateXYZ = 'SeparateXYZNode',
+  Normalize = 'NormalizeNode',
+  Mapping = 'MappingNode',
+  AlignEulerToVector = 'AlignEulerToVectorNode',
+  RotateEuler = 'RotateEulerNode',
+  Bump = 'BumpNode',
+  Displacement = 'DisplacementNode',
+  Quaternion = 'QuaternionNode',
+  MatrixTransform = 'MatrixTransformNode',
+  DirectionToPoint = 'DirectionToPointNode',
+  Reflect = 'ReflectNode',
+  Refract = 'RefractNode',
+  FaceForward = 'FaceForwardNode',
+  Wrap = 'WrapNode',
+  Snap = 'SnapNode',
+  FloorCeil = 'FloorCeilNode',
+  Modulo = 'ModuloNode',
+  Fraction = 'FractionNode',
+  Absolute = 'AbsoluteNode',
+  MinMax = 'MinMaxNode',
+  Trigonometry = 'TrigonometryNode',
+  PowerLog = 'PowerLogNode',
+  Sign = 'SignNode',
+  Compare = 'CompareNode',
+  SmoothMinMax = 'SmoothMinMaxNode',
+  AngleBetween = 'AngleBetweenNode',
+  Slerp = 'SlerpNode',
+  PolarToCart = 'PolarToCartNode',
+  CartToPolar = 'CartToPolarNode',
+  HueSaturationValue = 'HueSaturationNode',
+
+  // Subdivision
+  SubdivisionSurface = 'SubdivisionSurfaceNode',
+
+  // Aliases - SCREAMING_SNAKE_CASE aliases for PascalCase members
+  VECTOR_MATH = VectorMath,
+  TEX_COORD = TexCoord,
+  NORMAL_MAP = NormalMap,
+  MAPPING = Mapping,
+  LINE_OUTPUT = FileOutput,
+  LOD_GROUP_OUTPUT = GroupOutput,
+  LAYER_WEIGHT = LayerWeight,
+  BUMP = Bump,
+  COMPOSITE_OUTPUT = MovieOutput,
+  AMBIENT_OCCLUSION_OUTPUT = AmbientOcclusion,
+  COLOR_RAMP = ColorRamp,
+
+  // CamelCase aliases for referenced names
+  CompositeOutput = MovieOutput,
+  LODGroupOutput = GroupOutput,
+  AmbientOcclusionOutput = AmbientOcclusion,
+  LineOutput = FileOutput,
 }
 
 export default NodeTypes;

@@ -696,7 +696,7 @@ export function constraintToString(node: ConstraintNode): string {
   return '?';
 }
 
-function expressionToString(node: ExpressionNode): string {
+export function expressionToString(node: ExpressionNode): string {
   if (node.type === 'Constant') {
     return node.value.toString();
   }

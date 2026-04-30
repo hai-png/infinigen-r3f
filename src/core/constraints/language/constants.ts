@@ -7,6 +7,7 @@
 
 import { ScalarExpression, BoolExpression } from './expression';
 import { ObjectSetExpression } from './set-reasoning';
+import { ObjectSetDomain, Variable } from './types';
 
 /**
  * Constant expressions for constraint language
@@ -30,6 +31,7 @@ export function bool(value: boolean): BoolConstant {
  * Scalar constant expression
  */
 export class ScalarConstant extends ScalarExpression {
+  readonly type = 'ScalarConstant';
   constructor(public readonly value: number) {
     super();
   }
@@ -37,18 +39,35 @@ export class ScalarConstant extends ScalarExpression {
   children(): Map<string, any> {
     return new Map();
   }
+
+  evaluate(state: Map<any, any>): number {
+    return this.value;
+  }
+
+  clone(): ScalarConstant {
+    return new ScalarConstant(this.value);
+  }
 }
 
 /**
  * Boolean constant expression
  */
 export class BoolConstant extends BoolExpression {
+  readonly type = 'BoolConstant';
   constructor(public readonly value: boolean) {
     super();
   }
 
   children(): Map<string, any> {
     return new Map();
+  }
+
+  evaluate(state: Map<any, any>): boolean {
+    return this.value;
+  }
+
+  clone(): BoolConstant {
+    return new BoolConstant(this.value);
   }
 }
 
@@ -77,6 +96,7 @@ export function item(name: string, memberOf?: ObjectSetExpression): ItemExpressi
  * Item expression - references a variable in the constraint system
  */
 export class ItemExpression extends ObjectSetExpression {
+  readonly type = 'ItemExpression';
   constructor(
     public readonly name: string,
     public memberOf?: ObjectSetExpression
@@ -90,6 +110,23 @@ export class ItemExpression extends ObjectSetExpression {
       children.set('memberOf', this.memberOf);
     }
     return children;
+  }
+
+  domain(): ObjectSetDomain {
+    return new ObjectSetDomain();
+  }
+
+  evaluate(state: Map<any, any>): Set<string> {
+    const value = state.get(this.name);
+    return value instanceof Set ? value : new Set([value]);
+  }
+
+  getVariables(): Set<Variable> {
+    return new Set();
+  }
+
+  clone(): ItemExpression {
+    return new ItemExpression(this.name, this.memberOf?.clone() as ObjectSetExpression);
   }
 }
 
@@ -107,6 +144,7 @@ export function tagged(
  * Tagged object set - filters objects by semantic tags
  */
 export class TaggedExpression extends ObjectSetExpression {
+  readonly type = 'TaggedExpression';
   constructor(
     public readonly objs: ObjectSetExpression,
     public readonly tags: string[]
@@ -115,10 +153,26 @@ export class TaggedExpression extends ObjectSetExpression {
   }
 
   children(): Map<string, any> {
-    return new Map([
+    return new Map<string, any>([
       ['objs', this.objs],
       ['tags', this.tags]
     ]);
+  }
+
+  domain(): ObjectSetDomain {
+    return new ObjectSetDomain();
+  }
+
+  evaluate(state: Map<any, any>): Set<string> {
+    return this.objs.evaluate(state);
+  }
+
+  getVariables(): Set<Variable> {
+    return this.objs.getVariables();
+  }
+
+  clone(): TaggedExpression {
+    return new TaggedExpression(this.objs.clone() as ObjectSetExpression, [...this.tags]);
   }
 }
 
@@ -126,8 +180,27 @@ export class TaggedExpression extends ObjectSetExpression {
  * Scene-wide object set - all objects in the scene
  */
 export class SceneExpression extends ObjectSetExpression {
+  readonly type = 'SceneExpression';
+
   children(): Map<string, any> {
     return new Map();
+  }
+
+  domain(): ObjectSetDomain {
+    return new ObjectSetDomain();
+  }
+
+  evaluate(state: Map<any, any>): Set<string> {
+    const sceneObjs = state.get('__scene__');
+    return sceneObjs instanceof Set ? sceneObjs : new Set();
+  }
+
+  getVariables(): Set<Variable> {
+    return new Set();
+  }
+
+  clone(): SceneExpression {
+    return new SceneExpression();
   }
 }
 

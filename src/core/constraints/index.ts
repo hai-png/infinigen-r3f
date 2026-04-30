@@ -59,5 +59,43 @@ export * from './room-solver/index';
 // Tags - Semantic tagging system
 export * from './tags/index';
 
-// DSL - Constraint DSL
-export * from './dsl/index';
+// DSL - Constraint DSL (export selectively to avoid Expression conflict with language module)
+export {
+  TokenType,
+  ASTNodeType,
+  type Token,
+  type ASTNode,
+  type Program,
+  type ConstraintDeclaration,
+  type Parameter,
+  type TypeAnnotation,
+  type BlockStatement,
+  type Statement,
+  type ReturnStatement,
+  type IfStatement,
+  type ForStatement,
+  type ExpressionStatement,
+  type VariableDeclaration,
+  type VariableDeclarator,
+  type Pattern,
+  type ObjectPattern,
+  type ArrayPattern,
+  // Expression — already exported from language module (as a class, not just a type)
+  type BinaryExpression,
+  type UnaryExpression,
+  type MemberExpression,
+  type CallExpression,
+  type Identifier,
+  type Literal,
+  type ArrayLiteral,
+  type ObjectLiteral,
+  type Property,
+  type FunctionExpression,
+  type ArrowFunction,
+  type ConditionalExpression,
+  type AssignmentExpression,
+  ConstraintLexer,
+  ConstraintParser,
+  parseConstraintSource,
+  compileConstraint,
+} from './dsl/index';

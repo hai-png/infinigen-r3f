@@ -9,7 +9,7 @@
 
 import { Node, Problem, ForAll, SumOver, MeanOver, Item, SceneConstant, DebugPrint } from '../language/types';
 import { BoolOperatorExpression, InRange, Constant } from '../language/expression';
-import { Domain } from '../constraints/reasoning/domain';
+import { Domain } from '../reasoning/domain';
 import { constraintDomain, domainFinalized } from '../reasoning/constraint-domain';
 import { State, ObjectState } from './state';
 import { memoKey, evictMemoForMove, resetBVHCache } from './eval-memo';

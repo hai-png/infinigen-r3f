@@ -12,8 +12,8 @@
  * Provides common properties shared across all node types
  */
 export interface NodeBase {
-  readonly nodeType: NodeType;
-  readonly category: NodeCategory;
+  readonly nodeType: NodeType | string;
+  readonly category: NodeCategory | string;
   readonly name: string;
   readonly domain: AttributeDomain;
   inputs: Record<string, any>;
@@ -43,6 +43,7 @@ export enum SocketType {
   COLOR = 'COLOR',
   FLOAT = 'FLOAT',
   INTEGER = 'INTEGER',
+  INT = 'INT',
   BOOLEAN = 'BOOLEAN',
   STRING = 'STRING',
   TEXTURE = 'TEXTURE',
@@ -53,7 +54,22 @@ export enum SocketType {
   MESH = 'MESH',
   POINTS = 'POINTS',
   INSTANCE = 'INSTANCE',
+  INSTANCES = 'INSTANCES',
   VOLUME = 'VOLUME',
+  ANY = 'ANY',
+  VALUE = 'VALUE',
+  SHADER = 'SHADER',
+  ROTATION = 'ROTATION',
+  MATRIX = 'MATRIX',
+  LIGHT = 'LIGHT',
+  CAMERA = 'CAMERA',
+  RGB = 'RGB',
+  RGBA = 'RGBA',
+  UV = 'UV',
+  QUATERNION = 'QUATERNION',
+  TRANSFORM = 'TRANSFORM',
+  IMAGE = 'IMAGE',
+  WORLD = 'WORLD',
 }
 
 /**
@@ -329,25 +345,38 @@ export enum NodeType {
 
 /**
  * Socket definition for node inputs/outputs
+ * Generic over the value type carried by the socket
  */
-export interface NodeSocket {
+export interface NodeSocket<T = any> {
   name: string;
-  type: SocketType;
-  defaultValue?: any;
+  type: SocketType | string;
+  defaultValue?: T;
+  default?: T;
+  value?: T;
   min?: number;
   max?: number;
   required?: boolean;
+  description?: string;
+  [key: string]: any; // Allow additional properties for flexibility
 }
 
 /**
  * Node definition structure
+ * Generic over the node data type
  */
-export interface NodeDefinition {
-  type: NodeType;
-  category: NodeCategory;
+export interface NodeDefinition<T = any> {
+  name?: string;
+  type: NodeType | string;
+  category?: NodeCategory | string;
+  label?: string;
+  description?: string;
   inputs: NodeSocket[];
   outputs: NodeSocket[];
   properties?: Record<string, any>;
+  params?: Record<string, any>;
+  parameters?: any[];
+  defaults?: Record<string, any>;
+  defaultData?: T;
 }
 
 /**
@@ -380,6 +409,23 @@ export interface NodeGroupInterface {
   inputs: Map<string, NodeSocket>;
   outputs: Map<string, NodeSocket>;
 }
+
+/**
+ * Base Node interface for typed node definitions
+ * Used when defining specific node interfaces with typed sockets
+ */
+export interface Node {
+  type: NodeType | string;
+  inputs: Record<string, any>;
+  outputs: Record<string, any>;
+  params?: Record<string, any>;
+  settings?: Record<string, any>;
+}
+
+/**
+ * Geometry type placeholder - represents geometry data in the node system
+ */
+export type GeometryType = any;
 
 /**
  * Node group definition

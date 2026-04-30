@@ -746,11 +746,4 @@ export const UtilityNodes = {
   RandomValue: RandomValueNode
 };
 
-export type {
-  MathNodeData,
-  VectorMathNodeData,
-  ColorMathNodeData,
-  CompareNodeData,
-  SwitchNodeData,
-  RandomValueNodeData
-};
+

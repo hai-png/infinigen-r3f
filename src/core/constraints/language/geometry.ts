@@ -5,6 +5,7 @@
 // Authors: Alexander Raistrick, Karhan Kayan
 // Ported to TypeScript for React Three Fiber
 
+import { Node, Variable } from './types';
 import { ScalarExpression } from './expression';
 import { ObjectSetExpression } from './set-reasoning';
 
@@ -21,6 +22,7 @@ export abstract class GeometryPredicate extends ScalarExpression {
  * Distance between two objects or sets
  */
 export class Distance extends GeometryPredicate {
+  readonly type = 'Distance';
   readonly predicateType = 'Distance';
   
   constructor(
@@ -30,11 +32,23 @@ export class Distance extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['obj1', this.obj1],
       ['obj2', this.obj2]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    // Placeholder - requires distance computation between object sets
+    return 0;
+  }
+
+  clone(): Distance {
+    return new Distance(
+      this.obj1.clone() as ObjectSetExpression,
+      this.obj2.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -42,6 +56,7 @@ export class Distance extends GeometryPredicate {
  * Accessibility cost - how difficult it is to access an object
  */
 export class AccessibilityCost extends GeometryPredicate {
+  readonly type = 'AccessibilityCost';
   readonly predicateType = 'AccessibilityCost';
   
   constructor(
@@ -51,11 +66,22 @@ export class AccessibilityCost extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['obj', this.obj],
       ['fromObj', this.fromObj]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): AccessibilityCost {
+    return new AccessibilityCost(
+      this.obj.clone() as ObjectSetExpression,
+      this.fromObj.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -63,6 +89,7 @@ export class AccessibilityCost extends GeometryPredicate {
  * Focus score - how much an object is in focus from a viewpoint
  */
 export class FocusScore extends GeometryPredicate {
+  readonly type = 'FocusScore';
   readonly predicateType = 'FocusScore';
   
   constructor(
@@ -72,11 +99,22 @@ export class FocusScore extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['obj', this.obj],
       ['viewer', this.viewer]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): FocusScore {
+    return new FocusScore(
+      this.obj.clone() as ObjectSetExpression,
+      this.viewer.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -84,6 +122,7 @@ export class FocusScore extends GeometryPredicate {
  * Angle between two objects or directions
  */
 export class Angle extends GeometryPredicate {
+  readonly type = 'Angle';
   readonly predicateType = 'Angle';
   
   constructor(
@@ -93,11 +132,22 @@ export class Angle extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['obj1', this.obj1],
       ['obj2', this.obj2]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): Angle {
+    return new Angle(
+      this.obj1.clone() as ObjectSetExpression,
+      this.obj2.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -105,14 +155,23 @@ export class Angle extends GeometryPredicate {
  * Surface area of an object
  */
 export class SurfaceArea extends GeometryPredicate {
+  readonly type = 'SurfaceArea';
   readonly predicateType = 'SurfaceArea';
   
   constructor(public obj: ObjectSetExpression) {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([['obj', this.obj]]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): SurfaceArea {
+    return new SurfaceArea(this.obj.clone() as ObjectSetExpression);
   }
 }
 
@@ -120,14 +179,23 @@ export class SurfaceArea extends GeometryPredicate {
  * Volume of an object
  */
 export class Volume extends GeometryPredicate {
+  readonly type = 'Volume';
   readonly predicateType = 'Volume';
   
   constructor(public obj: ObjectSetExpression) {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([['obj', this.obj]]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): Volume {
+    return new Volume(this.obj.clone() as ObjectSetExpression);
   }
 }
 
@@ -135,14 +203,23 @@ export class Volume extends GeometryPredicate {
  * Count of objects in a set
  */
 export class Count extends GeometryPredicate {
+  readonly type = 'Count';
   readonly predicateType = 'Count';
   
   constructor(public objs: ObjectSetExpression) {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([['objs', this.objs]]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['objs', this.objs]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return this.objs.evaluate(state).size;
+  }
+
+  clone(): Count {
+    return new Count(this.objs.clone() as ObjectSetExpression);
   }
 }
 
@@ -150,14 +227,23 @@ export class Count extends GeometryPredicate {
  * Height of an object above ground
  */
 export class Height extends GeometryPredicate {
+  readonly type = 'Height';
   readonly predicateType = 'Height';
   
   constructor(public obj: ObjectSetExpression) {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([['obj', this.obj]]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): Height {
+    return new Height(this.obj.clone() as ObjectSetExpression);
   }
 }
 
@@ -165,6 +251,7 @@ export class Height extends GeometryPredicate {
  * Width/bounding box dimension of an object
  */
 export class Width extends GeometryPredicate {
+  readonly type = 'Width';
   readonly predicateType = 'Width';
   
   constructor(
@@ -174,11 +261,16 @@ export class Width extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
-      ['obj', this.obj],
-      ['axis', this.axis]
-    ]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): Width {
+    return new Width(this.obj.clone() as ObjectSetExpression, this.axis);
   }
 }
 
@@ -186,6 +278,7 @@ export class Width extends GeometryPredicate {
  * Center of mass position component
  */
 export class CenterOfMass extends GeometryPredicate {
+  readonly type = 'CenterOfMass';
   readonly predicateType = 'CenterOfMass';
   
   constructor(
@@ -195,11 +288,16 @@ export class CenterOfMass extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
-      ['obj', this.obj],
-      ['axis', this.axis]
-    ]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): CenterOfMass {
+    return new CenterOfMass(this.obj.clone() as ObjectSetExpression, this.axis);
   }
 }
 
@@ -207,6 +305,7 @@ export class CenterOfMass extends GeometryPredicate {
  * Normal direction alignment score
  */
 export class NormalAlignment extends GeometryPredicate {
+  readonly type = 'NormalAlignment';
   readonly predicateType = 'NormalAlignment';
   
   constructor(
@@ -216,11 +315,16 @@ export class NormalAlignment extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
-      ['obj', this.obj],
-      ['direction', this.direction]
-    ]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): NormalAlignment {
+    return new NormalAlignment(this.obj.clone() as ObjectSetExpression, [...this.direction]);
   }
 }
 
@@ -228,6 +332,7 @@ export class NormalAlignment extends GeometryPredicate {
  * Clearance distance - minimum distance to any other object
  */
 export class Clearance extends GeometryPredicate {
+  readonly type = 'Clearance';
   readonly predicateType = 'Clearance';
   
   constructor(
@@ -237,12 +342,23 @@ export class Clearance extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    const children = new Map([['obj', this.obj]]);
+  children(): Map<string, Node> {
+    const children = new Map<string, Node>([['obj', this.obj]]);
     if (this.excludeSet) {
       children.set('excludeSet', this.excludeSet);
     }
     return children;
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): Clearance {
+    return new Clearance(
+      this.obj.clone() as ObjectSetExpression,
+      this.excludeSet?.clone() as ObjectSetExpression | undefined
+    );
   }
 }
 
@@ -250,6 +366,7 @@ export class Clearance extends GeometryPredicate {
  * Visibility score from a viewpoint
  */
 export class VisibilityScore extends GeometryPredicate {
+  readonly type = 'VisibilityScore';
   readonly predicateType = 'VisibilityScore';
   
   constructor(
@@ -259,11 +376,22 @@ export class VisibilityScore extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['obj', this.obj],
       ['viewer', this.viewer]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): VisibilityScore {
+    return new VisibilityScore(
+      this.obj.clone() as ObjectSetExpression,
+      this.viewer.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -271,14 +399,23 @@ export class VisibilityScore extends GeometryPredicate {
  * Stability score - how stable an object is in its current pose
  */
 export class StabilityScore extends GeometryPredicate {
+  readonly type = 'StabilityScore';
   readonly predicateType = 'StabilityScore';
   
   constructor(public obj: ObjectSetExpression) {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([['obj', this.obj]]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): StabilityScore {
+    return new StabilityScore(this.obj.clone() as ObjectSetExpression);
   }
 }
 
@@ -286,6 +423,7 @@ export class StabilityScore extends GeometryPredicate {
  * Support contact area between two objects
  */
 export class SupportContactArea extends GeometryPredicate {
+  readonly type = 'SupportContactArea';
   readonly predicateType = 'SupportContactArea';
   
   constructor(
@@ -295,11 +433,22 @@ export class SupportContactArea extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['supported', this.supported],
       ['supporter', this.supporter]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): SupportContactArea {
+    return new SupportContactArea(
+      this.supported.clone() as ObjectSetExpression,
+      this.supporter.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -307,6 +456,7 @@ export class SupportContactArea extends GeometryPredicate {
  * Reachability score - can an agent reach this object
  */
 export class ReachabilityScore extends GeometryPredicate {
+  readonly type = 'ReachabilityScore';
   readonly predicateType = 'ReachabilityScore';
   
   constructor(
@@ -316,11 +466,22 @@ export class ReachabilityScore extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
+  children(): Map<string, Node> {
+    return new Map<string, Node>([
       ['obj', this.obj],
       ['agent', this.agent]
     ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): ReachabilityScore {
+    return new ReachabilityScore(
+      this.obj.clone() as ObjectSetExpression,
+      this.agent.clone() as ObjectSetExpression
+    );
   }
 }
 
@@ -328,6 +489,7 @@ export class ReachabilityScore extends GeometryPredicate {
  * Orientation alignment with a target direction
  */
 export class OrientationAlignment extends GeometryPredicate {
+  readonly type = 'OrientationAlignment';
   readonly predicateType = 'OrientationAlignment';
   
   constructor(
@@ -337,11 +499,16 @@ export class OrientationAlignment extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
-      ['obj', this.obj],
-      ['targetDirection', this.targetDirection]
-    ]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): OrientationAlignment {
+    return new OrientationAlignment(this.obj.clone() as ObjectSetExpression, [...this.targetDirection]);
   }
 }
 
@@ -349,14 +516,23 @@ export class OrientationAlignment extends GeometryPredicate {
  * Compactness ratio - volume / surface_area^(3/2)
  */
 export class Compactness extends GeometryPredicate {
+  readonly type = 'Compactness';
   readonly predicateType = 'Compactness';
   
   constructor(public obj: ObjectSetExpression) {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([['obj', this.obj]]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): Compactness {
+    return new Compactness(this.obj.clone() as ObjectSetExpression);
   }
 }
 
@@ -364,6 +540,7 @@ export class Compactness extends GeometryPredicate {
  * Aspect ratio of bounding box
  */
 export class AspectRatio extends GeometryPredicate {
+  readonly type = 'AspectRatio';
   readonly predicateType = 'AspectRatio';
   
   constructor(
@@ -374,11 +551,15 @@ export class AspectRatio extends GeometryPredicate {
     super();
   }
 
-  children(): Map<string, any> {
-    return new Map([
-      ['obj', this.obj],
-      ['axis1', this.axis1],
-      ['axis2', this.axis2]
-    ]);
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    return 0;
+  }
+
+  clone(): AspectRatio {
+    return new AspectRatio(this.obj.clone() as ObjectSetExpression, this.axis1, this.axis2);
   }
 }

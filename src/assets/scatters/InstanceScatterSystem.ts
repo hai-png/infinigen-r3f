@@ -122,6 +122,9 @@ export interface Biome {
   rules: Partial<ScatterRules>;
 }
 
+/** Alias for Biome used in biome-based distribution rules */
+export type BiomeRule = Biome;
+
 // ============================================================================
 // Helper Functions
 // ============================================================================

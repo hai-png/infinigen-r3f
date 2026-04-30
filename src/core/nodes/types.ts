@@ -1,9 +1,15 @@
 /**
  * Common type definitions for the node system
  * Provides "Like" types that accept both Three.js types and plain objects
+ * Also re-exports core types for convenience
  */
 
 import type { Color, Vector3, Vector2, Euler, Quaternion, Matrix4 } from 'three';
+
+// Re-export core types for convenience
+export type { NodeSocket, NodeDefinition, Node, NodeBase, GeometryType } from './core/types';
+export type { SocketDefinition } from './core/socket-types';
+export { SocketType as SocketTypeEnum } from './core/socket-types';
 
 // Color types - accept both THREE.Color and plain objects
 export type ColorLike = Color | { r: number; g: number; b: number };

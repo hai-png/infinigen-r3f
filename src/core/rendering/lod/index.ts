@@ -4,6 +4,9 @@
 
 export * from './LODSystem';
 
+// Re-export default as named export for convenience
+export { default as LODSystem } from './LODSystem';
+
 import LODSystem, {
   LODLevel,
   DEFAULT_LOD_CONFIG,
@@ -22,7 +25,6 @@ import LODSystem, {
 } from './LODSystem';
 
 export {
-  LODSystem as default,
   LODLevel,
   DEFAULT_LOD_CONFIG,
   generateLODLevels,

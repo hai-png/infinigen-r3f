@@ -902,4 +902,21 @@ export class GroundTruthGenerator {
   }
 }
 
+/** Depth data output format */
+export interface DepthData {
+  width: number;
+  height: number;
+  data: Float32Array;
+  near: number;
+  far: number;
+}
+
+/** Segmentation data output format */
+export interface SegmentationData {
+  width: number;
+  height: number;
+  data: Uint32Array;
+  labels: Map<number, string>;
+}
+
 export default GroundTruthGenerator;

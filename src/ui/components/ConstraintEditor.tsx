@@ -12,8 +12,8 @@ import type {
   Expression,
   RelationType,
   DomainType
-} from '../constraints/language/types';
-import { buildProblem } from '../constraints/language/constants';
+} from '../../core/constraints/language/types';
+import { buildProblem } from '../../core/constraints/language/constants';
 
 export interface ConstraintEditorProps {
   /** Initial constraints */

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SceneGraphNode } from '../types';
 
-interface SceneInspectorProps {
+export interface SceneInspectorProps {
   sceneGraph?: SceneGraphNode[];
   selectedNodeId?: string;
   onSelectNode?: (nodeId: string) => void;

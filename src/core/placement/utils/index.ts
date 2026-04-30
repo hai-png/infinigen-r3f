@@ -4,4 +4,5 @@
  */
 
 export { AssetFactory } from './AssetFactory';
-export type { AssetFactoryOptions, AssetDescription } from './AssetFactory';
+export type { AssetFactoryOptions } from './AssetFactory';
+export type { AssetDescription } from './AssetFactory';

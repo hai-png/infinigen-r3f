@@ -5,6 +5,8 @@
 
 import { Node, Variable } from '../language/types';
 
+export type { Variable };
+
 /**
  * Base class for all tags
  */
@@ -29,6 +31,7 @@ export abstract class Tag extends Node {
  * Semantic tags for object classification
  */
 export class SemanticsTag extends Tag {
+  readonly type = 'SemanticsTag';
   constructor(public readonly value: string) {
     super();
   }
@@ -61,6 +64,7 @@ export class SemanticsTag extends Tag {
  * Material tags
  */
 export class MaterialTag extends Tag {
+  readonly type = 'MaterialTag';
   constructor(public readonly value: string) {
     super();
   }
@@ -93,6 +97,7 @@ export class MaterialTag extends Tag {
  * Surface type tags
  */
 export class SurfaceTag extends Tag {
+  readonly type = 'SurfaceTag';
   constructor(public readonly value: string) {
     super();
   }
@@ -125,6 +130,7 @@ export class SurfaceTag extends Tag {
  * Room type tags
  */
 export class RoomTag extends Tag {
+  readonly type = 'RoomTag';
   constructor(public readonly value: string) {
     super();
   }
@@ -157,6 +163,7 @@ export class RoomTag extends Tag {
  * Function tags (what an object is used for)
  */
 export class FunctionTag extends Tag {
+  readonly type = 'FunctionTag';
   constructor(public readonly value: string) {
     super();
   }
@@ -189,6 +196,7 @@ export class FunctionTag extends Tag {
  * Size tags
  */
 export class SizeTag extends Tag {
+  readonly type = 'SizeTag';
   constructor(public readonly value: 'small' | 'medium' | 'large') {
     super();
   }
@@ -221,6 +229,7 @@ export class SizeTag extends Tag {
  * Style tags
  */
 export class StyleTag extends Tag {
+  readonly type = 'StyleTag';
   constructor(public readonly value: string) {
     super();
   }
@@ -253,6 +262,7 @@ export class StyleTag extends Tag {
  * Negated tag wrapper
  */
 export class NegatedTag extends Tag {
+  readonly type = 'NegatedTag';
   constructor(public readonly tag: Tag) {
     super();
   }

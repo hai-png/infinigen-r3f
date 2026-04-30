@@ -494,4 +494,4 @@ if (typeof window !== 'undefined' || typeof process !== 'undefined') {
   registerSaveMeshesTask();
 }
 
-export type { ExportFormat };
+

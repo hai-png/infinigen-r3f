@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { useThree, useFrame } from '@react-three/fiber';
-import { Constraint, Problem } from '../../constraints/language/types';
-import { evaluateProblem } from '../../constraints/evaluator/evaluate';
+import { Constraint, Problem } from '../../core/constraints/language/types';
+import { evaluateProblem } from '../../core/constraints/evaluator/evaluate';
 import { ConstraintVisualizationConfig } from '../types';
 
-interface ConstraintVisualizerProps {
+export interface ConstraintVisualizerProps {
   problem?: Problem;
   config?: Partial<ConstraintVisualizationConfig>;
   showDebugLines?: boolean;

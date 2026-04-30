@@ -10,8 +10,8 @@ import { BoulderFactory } from '../assets/geometries/boulder-factory';
 import { SimplePlantFactory } from '../assets/geometries/plant-factory';
 import { TerrainFactory } from '../assets/geometries/terrain-factory';
 import { setupSkyLighting, SkyConfig } from '../assets/lighting/sky-lighting';
-import { InstanceScatter, ScatterConfig } from '../placement/instance-scatter';
-import { DensityFilter, DensityConfig } from '../placement/density';
+import { InstanceScatter, ScatterConfig } from '../core/placement/instance-scatter';
+import { DensityFilter, DensityConfig } from '../core/placement/density';
 
 export interface SceneConfig {
   seed: number;

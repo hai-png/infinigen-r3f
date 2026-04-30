@@ -29,13 +29,13 @@ export interface RiverConfig {
   deltaSize: number;
 }
 
-interface FlowData {
+export interface FlowData {
   direction: number; // 0-7 for 8 directions
   accumulation: number;
   slope: number;
 }
 
-interface RiverPoint {
+export interface RiverPoint {
   position: THREE.Vector3;
   width: number;
   depth: number;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PerformanceMetrics } from '../types';
 
-interface PerformanceProfilerProps {
+export interface PerformanceProfilerProps {
   metrics?: Partial<PerformanceMetrics>;
   autoRefresh?: boolean;
   refreshInterval?: number;

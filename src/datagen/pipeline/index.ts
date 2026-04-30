@@ -28,7 +28,7 @@ export {
   registerRenderTask,
   executeRender,
   type RenderConfig,
-} from '../rendering/RenderTask';
+} from '../../core/rendering/RenderTask';
 
 export {
   saveMeshesTask,

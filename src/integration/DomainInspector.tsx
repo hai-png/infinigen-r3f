@@ -12,7 +12,7 @@ import {
   BBoxDomain,
   BooleanDomain,
   Variable 
-} from '../constraints/language/types';
+} from '../core/constraints/language/types';
 
 interface DomainInspectorProps {
   variables: Variable[];

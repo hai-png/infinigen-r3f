@@ -7,7 +7,7 @@
  */
 
 import { NegatedRelation } from '../language/relations';
-import { Domain } from '../constraints/reasoning/domain';
+import { Domain } from '../reasoning/domain';
 import { State, ObjectState, RelationState } from './state';
 import { satisfies } from '../tags/index';
 

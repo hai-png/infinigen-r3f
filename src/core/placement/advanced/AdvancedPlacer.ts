@@ -11,7 +11,10 @@
 
 import { Vector3, Raycaster, Mesh, BufferGeometry, Matrix4 } from 'three';
 import { BBox } from '../../util/math/bbox';
-import { TagQuery } from '../../tags';
+import type { Tag } from '../../tags';
+
+/** Tag query type for semantic filtering in placement */
+export type TagQuery = Set<Tag> | string[];
 
 // ============================================================================
 // Configuration Types

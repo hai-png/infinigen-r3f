@@ -26,6 +26,7 @@ export abstract class Relation extends BoolExpression {
  * Special relation that matches any object set
  */
 export class AnyRelation extends Relation {
+  readonly type = 'AnyRelation';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }
@@ -59,6 +60,7 @@ export class AnyRelation extends Relation {
  * Negated relation: NOT(relation)
  */
 export class NegatedRelation extends Relation {
+  readonly type = 'NegatedRelation';
   constructor(public readonly relation: Relation) {
     super();
   }
@@ -92,6 +94,7 @@ export class NegatedRelation extends Relation {
  * Conjunction of relations: AND(relations)
  */
 export class AndRelations extends Relation {
+  readonly type = 'AndRelations';
   constructor(public readonly relations: Relation[]) {
     super();
   }
@@ -133,6 +136,7 @@ export class AndRelations extends Relation {
  * Disjunction of relations: OR(relations)
  */
 export class OrRelations extends Relation {
+  readonly type = 'OrRelations';
   constructor(public readonly relations: Relation[]) {
     super();
   }
@@ -197,6 +201,7 @@ export abstract class GeometryRelation extends Relation {
  * Touching relation: objects1 are touching objects2
  */
 export class Touching extends GeometryRelation {
+  readonly type = 'Touching';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -238,6 +243,7 @@ export class Touching extends GeometryRelation {
  * Supported by relation: objects1 are supported by objects2
  */
 export class SupportedBy extends GeometryRelation {
+  readonly type = 'SupportedBy';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -279,6 +285,7 @@ export class SupportedBy extends GeometryRelation {
  * Co-planar relation: objects are on the same plane
  */
 export class CoPlanar extends GeometryRelation {
+  readonly type = 'CoPlanar';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -322,6 +329,7 @@ export class CoPlanar extends GeometryRelation {
  * Stable against relation: objects1 are stable against objects2
  */
 export class StableAgainst extends GeometryRelation {
+  readonly type = 'StableAgainst';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression
@@ -361,6 +369,7 @@ export class StableAgainst extends GeometryRelation {
  * Facing relation: objects1 are facing objects2
  */
 export class Facing extends GeometryRelation {
+  readonly type = 'Facing';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -402,6 +411,7 @@ export class Facing extends GeometryRelation {
  * Between relation: objects1 are between objects2 and objects3
  */
 export class Between extends Relation {
+  readonly type = 'Between';
   constructor(
     public readonly objects1: ObjectSetExpression,
     public readonly objects2: ObjectSetExpression,
@@ -454,6 +464,7 @@ export class Between extends Relation {
  * Accessible from relation: objects1 are accessible from objects2
  */
 export class AccessibleFrom extends GeometryRelation {
+  readonly type = 'AccessibleFrom';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -495,6 +506,7 @@ export class AccessibleFrom extends GeometryRelation {
  * Reachable from relation: objects1 are reachable from objects2 via path
  */
 export class ReachableFrom extends GeometryRelation {
+  readonly type = 'ReachableFrom';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -536,6 +548,7 @@ export class ReachableFrom extends GeometryRelation {
  * In front of relation: objects1 are in front of objects2
  */
 export class InFrontOf extends GeometryRelation {
+  readonly type = 'InFrontOf';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -577,6 +590,7 @@ export class InFrontOf extends GeometryRelation {
  * Aligned relation: objects1 are aligned with objects2
  */
 export class Aligned extends GeometryRelation {
+  readonly type = 'Aligned';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -620,6 +634,7 @@ export class Aligned extends GeometryRelation {
  * Hidden relation: objects1 are hidden from view
  */
 export class Hidden extends Relation {
+  readonly type = 'Hidden';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }
@@ -654,6 +669,7 @@ export class Hidden extends Relation {
  * Visible relation: objects are visible from camera/viewpoint
  */
 export class Visible extends Relation {
+  readonly type = 'Visible';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly viewpoint?: ObjectSetExpression
@@ -704,6 +720,7 @@ export class Visible extends Relation {
  * Grouped relation: objects are close together
  */
 export class Grouped extends Relation {
+  readonly type = 'Grouped';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly maxDistance: number = 2.0
@@ -744,6 +761,7 @@ export class Grouped extends Relation {
  * Distributed relation: objects are spread apart
  */
 export class Distributed extends Relation {
+  readonly type = 'Distributed';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly minDistance: number = 1.0
@@ -784,6 +802,7 @@ export class Distributed extends Relation {
  * Coverage relation: objects1 cover objects2
  */
 export class Coverage extends GeometryRelation {
+  readonly type = 'Coverage';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -825,6 +844,7 @@ export class Coverage extends GeometryRelation {
  * Support coverage relation
  */
 export class SupportCoverage extends GeometryRelation {
+  readonly type = 'SupportCoverage';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -865,6 +885,7 @@ export class SupportCoverage extends GeometryRelation {
  * Stability relation: objects are stable (won't fall)
  */
 export class Stability extends Relation {
+  readonly type = 'Stability';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }
@@ -899,6 +920,7 @@ export class Stability extends Relation {
  * Containment relation: objects1 contain objects2
  */
 export class Containment extends GeometryRelation {
+  readonly type = 'Containment';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression
@@ -938,6 +960,7 @@ export class Containment extends GeometryRelation {
  * Proximity relation: objects are within certain distance
  */
 export class Proximity extends GeometryRelation {
+  readonly type = 'Proximity';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,

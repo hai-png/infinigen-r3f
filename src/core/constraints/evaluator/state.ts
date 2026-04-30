@@ -33,6 +33,16 @@ export class ObjectState {
   generator: any = null; // AssetFactory equivalent
   tags: TagSet = new Set();
   relations: RelationState[] = [];
+  name: string = '';
+  
+  // Pose state
+  pose: {
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+  } = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } };
+  
+  /** Direct position access alias for pose.position */
+  position: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
   
   // Degrees of freedom for continuous optimization
   dofMatrixTranslation: THREE.Vector3 | null = null;
@@ -48,7 +58,10 @@ export class ObjectState {
   // Whether this object is active for current greedy stage
   active: boolean = true;
 
-  constructor() {
+  constructor(name?: string, tags?: TagSet, pose?: { position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }) {
+    if (name) this.name = name;
+    if (tags) this.tags = tags;
+    if (pose) this.pose = pose;
     this.dofMatrixTranslation = new THREE.Vector3();
     this.dofRotationAxis = new THREE.Vector3(0, 1, 0);
   }
@@ -95,10 +108,28 @@ export interface BVHCacheEntry {
  */
 export class State {
   objs: Map<string, ObjectState> = new Map();
+  /** Alias for objs - many consumers use state.objects */
+  objects: Map<string, ObjectState> = new Map();
+  problem?: any; // Problem reference for moves
   trimeshScene: any = null; // Trimesh scene equivalent
   graphs: any[] = []; // RoomGraph array
   bvhCache: Map<[string[], Set<any>], BVHCacheEntry> = new Map();
   planes: any = null; // Planes object
+
+  constructor(
+    objects?: Map<string, ObjectState>,
+    problem?: any,
+    bvhCache?: Map<[string[], Set<any>], BVHCacheEntry>
+  ) {
+    if (objects) {
+      this.objs = objects;
+      this.objects = objects;
+    }
+    this.problem = problem;
+    if (bvhCache) {
+      this.bvhCache = bvhCache;
+    }
+  }
 
   /**
    * Get object by key

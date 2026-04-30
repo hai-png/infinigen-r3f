@@ -11,7 +11,7 @@
  */
 
 import { Scene, Object3D } from 'three';
-import { SolverState } from '../constraints/solver/state';
+import { SolverState } from './types';
 import { Relation } from '../language';
 
 export interface BridgeConfig {
@@ -230,5 +230,8 @@ export class InfinigenBridge {
     this.isConnected = false;
   }
 }
+
+/** Singleton bridge instance for convenience */
+export const bridge = new InfinigenBridge();
 
 export default InfinigenBridge;

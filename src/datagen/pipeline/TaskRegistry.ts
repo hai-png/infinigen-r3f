@@ -536,5 +536,4 @@ export class TaskRegistry {
 // Export singleton instance
 export const taskRegistry = TaskRegistry.getInstance();
 
-// Convenience re-exports
-export type { TaskFunction, TaskResult, TaskConfig, TaskMetadata, TaskParamType };
+

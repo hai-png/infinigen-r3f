@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import type { ObjectState, Proposal } from '../types';
-import type { AssetDescription, Relation } from '../../domain/types';
+import type { AssetDescription, Relation } from '../../../placement/domain/types';
 
 export interface ProposalStrategyOptions {
   stepSize?: number;

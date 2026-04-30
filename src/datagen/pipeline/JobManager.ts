@@ -35,6 +35,7 @@ export interface JobManagerOptions {
 }
 
 export class JobManager extends EventEmitter {
+
   private jobs: Map<string, JobConfig>;
   private queue: JobConfig[];
   private runningJobs: Map<string, JobConfig>;
@@ -554,5 +555,11 @@ export class JobManager extends EventEmitter {
     this.emit('persistence_load', { timestamp: new Date() });
   }
 }
+
+/** Re-export JobStatus type for convenience */
+export type { JobStatus } from './types';
+
+/** Generation job type alias */
+export type GenerationJob = JobConfig;
 
 export default JobManager;

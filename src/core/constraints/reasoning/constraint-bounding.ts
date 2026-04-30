@@ -7,7 +7,7 @@
 
 import * as ops from './expression';
 import { BoolExpression, ScalarExpression } from './expression';
-import { Domain } from '../constraints/reasoning/domain';
+import { Domain } from './domain';
 import { constraintDomain } from './constraint-domain';
 import { domainTagSubstitute } from './domain-substitute';
 import { isConstant } from './constraint-constancy';
