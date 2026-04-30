@@ -20,6 +20,12 @@ export abstract class Relation extends BoolExpression {
    * Get the variables involved in this relation
    */
   abstract getVariables(): Set<Variable>;
+
+  /** Type discriminator for relation type comparisons */
+  abstract readonly relationType?: string;
+  
+  /** Optional target tags for relation matching */
+  targetTags?: string[];
 }
 
 /**

@@ -142,20 +142,20 @@ function violCountBinopInteger(
   lhs: number,
   rhs: number
 ): number {
-  const func = node.func;
+  const func = node.func as string;
   let err: number;
 
   switch (func) {
-    case (a: number, b: number) => a >= b: // ge
+    case 'gte': case 'ge': // ge
       err = rhs - lhs;
       break;
-    case (a: number, b: number) => a <= b: // le
+    case 'lte': case 'le': // le
       err = lhs - rhs;
       break;
-    case (a: number, b: number) => a > b: // gt
+    case 'gt': // gt
       err = rhs - lhs + 1;
       break;
-    case (a: number, b: number) => a < b: // lt
+    case 'lt': // lt
       err = lhs - rhs + 1;
       break;
     default:
@@ -172,7 +172,17 @@ function violCountBinop(node: BoolOperatorExpression, lhs: any, rhs: any): numbe
   if (typeof lhs === 'number' && typeof rhs === 'number') {
     return violCountBinopInteger(node, lhs, rhs);
   } else {
-    const satisfied = node.func(lhs, rhs);
+    const func = node.func as string;
+    let satisfied: boolean;
+    switch (func) {
+      case 'eq': satisfied = lhs === rhs; break;
+      case 'neq': case 'ne': satisfied = lhs !== rhs; break;
+      case 'lt': satisfied = lhs < rhs; break;
+      case 'lte': case 'le': satisfied = lhs <= rhs; break;
+      case 'gt': satisfied = lhs > rhs; break;
+      case 'gte': case 'ge': satisfied = lhs >= rhs; break;
+      default: satisfied = false;
+    }
     return satisfied ? 0 : 1;
   }
 }
@@ -189,7 +199,7 @@ export function violCount(
   let res: number;
 
   // Handle conjunctions and problems
-  if ((node instanceof BoolOperatorExpression && node.func === ((a: any, b: any) => a && b)) ||
+  if ((node instanceof BoolOperatorExpression && (node.func as string) === 'and') ||
       node instanceof Problem) {
     const constraints = node instanceof Problem ? node.constraints : (node as any).operands;
     res = constraints.reduce((sum: number, c: Node) => sum + violCount(c, state, memo, filter), 0);
@@ -214,7 +224,7 @@ export function violCount(
   
   // Handle equality
   else if (node instanceof BoolOperatorExpression && 
-           node.func === ((a: any, b: any) => a === b)) {
+           (node.func as string) === 'eq') {
     const [lhs, rhs] = node.operands;
     res = Math.abs(evaluateNode(lhs, state, memo) - evaluateNode(rhs, state, memo));
     if (!relevant(lhs, filter) && !relevant(rhs, filter)) {
@@ -238,12 +248,12 @@ export function violCount(
   
   // Handle comparison operators
   else if (node instanceof BoolOperatorExpression) {
-    const func = node.func;
+    const func = node.func as string;
     const isComparison = 
-      func === ((a: any, b: any) => a >= b) ||
-      func === ((a: any, b: any) => a <= b) ||
-      func === ((a: any, b: any) => a > b) ||
-      func === ((a: any, b: any) => a < b);
+      func === 'gte' || func === 'ge' ||
+      func === 'lte' || func === 'le' ||
+      func === 'gt' ||
+      func === 'lt';
     
     if (isComparison) {
       const [lhs, rhs] = node.operands;
@@ -268,14 +278,14 @@ export function violCount(
   
   // Handle OR
   else if (node instanceof BoolOperatorExpression && 
-           node.func === ((a: any, b: any) => a || b)) {
+           (node.func as string) === 'or') {
     const [lhs, rhs] = node.operands;
     res = Math.min(violCount(rhs, state, memo), violCount(lhs, state, memo));
   }
   
   // Handle NOT
   else if (node instanceof BoolOperatorExpression && 
-           node.func === ((a: any) => !a)) {
+           (node.func as string) === 'not') {
     const [lhs] = node.operands;
     const lhsRes = evaluateNode(lhs, state, memo);
     res = lhsRes === true ? 0 : 1;

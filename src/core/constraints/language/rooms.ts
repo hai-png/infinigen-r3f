@@ -39,6 +39,10 @@ import {
   TagCondition,
   UnionObjects,
   IntersectionObjects,
+  ForAll,
+  Exists,
+  SumOver,
+  ObjectSetExpression,
 } from './set-reasoning';
 import { item, tagged, SceneExpression, SCENE } from './constants';
 import type { SemanticsTag, RoomTag, FunctionTag } from '../tags';
@@ -87,12 +91,12 @@ export function objectsInRoom<T extends string>(
   roomTag: RoomTag | T,
   objectType?: SemanticsTag | string
 ): ObjectSetExpression {
-  const baseFilter = new TagCondition('room', roomTag as string);
+  const baseFilter = TagCondition.fromKeyValue('room', roomTag as string);
   
   if (objectType) {
     const combinedFilter = new AndRelations([
       baseFilter,
-      new TagCondition('semantics', objectType as string)
+      TagCondition.fromKeyValue('semantics', objectType as string)
     ]);
     return new FilterObjects(SCENE, combinedFilter);
   }
@@ -106,7 +110,7 @@ export function objectsInRoom<T extends string>(
 export function objectsWithFunction(functionType: RoomFunction): ObjectSetExpression {
   return new FilterObjects(
     SCENE,
-    new TagCondition('function', functionType)
+    TagCondition.fromKeyValue('function', functionType)
   );
 }
 
@@ -119,7 +123,7 @@ export function InRoom(
 ): ConstraintNode {
   const objVar = typeof object === 'string' ? item(object) : object;
   
-  return new TagCondition('room', roomTag as string);
+  return TagCondition.fromKeyValue('room', roomTag as string);
 }
 
 /**
@@ -193,7 +197,7 @@ export function RoomHasNaturalLight(
   const roomObjects = objectsInRoom(roomTag);
   const windowObjects = new FilterObjects(
     SCENE,
-    new TagCondition('semantics', 'window')
+    TagCondition.fromKeyValue('semantics', 'window')
   );
   
   // Count visible windows from room objects
@@ -230,8 +234,8 @@ export function ArrangeFurnitureInRoom(
   
   // Each furniture piece must be in the room
   furnitureVars.forEach((furnVar, idx) => {
-    constraints.push(new TagCondition('semantics', furnitureTypes[idx]));
-    constraints.push(new TagCondition('room', roomTag as string));
+    constraints.push(TagCondition.fromKeyValue('semantics', furnitureTypes[idx]));
+    constraints.push(TagCondition.fromKeyValue('room', roomTag as string));
   });
   
   // Minimum clearance between furniture
@@ -357,9 +361,9 @@ export function FunctionalZones(
     // Tag objects with zone function
     zone.objects.forEach((objType, objIdx) => {
       const objVar = item(`${zonePrefix}${objIdx}`);
-      constraints.push(new TagCondition('semantics', objType));
-      constraints.push(new TagCondition('function', zone.function));
-      constraints.push(new TagCondition('room', roomTag as string));
+      constraints.push(TagCondition.fromKeyValue('semantics', objType));
+      constraints.push(TagCondition.fromKeyValue('function', zone.function));
+      constraints.push(TagCondition.fromKeyValue('room', roomTag as string));
     });
     
     // Group zone objects together
@@ -433,9 +437,9 @@ export function defineRoom(
   const objects: Variable[] = [];
   
   // Tag the room itself
-  constraints.push(new TagCondition('room', name));
-  constraints.push(new TagCondition('function', roomFunction));
-  constraints.push(new TagCondition('privacy', privacy));
+  constraints.push(TagCondition.fromKeyValue('room', name));
+  constraints.push(TagCondition.fromKeyValue('function', roomFunction));
+  constraints.push(TagCondition.fromKeyValue('privacy', privacy));
   
   // Add adjacency constraints
   if (adjacency.requiredNeighbors) {
@@ -456,8 +460,8 @@ export function defineRoom(
     for (let i = 0; i < count; i++) {
       const objVar = item(`${name}_${req.type}_${i}`);
       objects.push(objVar);
-      constraints.push(new TagCondition('semantics', req.type as string));
-      constraints.push(new TagCondition('room', name));
+      constraints.push(TagCondition.fromKeyValue('semantics', req.type as string));
+      constraints.push(TagCondition.fromKeyValue('room', name));
       
       if (req.constraints) {
         constraints.push(...req.constraints);

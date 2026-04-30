@@ -2,10 +2,10 @@
  * IvyGenerator - Climbing plants with segmented growth
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
-export interface IvyConfig {
+export interface IvyConfig extends BaseGeneratorConfig {
   vineLength: number;
   segmentCount: number;
   leafSize: number;

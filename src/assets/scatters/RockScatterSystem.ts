@@ -61,7 +61,7 @@ export interface RockScatterConfig {
   erosionFactor: number;            // How much erosion affects placement
   
   // Rock types
-  rockTypes: RockType[];
+  rockTypes: (RockType | string)[];
   
   // Performance
   useLOD: boolean;
@@ -299,10 +299,13 @@ export class RockScatterSystem {
     // Override rock types if specified
     if (preset.config.rockTypes) {
       const typeMap: Record<string, RockType> = {};
-      this.config.rockTypes.forEach(t => typeMap[t.name] = t);
+      this.config.rockTypes.forEach(t => {
+        const name = typeof t === 'string' ? t : t.name;
+        if (typeof t !== 'string') typeMap[name] = t;
+      });
       
       mergedConfig.rockTypes = preset.config.rockTypes
-        .map(name => typeMap[name])
+        .map(nameOrType => typeof nameOrType === 'string' ? typeMap[nameOrType] : nameOrType)
         .filter(Boolean);
     }
     

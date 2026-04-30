@@ -49,6 +49,21 @@ export class SimulatedAnnealingSolver {
   }
 
   /**
+   * Initialize solver with constraint system
+   */
+  initialize(constraintSystem: any): SolverState {
+    return {
+      iteration: 0,
+      energy: 0,
+      currentScore: 0,
+      bestScore: -Infinity,
+      assignments: new Map(),
+      lastMove: null,
+      lastMoveAccepted: false
+    };
+  }
+
+  /**
    * Determine whether to accept a proposal based on Metropolis criterion
    */
   acceptProposal(currentScore: number, proposedScore: number): boolean {

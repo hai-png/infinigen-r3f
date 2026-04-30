@@ -3,7 +3,7 @@
  * Validates node connections, socket compatibility, and graph integrity
  */
 
-import { NodeType, SocketType, NodeSocket, NodeTree } from './types';
+import { NodeType, SocketType, NodeSocket, NodeTree, NodeInstance } from './types';
 
 export interface ValidationError {
   nodeId: string;
@@ -22,7 +22,7 @@ export interface ValidationResult {
  * Socket type compatibility matrix
  * Defines which socket types can be connected to each other
  */
-const SOCKET_COMPATIBILITY: Record<SocketType, SocketType[]> = {
+const SOCKET_COMPATIBILITY: Partial<Record<SocketType, SocketType[]>> = {
   [SocketType.GEOMETRY]: [SocketType.GEOMETRY],
   [SocketType.MATERIAL]: [SocketType.MATERIAL],
   [SocketType.TEXTURE]: [SocketType.TEXTURE],
@@ -50,7 +50,7 @@ export class NodeValidator {
 
     // Check for duplicate node IDs
     const nodeIds = new Set<string>();
-    for (const node of tree.nodes) {
+    for (const [id, node] of tree.nodes) {
       if (nodeIds.has(node.id)) {
         errors.push({
           nodeId: node.id,
@@ -63,7 +63,7 @@ export class NodeValidator {
     }
 
     // Validate each node
-    for (const node of tree.nodes) {
+    for (const [id, node] of tree.nodes) {
       const nodeResult = this.validateNode(node, tree);
       errors.push(...nodeResult.errors);
       warnings.push(...nodeResult.warnings);
@@ -81,7 +81,7 @@ export class NodeValidator {
     }
 
     // Check for unconnected required inputs
-    for (const node of tree.nodes) {
+    for (const [id, node] of tree.nodes) {
       const unconnectedResult = this.checkRequiredInputs(node, tree);
       errors.push(...unconnectedResult.errors);
       warnings.push(...unconnectedResult.warnings);
@@ -97,23 +97,23 @@ export class NodeValidator {
   /**
    * Validate a single node
    */
-  validateNode(node: NodeType, tree: NodeTree): ValidationResult {
+  validateNode(node: NodeInstance, tree: NodeTree): ValidationResult {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
     // Validate input sockets
-    for (const input of node.inputs) {
-      if (input.link) {
-        const linkValidation = this.validateLink(input.link, tree, node.id);
+    for (const [socketName, inputValue] of node.inputs) {
+      if (inputValue && typeof inputValue === 'object' && inputValue.link) {
+        const linkValidation = this.validateLink(inputValue.link, tree, node.id);
         errors.push(...linkValidation.errors);
         warnings.push(...linkValidation.warnings);
       }
     }
 
     // Validate output sockets
-    for (const output of node.outputs) {
-      if (output.links && output.links.length > 0) {
-        for (const link of output.links) {
+    for (const [socketName, outputValue] of node.outputs) {
+      if (outputValue && typeof outputValue === 'object' && outputValue.links && outputValue.links.length > 0) {
+        for (const link of outputValue.links) {
           const linkValidation = this.validateOutputLink(link, tree, node.id);
           errors.push(...linkValidation.errors);
           warnings.push(...linkValidation.warnings);
@@ -135,7 +135,7 @@ export class NodeValidator {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
-    const sourceNode = tree.nodes.find(n => n.id === link.fromNode);
+    const sourceNode = Array.from(tree.nodes.values()).find(n => n.id === link.fromNode);
     if (!sourceNode) {
       errors.push({
         nodeId: targetNodeId,
@@ -146,7 +146,7 @@ export class NodeValidator {
       return { valid: false, errors, warnings };
     }
 
-    const sourceOutput = sourceNode.outputs.find(o => o.identifier === link.fromSocket);
+    const sourceOutput = Array.from(sourceNode.outputs.values()).find((o: any) => o.identifier === link.fromSocket);
     if (!sourceOutput) {
       errors.push({
         nodeId: targetNodeId,
@@ -171,7 +171,7 @@ export class NodeValidator {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
-    const targetNode = tree.nodes.find(n => n.id === link.toNode);
+    const targetNode = Array.from(tree.nodes.values()).find(n => n.id === link.toNode);
     if (!targetNode) {
       errors.push({
         nodeId: sourceNodeId,
@@ -182,7 +182,7 @@ export class NodeValidator {
       return { valid: false, errors, warnings };
     }
 
-    const targetInput = targetNode.inputs.find(i => i.identifier === link.toSocket);
+    const targetInput = Array.from(targetNode.inputs.values()).find((i: any) => i.identifier === link.toSocket);
     if (!targetInput) {
       errors.push({
         nodeId: sourceNodeId,
@@ -212,30 +212,31 @@ export class NodeValidator {
     const recursionStack = new Set<string>();
     const parentMap = new Map<string, string>();
 
-    const dfs = (nodeId: string, path: string[]): boolean => {
+    const dfs = (nodeId: string, path: string[]): boolean | { hasCycle: boolean; nodeId: string; path: string[] } => {
       visited.add(nodeId);
       recursionStack.add(nodeId);
 
-      const node = tree.nodes.find(n => n.id === nodeId);
+      const node = Array.from(tree.nodes.values()).find(n => n.id === nodeId);
       if (!node) return false;
 
       // Check all input links (dependencies)
-      for (const input of node.inputs) {
-        if (input.link) {
-          const neighborId = input.link.fromNode;
+      for (const [socketName, inputValue] of node.inputs) {
+        if (inputValue && typeof inputValue === 'object' && inputValue.link) {
+          const neighborId = inputValue.link.fromNode;
           
           if (!visited.has(neighborId)) {
             parentMap.set(neighborId, nodeId);
             const newPath = [...path, neighborId];
-            if (dfs(neighborId, newPath)) {
-              return true;
+            const result = dfs(neighborId, newPath);
+            if (result !== false) {
+              return result;
             }
           } else if (recursionStack.has(neighborId)) {
             // Found cycle
             const cycleStart = path.indexOf(neighborId);
             const cyclePath = path.slice(cycleStart);
             cyclePath.push(neighborId);
-            return { hasCycle: true, nodeId, path: cyclePath } as any;
+            return { hasCycle: true, nodeId, path: cyclePath };
           }
         }
       }
@@ -244,7 +245,7 @@ export class NodeValidator {
       return false;
     };
 
-    for (const node of tree.nodes) {
+    for (const [id, node] of tree.nodes) {
       if (!visited.has(node.id)) {
         const result = dfs(node.id, [node.id]);
         if (result !== false) {
@@ -259,11 +260,12 @@ export class NodeValidator {
   /**
    * Check for unconnected required inputs
    */
-  checkRequiredInputs(node: NodeType, tree: NodeTree): ValidationResult {
+  checkRequiredInputs(node: NodeInstance, tree: NodeTree): ValidationResult {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
-    for (const input of node.inputs) {
+    for (const [socketName, inputValue] of node.inputs) {
+      const input = inputValue as any;
       // Skip if input has a default value or is linked
       if (input.value !== undefined || input.link) {
         continue;
@@ -273,15 +275,15 @@ export class NodeValidator {
       if (input.required) {
         errors.push({
           nodeId: node.id,
-          socketId: input.identifier,
-          error: `Required input "${input.name}" is not connected`,
+          socketId: input.identifier || socketName,
+          error: `Required input "${input.name || socketName}" is not connected`,
           severity: 'error',
         });
       } else if (!input.optional) {
         warnings.push({
           nodeId: node.id,
-          socketId: input.identifier,
-          error: `Input "${input.name}" has no value or connection`,
+          socketId: input.identifier || socketName,
+          error: `Input "${input.name || socketName}" has no value or connection`,
           severity: 'warning',
         });
       }
@@ -303,9 +305,9 @@ export class NodeValidator {
   getDependentNodes(nodeId: string, tree: NodeTree): string[] {
     const dependents: string[] = [];
 
-    for (const node of tree.nodes) {
-      for (const input of node.inputs) {
-        if (input.link && input.link.fromNode === nodeId) {
+    for (const [id, node] of tree.nodes) {
+      for (const [socketName, inputValue] of node.inputs) {
+        if (inputValue && typeof inputValue === 'object' && (inputValue as any).link && (inputValue as any).link.fromNode === nodeId) {
           dependents.push(node.id);
           break;
         }
@@ -320,13 +322,13 @@ export class NodeValidator {
    */
   getDependencies(nodeId: string, tree: NodeTree): string[] {
     const dependencies: string[] = [];
-    const node = tree.nodes.find(n => n.id === nodeId);
+    const node = Array.from(tree.nodes.values()).find(n => n.id === nodeId);
     
     if (!node) return dependencies;
 
-    for (const input of node.inputs) {
-      if (input.link) {
-        dependencies.push(input.link.fromNode);
+    for (const [socketName, inputValue] of node.inputs) {
+      if (inputValue && typeof inputValue === 'object' && (inputValue as any).link) {
+        dependencies.push((inputValue as any).link.fromNode);
       }
     }
 
@@ -351,11 +353,11 @@ export class NodeValidator {
 
       tempMark.add(nodeId);
       
-      const node = tree.nodes.find(n => n.id === nodeId);
+      const node = Array.from(tree.nodes.values()).find(n => n.id === nodeId);
       if (node) {
-        for (const input of node.inputs) {
-          if (input.link) {
-            if (!visit(input.link.fromNode)) {
+        for (const [socketName, inputValue] of node.inputs) {
+          if (inputValue && typeof inputValue === 'object' && (inputValue as any).link) {
+            if (!visit((inputValue as any).link.fromNode)) {
               return false;
             }
           }
@@ -368,7 +370,7 @@ export class NodeValidator {
       return true;
     };
 
-    for (const node of tree.nodes) {
+    for (const [id, node] of tree.nodes) {
       if (!visited.has(node.id)) {
         if (!visit(node.id)) {
           throw new Error('Cannot sort: graph contains a cycle');

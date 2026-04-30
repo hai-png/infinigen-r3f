@@ -45,7 +45,9 @@ export class ContinuousProposalGenerator {
   generate(currentState: ObjectState, relation?: Relation): Proposal {
     const proposal: Proposal = {
       objectId: currentState.id,
-      newState: { ...currentState },
+      variableId: currentState.id,
+      newValue: undefined,
+      newState: currentState,
       score: 0,
       metadata: { type: 'continuous' },
     };
@@ -56,27 +58,31 @@ export class ContinuousProposalGenerator {
     if (choice < 0.4) {
       // Perturb position (40% chance)
       proposal.newState.position = this.perturbPosition(
-        currentState.position || new THREE.Vector3(),
+        currentState.position instanceof THREE.Vector3 ? currentState.position : new THREE.Vector3(),
         relation
       );
     } else if (choice < 0.7) {
       // Perturb rotation (30% chance)
       proposal.newState.rotation = this.perturbRotation(
-        currentState.rotation || new THREE.Euler(0, 0, 0),
+        currentState.rotation instanceof THREE.Euler || currentState.rotation instanceof THREE.Quaternion
+          ? currentState.rotation
+          : new THREE.Euler(0, 0, 0),
         relation
       );
     } else if (choice < 0.9) {
       // Perturb scale (20% chance)
       proposal.newState.scale = this.perturbScale(
-        currentState.scale || new THREE.Vector3(1, 1, 1)
+        currentState.scale instanceof THREE.Vector3 ? currentState.scale : new THREE.Vector3(1, 1, 1)
       );
     } else {
       // Combined perturbation (10% chance)
       proposal.newState.position = this.perturbPosition(
-        currentState.position || new THREE.Vector3()
+        currentState.position instanceof THREE.Vector3 ? currentState.position : new THREE.Vector3()
       );
       proposal.newState.rotation = this.perturbRotation(
-        currentState.rotation || new THREE.Euler(0, 0, 0)
+        currentState.rotation instanceof THREE.Euler || currentState.rotation instanceof THREE.Quaternion
+          ? currentState.rotation
+          : new THREE.Euler(0, 0, 0)
       );
     }
 
@@ -93,10 +99,10 @@ export class ContinuousProposalGenerator {
     const newPos = current.clone();
     
     // If relation suggests specific positioning (e.g., "on", "near"), bias accordingly
-    if (relation?.type === 'on' || relation?.type === 'supportedBy') {
+    if ((relation as any)?.relationType === 'on' || (relation as any)?.relationType === 'supportedBy') {
       // Keep X/Z similar, adjust Y for support
       newPos.y += (Math.random() - 0.5) * this.options.stepSize * 0.5;
-    } else if (relation?.type === 'near' || relation?.type === 'touching') {
+    } else if ((relation as any)?.relationType === 'near' || (relation as any)?.relationType === 'touching') {
       // Larger movement in all directions
       newPos.x += (Math.random() - 0.5) * this.options.stepSize * 2;
       newPos.z += (Math.random() - 0.5) * this.options.stepSize * 2;
@@ -178,7 +184,9 @@ export class DiscreteProposalGenerator {
   ): Proposal {
     const proposal: Proposal = {
       objectId: currentState.id,
-      newState: { ...currentState },
+      variableId: currentState.id,
+      newValue: undefined,
+      newState: currentState,
       score: 0,
       metadata: { type: 'discrete' },
     };
@@ -197,7 +205,8 @@ export class DiscreteProposalGenerator {
     } else {
       // Snap to grid/discrete positions (20% chance)
       if (currentState.position) {
-        proposal.newState.position = this.snapToGrid(currentState.position);
+        const pos = currentState.position;
+        proposal.newState.position = this.snapToGrid(new THREE.Vector3(pos.x, pos.y, pos.z));
         proposal.metadata.changeType = 'grid_snap';
       }
     }
@@ -234,7 +243,7 @@ export class DiscreteProposalGenerator {
         const targetTags = relation.targetTags || [];
         
         targetTags.forEach(tag => {
-          if (c.tags?.includes(tag)) score += 1;
+          if ((c.tags as any)?.has?.(tag)) score += 1;
         });
         
         return { candidate: c, score };
@@ -256,8 +265,10 @@ export class DiscreteProposalGenerator {
 export class HybridProposalGenerator {
   private continuous: ContinuousProposalGenerator;
   private discrete: DiscreteProposalGenerator;
+  options: Required<ProposalStrategyOptions>;
 
   constructor(options: Partial<ProposalStrategyOptions> = {}) {
+    this.options = { ...DEFAULT_OPTIONS, ...options };
     this.continuous = new ContinuousProposalGenerator(options);
     this.discrete = new DiscreteProposalGenerator(options);
   }

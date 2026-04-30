@@ -167,7 +167,7 @@ export class MushroomVarieties {
     
     // Create cap
     const cap = this.createCap(config.species, config.growthStage, sizeMultiplier);
-    cap.position.y = stem.geometry.parameters.height * sizeMultiplier;
+    cap.position.y = (stem.geometry.boundingBox?.max.y ?? 0.1) * sizeMultiplier;
     group.add(cap);
     
     // Add spots if species has them
@@ -317,7 +317,7 @@ export class MushroomVarieties {
       // Position on cap surface
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * Math.PI / 3;
-      const radius = cap.geometry.parameters.radius || 0.08;
+      const radius = (cap.geometry.boundingBox?.max.x ?? 0.08) || 0.08;
       
       spot.position.set(
         radius * Math.sin(phi) * Math.cos(theta),

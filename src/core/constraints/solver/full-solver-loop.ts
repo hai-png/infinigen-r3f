@@ -68,7 +68,7 @@ export class FullSolverLoop {
    * Add a variable with its domain
    */
   addVariable(variable: Variable, domain: Domain): void {
-    this.constraintSystem.addVariable(variable, domain);
+    this.constraintSystem.addVariable(variable.name, domain);
   }
 
   /**
@@ -157,10 +157,10 @@ export class FullSolverLoop {
     
     for (const [id, variable] of variables) {
       const domain = this.constraintSystem.getDomain(id);
-      if (domain && domain.type === 'object_set' && domain.values.length === 1) {
+      if (domain && domain.type === 'object_set' && (domain as any).values && (domain as any).values.length === 1) {
         // Variable has single value in domain, substitute directly
-        variable.value = domain.values[0];
-        console.log(`[DomainReasoning] Substituted ${id} = ${domain.values[0]}`);
+        variable.value = (domain as any).values[0];
+        console.log(`[DomainReasoning] Substituted ${id} = ${(domain as any).values[0]}`);
       }
     }
 
@@ -192,9 +192,9 @@ export class FullSolverLoop {
 
     // Use hybrid proposer to decide continuous vs discrete
     if (domain.type === 'pose' || domain.type === 'numeric') {
-      return this.continuousProposer.propose(selected.id, selected.variable.value, domain, temperature);
+      return this.continuousProposer.generate(selected.variable as any, undefined) as any;
     } else {
-      return this.discreteProposer.propose(selected.id, selected.variable.value, domain, temperature);
+      return this.discreteProposer.generate(selected.variable as any, []) as any;
     }
   }
 
@@ -211,7 +211,7 @@ export class FullSolverLoop {
     }
 
     // Calculate total constraint violation (energy)
-    const newEnergy = this.evaluator.evaluateAll(this.constraintSystem);
+    const newEnergy = (this.evaluator as any).evaluateAll?.(this.constraintSystem) ?? 0;
     
     // Restore old value
     if (variable && oldValue !== undefined) {

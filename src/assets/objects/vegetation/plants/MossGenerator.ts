@@ -2,12 +2,12 @@
  * MossGenerator - Moss and lichen patches
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export type MossType = 'sheet' | 'clump' | 'lichen';
-export interface MossConfig {
+export interface MossConfig extends BaseGeneratorConfig {
   patchSize: number;
   density: number;
   height: number;

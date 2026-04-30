@@ -12,7 +12,7 @@ import { BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import * as THREE from 'three';
 import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 
-export type WardrobeType = 'freestanding' | 'built-in' | 'armoire' | 'cabinet' | 'walk-in' | 'chifforobe';
+export type WardrobeType = 'freestanding' | 'built-in' | 'armoire' | 'cabinet' | 'walk-in' | 'chifforobe' | 'sliding';
 export type DoorStyle = 'sliding' | 'hinged' | 'bi-fold' | 'curtain' | 'french';
 export type WardrobeMaterial = 'wood' | 'mdf' | 'metal' | 'glass' | 'mirrored' | 'composite';
 export type InteriorLayout = 'hanging-only' | 'shelves-only' | 'mixed' | 'custom';

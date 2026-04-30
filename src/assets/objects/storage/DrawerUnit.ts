@@ -36,6 +36,10 @@ export class DrawerUnit extends BaseObjectGenerator<DrawerUnitParams> {
     };
   }
 
+  getDefaultParams() {
+    return this.getDefaultConfig();
+  }
+
   generate(params: Partial<DrawerUnitParams> = {}): THREE.Object3D {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const rng = new SeededRandom(finalParams.variationSeed || this.seed);

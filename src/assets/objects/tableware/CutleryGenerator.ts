@@ -239,6 +239,19 @@ export class CutleryGenerator extends BaseObjectGenerator<CutleryParams> {
     
     return variations;
   }
+
+  protected getMaterial(type: string): THREE.MeshStandardMaterial {
+    const materialConfigs: Record<string, { color: number; metalness: number; roughness: number }> = {
+      silver: { color: 0xcccccc, metalness: 0.95, roughness: 0.1 },
+      steel: { color: 0xaaaaaa, metalness: 0.9, roughness: 0.15 },
+      black_plastic: { color: 0x222222, metalness: 0.0, roughness: 0.6 },
+      wood: { color: 0x8b6914, metalness: 0.0, roughness: 0.8 },
+      gold: { color: 0xffd700, metalness: 0.95, roughness: 0.1 },
+      ceramic: { color: 0xf5f5f0, metalness: 0.0, roughness: 0.3 },
+    };
+    const config = materialConfigs[type] || materialConfigs['steel'];
+    return this.createPBRMaterial(config);
+  }
 }
 
 

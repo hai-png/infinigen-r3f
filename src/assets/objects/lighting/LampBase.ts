@@ -9,12 +9,12 @@
  * - Light emission integration
  */
 
-import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, ConeGeometry, TorusGeometry, DoubleSide } from 'three';
+import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, ConeGeometry, TorusGeometry, DoubleSide, MeshStandardMaterial } from 'three';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 import { BBox } from '../../../core/util/math/index';
 
 export interface LampParams extends BaseGeneratorConfig {
-  style: 'modern' | 'traditional' | 'industrial' | 'minimal' | 'art-deco';
+  style: 'modern' | 'traditional' | 'industrial' | 'minimal' | 'art-deco' | 'floor';
   baseMaterial: 'metal' | 'wood' | 'ceramic' | 'glass' | 'stone';
   shadeMaterial: 'fabric' | 'paper' | 'glass' | 'metal' | 'plastic';
   shadeShape: 'cylinder' | 'cone' | 'sphere' | 'rectangle' | 'empire';
@@ -425,8 +425,8 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
     return this.createPBRMaterial(config);
   }
 
-  protected createEmissiveMaterial(color: number, intensity: number = 1.0): THREE.MeshStandardMaterial {
-    return new THREE.MeshStandardMaterial({
+  protected createEmissiveMaterial(color: number, intensity: number = 1.0): MeshStandardMaterial {
+    return new MeshStandardMaterial({
       color,
       emissive: color,
       emissiveIntensity: intensity,

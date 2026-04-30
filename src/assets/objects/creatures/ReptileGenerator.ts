@@ -1,7 +1,7 @@
 /**
  * ReptileGenerator - Procedural reptile generation
  */
-import { Group, Mesh, MeshStandardMaterial } from 'three';
+import { Group, Mesh, MeshStandardMaterial, BoxGeometry } from 'three';
 import { CreatureBase, CreatureParams, CreatureType } from './CreatureBase';
 
 export interface ReptileParameters extends CreatureParams {
@@ -105,7 +105,7 @@ export class ReptileGenerator extends CreatureBase {
     return new Mesh(geometry, material);
   }
 
-  protected createShellGeometry(params?: any): THREE.BoxGeometry {
-    return new THREE.BoxGeometry(1, 1, 1); 
+  protected createShellGeometry(params?: any): BoxGeometry {
+    return new BoxGeometry(1, 1, 1);
   }
 }

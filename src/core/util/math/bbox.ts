@@ -116,6 +116,15 @@ export class BBox {
   }
   
   /**
+   * Get the diagonal length of the bbox
+   */
+  diagonal(): number {
+    if (this.isEmpty()) return 0;
+    const s = this.size();
+    return Math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
+  }
+  
+  /**
    * Get the volume of the bbox
    */
   volume(): number {

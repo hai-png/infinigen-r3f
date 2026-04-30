@@ -300,12 +300,12 @@ export class BoolVariable extends BoolExpression {
 /**
  * Binary operator for scalar expressions
  */
-export type ScalarOperator = 'add' | 'sub' | 'mul' | 'div' | 'mod' | 'pow';
+export type ScalarOperator = 'add' | 'sub' | 'mul' | 'div' | 'mod' | 'pow' | 'min' | 'max';
 
 /**
  * Binary operator for boolean expressions
  */
-export type BoolOperator = 'and' | 'or' | 'xor' | 'implies' | 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte';
+export type BoolOperator = 'and' | 'or' | 'xor' | 'implies' | 'eq' | 'neq' | 'ne' | 'lt' | 'lte' | 'le' | 'gt' | 'gte' | 'ge' | 'not';
 
 /**
  * Binary scalar operator expression
@@ -318,6 +318,16 @@ export class ScalarOperatorExpression extends ScalarExpression {
     public readonly right: ScalarExpression
   ) {
     super();
+  }
+
+  /** Alias for operator - used by reasoning modules */
+  get func(): ScalarOperator {
+    return this.operator;
+  }
+
+  /** Alias for operands as array - used by reasoning modules */
+  get operands(): ScalarExpression[] {
+    return [this.left, this.right];
   }
 
   children(): Map<string, Node> {
@@ -352,7 +362,7 @@ export class ScalarOperatorExpression extends ScalarExpression {
 
   toString(): string {
     const opMap: Record<ScalarOperator, string> = {
-      add: '+', sub: '-', mul: '*', div: '/', mod: '%', pow: '^'
+      add: '+', sub: '-', mul: '*', div: '/', mod: '%', pow: '^', min: 'min', max: 'max'
     };
     return `(${this.left} ${opMap[this.operator]} ${this.right})`;
   }
@@ -369,6 +379,16 @@ export class BoolOperatorExpression extends BoolExpression {
     public readonly right?: Expression
   ) {
     super();
+  }
+
+  /** Alias for operator - used by reasoning modules */
+  get func(): BoolOperator {
+    return this.operator;
+  }
+
+  /** Operands as array - used by reasoning modules */
+  get operands(): Expression[] {
+    return this.right ? [this.left, this.right] : [this.left];
   }
 
   children(): Map<string, Node> {
@@ -418,7 +438,7 @@ export class BoolOperatorExpression extends BoolExpression {
   toString(): string {
     const opMap: Record<BoolOperator, string> = {
       and: '&&', or: '||', xor: '^', implies: '=>',
-      eq: '==', neq: '!=', lt: '<', lte: '<=', gt: '>', gte: '>='
+      eq: '==', neq: '!=', ne: '!=', lt: '<', lte: '<=', le: '<=', gt: '>', gte: '>=', ge: '>=', not: '!'
     };
     if (this.right) {
       return `(${this.left} ${opMap[this.operator]} ${this.right})`;
@@ -654,3 +674,6 @@ export class BoolIfElse extends BoolExpression {
     return `if(${this.condition}, ${this.thenExpr}, ${this.elseExpr})`;
   }
 }
+
+// Re-export InRange from types for convenience
+export { InRange } from './types';

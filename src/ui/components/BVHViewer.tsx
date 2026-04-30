@@ -8,7 +8,18 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { BVHNode, BVHCacheEntry } from '../../core/constraints/evaluator/state';
+import type { BVHCacheEntry } from '../../core/constraints/evaluator/state';
+
+/** BVH Node representation for visualization */
+export interface BVHNode {
+  bounds: { min: THREE.Vector3; max: THREE.Vector3 };
+  bbox: THREE.Box3;
+  left: BVHNode | null;
+  right: BVHNode | null;
+  primitiveCount?: number;
+  children?: BVHNode[];
+  data?: any;
+}
 
 export interface BVHViewerProps {
   /** BVH root node to visualize */

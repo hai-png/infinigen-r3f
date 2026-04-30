@@ -8,7 +8,8 @@
 import { Node, Domain, ObjectSetDomain, NumericDomain, PoseDomain, BBoxDomain, BooleanDomain } from '../language/types';
 import { ScalarExpression, BoolExpression, ScalarConstant, BoolConstant, ScalarVariable, BoolVariable } from '../language/expression';
 import { ObjectSetExpression, ObjectSetConstant, ObjectSetVariable, FilterObjects, UnionObjects, IntersectionObjects, DifferenceObjects, CountExpression } from '../language/set-reasoning';
-import { Problem, BoolOperatorExpression, ScalarOperatorExpression, ItemExpression, TaggedExpression, SceneExpression } from '../language/constants';
+import { Problem, ItemExpression, TaggedExpression, SceneExpression } from '../language/constants';
+import { BoolOperatorExpression, ScalarOperatorExpression } from '../language/expression';
 import { Relation, AnyRelation, NegatedRelation, AndRelations, OrRelations } from '../language/relations';
 import { GeometryPredicate, Distance, Angle, SurfaceArea, Volume, Count } from '../language/geometry';
 import { ForAll, Exists, SumOver, MeanOver, MaxOver, MinOver } from '../language/set-reasoning';
@@ -94,6 +95,12 @@ export function constraintDomain(node: Node): Domain | undefined {
 
   if (node instanceof ObjectSetVariable) {
     return new ObjectSetDomain();
+  }
+
+  // Handle variable name access for union types
+  if ('name' in node && typeof (node as any).name === 'string') {
+    // Variables have a name property
+    return undefined;
   }
 
   // Handle constants
@@ -254,7 +261,7 @@ export function extractVariables(node: Node): Set<string> {
     if (child instanceof ScalarVariable || 
         child instanceof BoolVariable || 
         child instanceof ObjectSetVariable) {
-      variables.add(child.name);
+      variables.add(child.variable.name);
     } else if (child instanceof ItemExpression) {
       variables.add(child.name);
     }
@@ -271,7 +278,7 @@ export function containsVariable(node: Node, varName: string): boolean {
     if (child instanceof ScalarVariable || 
         child instanceof BoolVariable || 
         child instanceof ObjectSetVariable) {
-      if (child.name === varName) return true;
+      if (child.variable.name === varName) return true;
     } else if (child instanceof ItemExpression) {
       if (child.name === varName) return true;
     }

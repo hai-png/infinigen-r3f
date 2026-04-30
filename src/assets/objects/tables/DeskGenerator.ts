@@ -38,6 +38,10 @@ export class DeskGenerator extends BaseObjectGenerator<DeskParams> {
     };
   }
 
+  getDefaultParams() {
+    return this.getDefaultConfig();
+  }
+
   generate(params: Partial<DeskParams> = {}): THREE.Object3D {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const rng = new SeededRandom(finalParams.variationSeed || this.seed);

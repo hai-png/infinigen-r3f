@@ -377,6 +377,7 @@ export interface NodeDefinition<T = any> {
   parameters?: any[];
   defaults?: Record<string, any>;
   defaultData?: T;
+  execute?: (...args: any[]) => any;
 }
 
 /**
@@ -396,6 +397,7 @@ export interface NodeInstance {
  * Link between two nodes
  */
 export interface NodeLink {
+  id: string;
   fromNode: string;
   fromSocket: string;
   toNode: string;
@@ -415,11 +417,17 @@ export interface NodeGroupInterface {
  * Used when defining specific node interfaces with typed sockets
  */
 export interface Node {
+  id?: string;
   type: NodeType | string;
   inputs: Record<string, any>;
   outputs: Record<string, any>;
   params?: Record<string, any>;
   settings?: Record<string, any>;
+  val?: any;
+  var?: string;
+  value?: any;
+  objs?: any[];
+  pred?: any;
 }
 
 /**
@@ -505,3 +513,26 @@ export function getDefaultValueForType(type: SocketType): any {
       return null;
   }
 }
+
+/**
+ * Geometry node definition - specialized for geometry nodes
+ */
+export interface GeometryNodeDefinition<T = any> extends NodeDefinition<T> {
+  execute?: (...args: any[]) => any;
+}
+
+/**
+ * Node execution context for shader/geometry node execution
+ */
+export interface NodeExecutionContext {
+  variables: Map<string, any>;
+  functions: Map<string, (...args: any[]) => any>;
+  depth: number;
+  maxDepth: number;
+  metadata: Record<string, any>;
+}
+
+/**
+ * Re-export from constraint types for node integration
+ */
+export type { ConstraintNode, ExpressionNode } from '../../constraints/language/types';

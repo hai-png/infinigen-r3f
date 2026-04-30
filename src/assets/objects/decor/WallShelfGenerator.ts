@@ -17,7 +17,7 @@
 
 import * as THREE from 'three';
 
-export type ShelfStyle = 'floating' | 'bracketed' | 'recessed' | 'ledged' | 'corner';
+export type ShelfStyle = 'floating' | 'bracketed' | 'recessed' | 'ledged' | 'corner' | 'ornate';
 export type ShelfMaterial = 'wood' | 'metal' | 'glass' | 'stone' | 'composite';
 export type BracketStyle = 'simple' | 'ornate' | 'industrial' | 'hidden' | 'decorative';
 

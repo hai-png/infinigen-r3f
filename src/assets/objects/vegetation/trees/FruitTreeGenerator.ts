@@ -2,11 +2,11 @@
  * FruitTreeGenerator - Fruit-bearing trees
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type FruitType = 'apple' | 'orange' | 'cherry' | 'peach' | 'pear';
-export interface FruitTreeConfig {
+export interface FruitTreeConfig extends BaseGeneratorConfig {
   height: number;
   crownRadius: number;
   fruitCount: number;

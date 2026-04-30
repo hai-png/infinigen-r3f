@@ -33,6 +33,12 @@ export interface AssetDescription {
   /** Size category */
   size?: 'small' | 'medium' | 'large';
   
+  /** Type of the asset */
+  type?: string;
+  
+  /** Scale of the asset */
+  scale?: number;
+  
   /** Function of the object */
   function?: string;
   
@@ -44,6 +50,12 @@ export interface AssetDescription {
   
   /** Children object IDs */
   childrenIds?: string[];
+  
+  /** Target count for placement */
+  targetCount?: number;
+  
+  /** Target tags for relation matching */
+  targetTags?: string[];
 }
 
 /**
@@ -97,6 +109,9 @@ export interface Relation {
   
   /** Tolerance for satisfaction */
   tolerance?: number;
+  
+  /** Target tags for relation matching */
+  targetTags?: string[];
 }
 
 /**

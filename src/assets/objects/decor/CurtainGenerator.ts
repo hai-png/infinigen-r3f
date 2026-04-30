@@ -19,7 +19,7 @@ import {
 import { BaseObjectGenerator } from '../utils/BaseObjectGenerator';
 import { NoiseUtils } from '../../utils/NoiseUtils';
 
-export type CurtainStyle = 'drapes' | 'sheer' | 'valance' | 'cafe' | 'pencil' | 'grommet' | 'rod_pocket';
+export type CurtainStyle = 'drapes' | 'sheer' | 'valance' | 'cafe' | 'pencil' | 'grommet' | 'rod_pocket' | 'velvet';
 export type CurtainMaterialType = 'cotton' | 'linen' | 'silk' | 'velvet' | 'polyester' | 'lace';
 export type CurtainPattern = 'solid' | 'striped' | 'floral' | 'geometric' | 'damask';
 

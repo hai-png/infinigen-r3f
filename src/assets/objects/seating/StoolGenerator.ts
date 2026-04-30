@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { BaseObjectGenerator, BaseGeneratorConfig, ObjectStylePreset } from '../utils';
 import { ObjectRegistry } from '../ObjectRegistry';
 import { SeededRandom } from '../../../core/util/math/distributions';
-import { BezierCurveGenerator } from '../../../assets/utils/curves';
+import { BezierCurveGenerator, extrudeShape } from '../../../assets/utils/curves';
 import { MeshUtils } from '../../../assets/utils/mesh';
 
 export interface StoolParams extends BaseGeneratorConfig {
@@ -68,6 +68,10 @@ export class StoolGenerator extends BaseObjectGenerator<StoolParams> {
       swivel: false,
       variationSeed: undefined,
     };
+  }
+
+  getDefaultParams() {
+    return this.getDefaultConfig();
   }
 
   generate(params: Partial<StoolParams> = {}): THREE.Object3D {

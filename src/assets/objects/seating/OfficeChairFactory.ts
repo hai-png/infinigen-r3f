@@ -49,6 +49,7 @@ export interface OfficeChairResult {
   mesh: THREE.Group;
   config: OfficeChairConfig;
   materials: THREE.Material[];
+  position: THREE.Vector3;
 }
 
 /**
@@ -163,6 +164,7 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
       mesh: group,
       config,
       materials,
+      position: new THREE.Vector3(0, 0, 0),
     };
   }
 
@@ -222,6 +224,7 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
       mesh: group,
       config: {} as OfficeChairConfig,
       materials,
+      position: new THREE.Vector3(0, 0, 0),
     };
   }
 
@@ -264,6 +267,7 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
       mesh: group,
       config: {} as OfficeChairConfig,
       materials,
+      position: new THREE.Vector3(0, 0, 0),
     };
   }
 
@@ -329,6 +333,7 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
       mesh: group,
       config: {} as OfficeChairConfig,
       materials,
+      position: new THREE.Vector3(0, 0, 0),
     };
   }
 
@@ -397,6 +402,7 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
       mesh: group,
       config: {} as OfficeChairConfig,
       materials,
+      position: new THREE.Vector3(0, 0, 0),
     };
   }
 
@@ -473,6 +479,7 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
       mesh: group,
       config: {} as OfficeChairConfig,
       materials,
+      position: new THREE.Vector3(0, 0, 0),
     };
   }
 

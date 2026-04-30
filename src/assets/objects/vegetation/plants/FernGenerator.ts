@@ -3,12 +3,12 @@
  */
 
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type FernSpecies = 'boston' | 'maidenhair' | 'bird_nest' | 'staghorn' | 'tree_fern';
 
-export interface FernConfig {
+export interface FernConfig extends BaseGeneratorConfig {
   frondCount: number;
   frondLength: number;
   pinnaePerFrond: number;

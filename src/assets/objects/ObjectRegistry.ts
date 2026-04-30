@@ -28,6 +28,13 @@ export class ObjectRegistry {
     this.objects.set(name, { name, category, generator, tags });
   }
 
+  /**
+   * Static convenience method to register an object on the singleton instance
+   */
+  static register(name: string, category: string, generator: any, tags?: string[]): void {
+    ObjectRegistry.getInstance().register(name, category, generator, tags);
+  }
+
   get(name: string): RegisteredObject | undefined {
     return this.objects.get(name);
   }

@@ -5,4 +5,4 @@
  * will resolve here and get the State type from evaluator.
  */
 
-export { State, ObjectState, RelationState, BVHNode, BVHCacheEntry } from '../evaluator/state';
+export { State, ObjectState, RelationState, BVHCacheEntry } from '../evaluator/state';

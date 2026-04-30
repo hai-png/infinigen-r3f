@@ -27,6 +27,8 @@ export enum TokenType {
   COLON = 'COLON',
   ARROW = 'ARROW',
   KEYWORD = 'KEYWORD',
+  DOT = 'DOT',
+  SEMICOLON = 'SEMICOLON',
   EOF = 'EOF'
 }
 
@@ -38,6 +40,8 @@ export interface Token {
   value: string | number;
   line: number;
   column: number;
+  /** Name of the token (alias for string value) */
+  name?: string;
 }
 
 /**
@@ -58,7 +62,8 @@ export enum ASTNodeType {
   BLOCK_STATEMENT = 'BLOCK_STATEMENT',
   RETURN_STATEMENT = 'RETURN_STATEMENT',
   IF_STATEMENT = 'IF_STATEMENT',
-  FOR_STATEMENT = 'FOR_STATEMENT'
+  FOR_STATEMENT = 'FOR_STATEMENT',
+  VARIABLE_DECLARATION = 'VARIABLE_DECLARATION'
 }
 
 /**
@@ -643,6 +648,7 @@ export class ConstraintLexer {
     return {
       type,
       value,
+      name: value as string,
       line: startLine,
       column: startColumn
     };

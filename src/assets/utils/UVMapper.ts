@@ -3,7 +3,7 @@
  * Provides automatic UV unwrapping and mapping utilities
  */
 
-import { BufferGeometry, Vector2, Vector3, Box3 } from 'three';
+import { BufferGeometry, BufferAttribute, Float32BufferAttribute, Vector2, Vector3, Box3 } from 'three';
 
 export class UVMapper {
   /**
@@ -39,7 +39,7 @@ export class UVMapper {
       uvs.push(u, v);
     }
 
-    geometry.setAttribute('uv', new Float32Array(uvs));
+    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
     return geometry;
   }
 
@@ -75,7 +75,7 @@ export class UVMapper {
       uvs.push(u, v);
     }
 
-    geometry.setAttribute('uv', new Float32Array(uvs));
+    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
     return geometry;
   }
 
@@ -114,7 +114,7 @@ export class UVMapper {
       uvs.push(u, v);
     }
 
-    geometry.setAttribute('uv', new Float32Array(uvs));
+    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
     return geometry;
   }
 
@@ -163,7 +163,7 @@ export class UVMapper {
       uvs.push(u, v);
     }
 
-    geometry.setAttribute('uv', new Float32Array(uvs));
+    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
     return geometry;
   }
 

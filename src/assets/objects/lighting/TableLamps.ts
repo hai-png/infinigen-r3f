@@ -178,7 +178,7 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     const baseGeometry = this.getBaseGeometry(params);
     const baseMaterial = this.getMaterial(params.baseMaterial, params.baseColor);
     const base = new THREE.Mesh(baseGeometry, baseMaterial);
-    base.position.y = baseGeometry.parameters.height ? baseGeometry.parameters.height / 2 : 0.03;
+    base.position.y = baseGeometry.boundingBox?.max.y ?? 0.03 ? baseGeometry.boundingBox?.max.y ?? 0.03 / 2 : 0.03;
     group.add(base);
 
     // Stem
@@ -296,7 +296,7 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     const baseGeometry = this.getBaseGeometry(params);
     const baseMaterial = this.getMaterial(params.baseMaterial, params.baseColor);
     const base = new THREE.Mesh(baseGeometry, baseMaterial);
-    base.position.y = baseGeometry.parameters.height ? baseGeometry.parameters.height / 2 : 0.04;
+    base.position.y = baseGeometry.boundingBox?.max.y ?? 0.03 ? baseGeometry.boundingBox?.max.y ?? 0.03 / 2 : 0.04;
     group.add(base);
 
     // Tall elegant stem

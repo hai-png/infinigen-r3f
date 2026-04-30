@@ -2,11 +2,11 @@
  * PalmGenerator - Palm trees
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type PalmType = 'coconut' | 'date' | 'fan' | 'sago';
-export interface PalmConfig {
+export interface PalmConfig extends BaseGeneratorConfig {
   trunkHeight: number;
   trunkRadius: number;
   frondCount: number;

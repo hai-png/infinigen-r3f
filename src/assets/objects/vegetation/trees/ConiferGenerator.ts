@@ -2,11 +2,11 @@
  * ConiferGenerator - Pine, fir, spruce trees
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type ConiferType = 'pine' | 'fir' | 'spruce' | 'cedar' | 'redwood';
-export interface ConiferConfig {
+export interface ConiferConfig extends BaseGeneratorConfig {
   height: number;
   baseRadius: number;
   tierCount: number;

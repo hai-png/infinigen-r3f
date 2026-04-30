@@ -356,6 +356,7 @@ export class NodeTranspiler {
           );
           
           optimized.links.push({
+            id: `${inputLink.fromNode}-${inputLink.fromSocket}-${outputLink.toNode}-${outputLink.toSocket}`,
             fromNode: inputLink.fromNode,
             fromSocket: inputLink.fromSocket,
             toNode: outputLink.toNode,

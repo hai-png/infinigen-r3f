@@ -14,9 +14,13 @@ export class ConstraintSystem {
   private constraints: Map<string, BoolExpression> = new Map();
   private scoreTerms: Map<string, ScalarExpression> = new Map();
 
-  addVariable(name: string, domain: Domain): Variable {
-    const variable = new Variable(name, domain);
-    this.variables.set(name, variable);
+  addVariable(nameOrVariable: string | Variable, domain?: Domain): Variable {
+    if (nameOrVariable instanceof Variable) {
+      this.variables.set(nameOrVariable.name, nameOrVariable);
+      return nameOrVariable;
+    }
+    const variable = new Variable(nameOrVariable, domain);
+    this.variables.set(nameOrVariable, variable);
     return variable;
   }
 
@@ -34,6 +38,18 @@ export class ConstraintSystem {
 
   getVariable(name: string): Variable | undefined {
     return this.variables.get(name);
+  }
+
+  getVariables(): Map<string, Variable> {
+    return this.variables;
+  }
+
+  getDomain(name: string): Domain | undefined {
+    return this.variables.get(name)?.domain;
+  }
+
+  simplify(): void {
+    // Simplify constraints - basic implementation
   }
 
   getAllVariables(): Variable[] {

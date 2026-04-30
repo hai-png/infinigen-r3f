@@ -38,6 +38,10 @@ export class CabinetGenerator extends BaseObjectGenerator<CabinetConfig> {
     };
   }
 
+  getDefaultParams() {
+    return this.getDefaultConfig();
+  }
+
   generate(params: Partial<CabinetConfig> = {}): THREE.Object3D {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const rng = new SeededRandom(finalParams.variationSeed || this.seed);

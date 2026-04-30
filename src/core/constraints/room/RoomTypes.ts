@@ -74,6 +74,7 @@ export interface Door {
   height: number;
   isSliding: boolean;
   isOpen: boolean;
+  wall?: string;
 }
 
 /**
@@ -88,6 +89,7 @@ export interface Window {
   sillHeight: number;
   orientation: number;
   isOperable: boolean;
+  wall?: string;
 }
 
 /**
@@ -101,6 +103,7 @@ export interface Room {
   polygon: THREE.Vector2[];
   center: THREE.Vector2;
   area: number;
+  volume: number;
   doors: Door[];
   windows: Window[];
   neighbors: string[];

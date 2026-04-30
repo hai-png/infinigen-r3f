@@ -5,6 +5,7 @@
 
 import { ConstraintDomain, ConstraintEvaluationResult } from '../core/ConstraintTypes';
 import { MoveOperatorFactory, Move, MoveType, MoveResult } from '../moves/MoveOperators';
+import { Vector3 } from 'three';
 
 export interface AnnealingConfig {
   initialTemperature: number;
@@ -168,11 +169,11 @@ export class SimulatedAnnealing {
 
       case MoveType.ADD:
         move.objectId = `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        move.position = {
-          x: (Math.random() - 0.5) * 20,
-          y: 0,
-          z: (Math.random() - 0.5) * 20,
-        };
+        move.position = new Vector3(
+          (Math.random() - 0.5) * 20,
+          0,
+          (Math.random() - 0.5) * 20,
+        );
         if (rooms.length > 0) {
           move.roomId = rooms[Math.floor(Math.random() * rooms.length)];
         }

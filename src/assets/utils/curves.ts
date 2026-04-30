@@ -1,5 +1,18 @@
 import * as THREE from 'three';
 
+/**
+ * Extrude a 2D shape into a 3D geometry
+ * @param shape - The THREE.Shape to extrude
+ * @param options - ExtrudeGeometry options (depth, bevel settings, etc.)
+ * @returns The extruded BufferGeometry
+ */
+export function extrudeShape(
+  shape: THREE.Shape,
+  options?: THREE.ExtrudeGeometryOptions
+): THREE.BufferGeometry {
+  return new THREE.ExtrudeGeometry(shape, options ?? { depth: 1, bevelEnabled: false });
+}
+
 export class BezierCurveGenerator {
   static quadraticBezierCurve(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, segments: number = 10): THREE.Vector3[] {
     const points: THREE.Vector3[] = [];

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import * as THREE from 'three';
+import { Variable } from '../core/constraints/language/types';
 import {
   AnyRelation,
   ScalarConstant,
@@ -10,7 +11,7 @@ import {
   Touching
 } from '../core/constraints/language';
 import { useInfinigenSolver, ConstraintDebugger, ConstraintOverlay } from '../integration';
-import type { ObjectState } from '../core/constraints/evaluator/state';
+import { ObjectState } from '../core/constraints/evaluator/state';
 
 /**
  * Example scene demonstrating basic constraint solving.
@@ -24,38 +25,27 @@ import type { ObjectState } from '../core/constraints/evaluator/state';
 export function BasicExample() {
   // Define initial objects
   const initialObjects: ObjectState[] = [
-    {
-      id: 'box1',
-      position: new THREE.Vector3(-2, 0, 0),
-      rotation: new THREE.Quaternion(),
-      scale: new THREE.Vector3(1, 1, 1)
-    },
-    {
-      id: 'box2',
-      position: new THREE.Vector3(2, 0, 0),
-      rotation: new THREE.Quaternion(),
-      scale: new THREE.Vector3(1, 1, 1)
-    },
-    {
-      id: 'box3',
-      position: new THREE.Vector3(0, 0, -2),
-      rotation: new THREE.Quaternion(),
-      scale: new THREE.Vector3(1, 1, 1)
-    }
+    new ObjectState('box1'),
+    new ObjectState('box2'),
+    new ObjectState('box3'),
   ];
+  // Set positions on the objects
+  initialObjects[0].position = { x: -2, y: 0, z: 0 };
+  initialObjects[1].position = { x: 2, y: 0, z: 0 };
+  initialObjects[2].position = { x: 0, y: 0, z: -2 };
 
   // Define constraints
   const constraints = [
     // Box1 and Box2 should be within distance 3
     new AnyRelation(
-      new ObjectSetVariable('box1'),
-      new ObjectSetVariable('box2'),
+      new ObjectSetVariable(new Variable('box1')),
+      new ObjectSetVariable(new Variable('box2')),
       new Distance(new ScalarConstant(3), 'less_than')
     ),
     // Box2 and Box3 should be touching
     new AnyRelation(
-      new ObjectSetVariable('box2'),
-      new ObjectSetVariable('box3'),
+      new ObjectSetVariable(new Variable('box2')),
+      new ObjectSetVariable(new Variable('box3')),
       new Touching()
     )
   ];
@@ -215,31 +205,36 @@ export function BasicExample() {
 export function RoomLayoutExample() {
   // Create furniture objects
   const furniture: ObjectState[] = [
-    { id: 'sofa', position: new THREE.Vector3(0, 0, 0), rotation: new THREE.Quaternion(), scale: new THREE.Vector3(2, 0.5, 1) },
-    { id: 'table', position: new THREE.Vector3(3, 0, 0), rotation: new THREE.Quaternion(), scale: new THREE.Vector3(1, 0.5, 1) },
-    { id: 'chair1', position: new THREE.Vector3(-2, 0, 2), rotation: new THREE.Quaternion(), scale: new THREE.Vector3(0.5, 0.5, 0.5) },
-    { id: 'chair2', position: new THREE.Vector3(-2, 0, -2), rotation: new THREE.Quaternion(), scale: new THREE.Vector3(0.5, 0.5, 0.5) },
-    { id: 'lamp', position: new THREE.Vector3(4, 0, 3), rotation: new THREE.Quaternion(), scale: new THREE.Vector3(0.3, 1.5, 0.3) }
+    new ObjectState('sofa'),
+    new ObjectState('table'),
+    new ObjectState('chair1'),
+    new ObjectState('chair2'),
+    new ObjectState('lamp'),
   ];
+  furniture[0].position = { x: 0, y: 0, z: 0 };
+  furniture[1].position = { x: 3, y: 0, z: 0 };
+  furniture[2].position = { x: -2, y: 0, z: 2 };
+  furniture[3].position = { x: -2, y: 0, z: -2 };
+  furniture[4].position = { x: 4, y: 0, z: 3 };
 
   // Define room constraints
   const roomConstraints = [
     // Sofa should be against a wall (simplified)
     new AnyRelation(
-      new ObjectSetVariable('sofa'),
-      new ObjectSetVariable('wall_north'),
+      new ObjectSetVariable(new Variable('sofa')),
+      new ObjectSetVariable(new Variable('wall_north')),
       new Touching()
     ),
     // Table should be near sofa
     new AnyRelation(
-      new ObjectSetVariable('table'),
-      new ObjectSetVariable('sofa'),
+      new ObjectSetVariable(new Variable('table')),
+      new ObjectSetVariable(new Variable('sofa')),
       new Distance(new ScalarConstant(2), 'less_than')
     ),
     // Chairs should face table
     new AnyRelation(
-      new ObjectSetVariable('chair1'),
-      new ObjectSetVariable('table'),
+      new ObjectSetVariable(new Variable('chair1')),
+      new ObjectSetVariable(new Variable('table')),
       new Distance(new ScalarConstant(1.5), 'less_than')
     )
   ];

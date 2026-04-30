@@ -5,7 +5,7 @@
  * Ported from: placement/camera.py (30.7KB)
  */
 
-import type { Vector3, Euler } from 'three';
+import { Vector3, Euler } from 'three';
 import type { Variable, ConstraintNode } from '../../constraints/language/types';
 import { item } from '../../constraints/language/constants';
 import {
@@ -428,11 +428,11 @@ export function calculateOptimalPosition(
   // Clamp height
   const finalY = Math.max(heightRange[0], Math.min(heightRange[1], subjectPosition.y + offsetY));
   
-  return {
-    x: subjectPosition.x + offsetX,
-    y: finalY,
-    z: subjectPosition.z + offsetZ,
-  };
+  return new Vector3(
+    subjectPosition.x + offsetX,
+    finalY,
+    subjectPosition.z + offsetZ,
+  );
 }
 
 /**
@@ -484,11 +484,11 @@ export function generateTrajectoryKeyframes(
         
         keyframes_.push({
           time: t * duration,
-          position: {
-            x: center.x + Math.sin(angle) * radius,
-            y: center.y,
-            z: center.z + Math.cos(angle) * radius,
-          },
+          position: new Vector3(
+            center.x + Math.sin(angle) * radius,
+            center.y,
+            center.z + Math.cos(angle) * radius,
+          ),
           target: center,
           easing: 'linear',
         });
@@ -507,7 +507,7 @@ export function generateTrajectoryKeyframes(
         keyframes_.push({
           time: t * duration,
           position: startPosition,
-          rotation: { x: 0, y: angle, z: 0 },
+          rotation: new Euler(0, angle, 0),
           easing: 'linear',
         });
       }
@@ -540,11 +540,11 @@ export function generateTrajectoryKeyframes(
         
         keyframes_.push({
           time: t * duration,
-          position: {
-            x: startPosition.x,
-            y: lerp(startHeight, endHeight, progress),
-            z: startPosition.z,
-          },
+          position: new Vector3(
+            startPosition.x,
+            lerp(startHeight, endHeight, progress),
+            startPosition.z,
+          ),
           target: startTarget,
           easing: 'ease_in_out',
         });
@@ -571,21 +571,21 @@ export function generateTrajectoryKeyframes(
 
 // Helper math functions
 function subtractVectors(a: Vector3, b: Vector3): Vector3 {
-  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+  return new Vector3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 function addVectors(a: Vector3, b: Vector3): Vector3 {
-  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+  return new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 
 function scaleVector(v: Vector3, s: number): Vector3 {
-  return { x: v.x * s, y: v.y * s, z: v.z * s };
+  return new Vector3(v.x * s, v.y * s, v.z * s);
 }
 
 function normalizeVector(v: Vector3): Vector3 {
   const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-  if (len === 0) return { x: 0, y: 0, z: 0 };
-  return { x: v.x / len, y: v.y / len, z: v.z / len };
+  if (len === 0) return new Vector3(0, 0, 0);
+  return new Vector3(v.x / len, v.y / len, v.z / len);
 }
 
 function lerp(a: number, b: number, t: number): number {

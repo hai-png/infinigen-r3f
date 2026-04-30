@@ -361,6 +361,13 @@ export class TagCondition extends ObjectCondition {
     super();
   }
 
+  /**
+   * Convenience constructor for a single tag key-value pair
+   */
+  static fromKeyValue(key: string, value: string): TagCondition {
+    return new TagCondition(new Set([`${key}:${value}`]));
+  }
+
   children(): Map<string, Node> {
     return new Map();
   }

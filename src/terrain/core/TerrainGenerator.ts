@@ -30,6 +30,8 @@ export interface TerrainData {
   slopeMap: HeightMap;
   biomeMask: MaskMap;
   config: TerrainConfig;
+  width: number;
+  height: number;
 }
 
 export class TerrainGenerator {
@@ -92,6 +94,8 @@ export class TerrainGenerator {
       slopeMap,
       biomeMask,
       config: { ...this.config },
+      width: this.width,
+      height: this.height,
     };
   }
 

@@ -54,18 +54,21 @@ export function evaluateConstant<T extends number | boolean>(node: any): T | nul
       case 'div': return Math.floor((ops[0] as number) / (ops[1] as number)) as T;
       case 'mod': return (ops[0] as number) % (ops[1] as number) as T;
       case 'pow': return Math.pow(ops[0] as number, ops[1] as number) as T;
-      case 'min': return Math.min(...(ops as number[])) as T;
-      case 'max': return Math.max(...(ops as number[])) as T;
+      case 'min' as any: return Math.min(...(ops as number[])) as T;
+      case 'max' as any: return Math.max(...(ops as number[])) as T;
       
       // Boolean operations
       case 'and': return (ops[0] as boolean) && (ops[1] as boolean) as T;
       case 'or': return (ops[0] as boolean) || (ops[1] as boolean) as T;
       case 'eq': return (ops[0] as any) === (ops[1] as any) as T;
-      case 'ne': return (ops[0] as any) !== (ops[1] as any) as T;
+      case 'ne' as any:
+      case 'neq': return (ops[0] as any) !== (ops[1] as any) as T;
       case 'lt': return (ops[0] as number) < (ops[1] as number) as T;
-      case 'le': return (ops[0] as number) <= (ops[1] as number) as T;
+      case 'le' as any:
+      case 'lte': return (ops[0] as number) <= (ops[1] as number) as T;
       case 'gt': return (ops[0] as number) > (ops[1] as number) as T;
-      case 'ge': return (ops[0] as number) >= (ops[1] as number) as T;
+      case 'ge' as any:
+      case 'gte': return (ops[0] as number) >= (ops[1] as number) as T;
       
       default:
         return null;

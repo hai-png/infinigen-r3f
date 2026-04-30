@@ -2,12 +2,12 @@
  * DeciduousGenerator - Broadleaf trees
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 import { Noise3D } from '../../../../core/util/math/noise';
 
 export type DeciduousType = 'oak' | 'maple' | 'birch' | 'willow' | 'ash';
-export interface DeciduousConfig {
+export interface DeciduousConfig extends BaseGeneratorConfig {
   height: number;
   crownRadius: number;
   trunkThickness: number;

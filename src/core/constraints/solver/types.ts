@@ -14,6 +14,12 @@ export interface Proposal {
   /** ID of the object being modified */
   objectId: string;
   
+  /** ID of the variable being modified */
+  variableId: string;
+  
+  /** Proposed new value for the variable */
+  newValue: any;
+  
   /** Proposed new state */
   newState: ObjectState;
   
@@ -26,6 +32,32 @@ export interface Proposal {
     moveType?: string;
     [key: string]: any;
   };
+}
+
+/**
+ * Solver state - tracks the current state of the solving process
+ */
+export interface SolverState {
+  /** Current iteration number */
+  iteration: number;
+  
+  /** Current energy (lower is better) */
+  energy: number;
+  
+  /** Current score */
+  currentScore: number;
+  
+  /** Best score found so far */
+  bestScore: number;
+  
+  /** Variable assignments (variable id -> value) */
+  assignments: Map<string, any>;
+  
+  /** Last proposed move */
+  lastMove: Proposal | null;
+  
+  /** Whether last move was accepted */
+  lastMoveAccepted: boolean;
 }
 
 /**

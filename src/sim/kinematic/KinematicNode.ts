@@ -8,6 +8,10 @@
 import * as THREE from 'three';
 
 export enum KinematicType {
+  NONE = 'none',
+  JOINT = 'joint',
+  DUPLICATE = 'duplicate',
+  SWITCH = 'switch',
   Revolute = 'revolute',
   Prismatic = 'prismatic',
   Fixed = 'fixed',
@@ -42,6 +46,7 @@ export interface KinematicNodeConfig {
 export class KinematicNode {
   public name: string;
   public type: KinematicType;
+  public kinematicType: KinematicType;
   public jointType: JointType;
   public parent: KinematicNode | null;
   public children: KinematicNode[];
@@ -50,10 +55,13 @@ export class KinematicNode {
   public limits: { lower: number; upper: number };
   public currentValue: number;
   public transform: THREE.Matrix4;
+  public idn: number;
+  private static _nextIdn = 0;
 
   constructor(config: Partial<KinematicNodeConfig> & { name: string }) {
     this.name = config.name;
     this.type = config.type || KinematicType.Revolute;
+    this.kinematicType = this.type;
     this.jointType = config.jointType || JointType.Hinge;
     this.parent = null;
     this.children = [];
@@ -62,6 +70,28 @@ export class KinematicNode {
     this.limits = config.limits || { lower: -Math.PI, upper: Math.PI };
     this.currentValue = 0;
     this.transform = new THREE.Matrix4();
+    this.idn = KinematicNode._nextIdn++;
+  }
+
+  static resetCounts(): void {
+    KinematicNode._nextIdn = 0;
+  }
+
+  setIdn(idn: number): void {
+    this.idn = idn;
+  }
+
+  addChild(child: KinematicNode): void {
+    this.children.push(child);
+    child.parent = this;
+  }
+
+  getGraph(): KinematicNode {
+    let root: KinematicNode = this;
+    while (root.parent) {
+      root = root.parent;
+    }
+    return root;
   }
 
   setParent(parent: KinematicNode): void {

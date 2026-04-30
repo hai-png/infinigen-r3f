@@ -154,4 +154,15 @@ export class GlasswareGenerator extends BaseObjectGenerator<GlasswareParams> {
       seed: i * 1000
     }));
   }
+
+  protected getMaterial(type: string): THREE.MeshPhysicalMaterial {
+    const materialConfigs: Record<string, { color: number; transmission: number; roughness: number; metalness: number; ior: number; thickness: number }> = {
+      glass: { color: 0xffffff, transmission: 0.95, roughness: 0.05, metalness: 0.0, ior: 1.5, thickness: 0.5 },
+      crystal: { color: 0xffffff, transmission: 0.98, roughness: 0.01, metalness: 0.0, ior: 1.7, thickness: 0.3 },
+      colored_glass: { color: 0x88ccff, transmission: 0.85, roughness: 0.1, metalness: 0.0, ior: 1.5, thickness: 0.5 },
+      ceramic: { color: 0xf5f5f0, transmission: 0.0, roughness: 0.3, metalness: 0.0, ior: 1.5, thickness: 0.0 },
+    };
+    const config = materialConfigs[type] || materialConfigs['glass'];
+    return new THREE.MeshPhysicalMaterial(config);
+  }
 }

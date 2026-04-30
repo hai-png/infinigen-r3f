@@ -26,6 +26,8 @@ export interface TerrainData {
   materialMap?: Uint8Array;
   waterLevel?: number;
   bounds: THREE.Box3;
+  width: number;
+  height: number;
 }
 
 export class TerrainGenerator {
@@ -67,6 +69,8 @@ export class TerrainGenerator {
         new THREE.Vector3(0, -size, 0),
         new THREE.Vector3(size, size, size)
       ),
+      width,
+      height,
     };
   }
 }

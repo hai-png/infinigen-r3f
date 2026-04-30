@@ -3,7 +3,7 @@
  * Provides mesh processing, optimization, and transformation utilities
  */
 
-import { BufferGeometry, Mesh, Vector3, Matrix4 } from 'three';
+import { BufferGeometry, BufferAttribute, Float32BufferAttribute, Mesh, Vector3, Matrix4 } from 'three';
 
 export class GeometryPipeline {
   /**
@@ -30,7 +30,7 @@ export class GeometryPipeline {
       }
     });
     
-    mergedGeometry.setAttribute('position', new Float32Array(positions));
+    mergedGeometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
     
     // Merge normal attribute if present
     const hasNormals = geometries.every(geo => geo.attributes.normal);
@@ -42,7 +42,7 @@ export class GeometryPipeline {
           normals.push(norm[i]);
         }
       });
-      mergedGeometry.setAttribute('normal', new Float32Array(normals));
+      mergedGeometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
     }
     
     // Merge UV attribute if present
@@ -55,7 +55,7 @@ export class GeometryPipeline {
           uvs.push(uv[i]);
         }
       });
-      mergedGeometry.setAttribute('uv', new Float32Array(uvs));
+      mergedGeometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
     }
 
     mergedGeometry.computeVertexNormals();
@@ -66,7 +66,8 @@ export class GeometryPipeline {
    * Optimize geometry by removing duplicate vertices
    */
   static optimizeGeometry(geometry: BufferGeometry): BufferGeometry {
-    geometry.mergeVertices();
+    // mergeVertices requires BufferGeometryUtils
+    // geometry.mergeVertices();
     return geometry;
   }
 

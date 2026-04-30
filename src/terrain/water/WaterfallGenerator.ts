@@ -12,6 +12,7 @@
  */
 
 import * as THREE from 'three';
+import { Vector3 } from 'three';
 import { NoiseUtils } from '../utils/NoiseUtils';
 import { RiverPoint } from './RiverNetwork';
 

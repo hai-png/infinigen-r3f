@@ -93,7 +93,11 @@ export interface Proposal {
 export interface SolverState {
   iteration: number;
   energy: number;
+  currentScore: number;
+  bestScore: number;
   assignments: Map<string, any>;
   objects?: Map<string, any>;
   temperature?: number;
+  lastMove: any | null;
+  lastMoveAccepted: boolean;
 }

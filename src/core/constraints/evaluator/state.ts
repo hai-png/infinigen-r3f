@@ -8,7 +8,7 @@
  */
 
 import { Relation } from '../language/relations';
-import { TagSet } from '../tags/index';
+import { TagSet, SemanticsTag } from '../tags/index';
 import * as THREE from 'three';
 
 /**
@@ -31,9 +31,23 @@ export class ObjectState {
   obj: THREE.Object3D | null = null;
   polygon: any = null; // Shapely Polygon equivalent
   generator: any = null; // AssetFactory equivalent
-  tags: TagSet = new Set();
+  tags: TagSet = new TagSet();
   relations: RelationState[] = [];
   name: string = '';
+  id: string = '';
+  domain: any = null; // Domain reference
+  
+  // Rotation state (Euler angles)
+  rotation: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
+  
+  // Scale state
+  scale: { x: number; y: number; z: number } = { x: 1, y: 1, z: 1 };
+  
+  // Yaw (Y-axis rotation) convenience accessor
+  yaw: number = 0;
+  
+  // Asset description reference
+  assetDescription: any = null;
   
   // Pose state
   pose: {
@@ -48,8 +62,8 @@ export class ObjectState {
   dofMatrixTranslation: THREE.Vector3 | null = null;
   dofRotationAxis: THREE.Vector3 | null = null;
   
-  // Cached pose affect score
-  private _poseAffectsScore: boolean | null = null;
+  // Cached pose affect score (accessible from module-level functions)
+  _poseAffectsScore: boolean | null = null;
   
   // Collision objects (FCL or three.js)
   fclObj: any = null;
@@ -60,6 +74,7 @@ export class ObjectState {
 
   constructor(name?: string, tags?: TagSet, pose?: { position: { x: number; y: number; z: number }; rotation: { x: number; y: number; z: number } }) {
     if (name) this.name = name;
+    if (name) this.id = name; // Default id to name
     if (tags) this.tags = tags;
     if (pose) this.pose = pose;
     this.dofMatrixTranslation = new THREE.Vector3();
@@ -71,8 +86,11 @@ export class ObjectState {
    */
   validate(): void {
     // Check for contradictory tags (e.g., both "Chair" and "Table")
-    const tagList = Array.from(this.tags);
-    const semanticTags = tagList.filter(t => typeof t === 'string' && !t.startsWith('!'));
+    const tagList = this.tags.toArray();
+    const semanticTags = tagList.filter(t => {
+      const str = t.toString();
+      return typeof str === 'string' && !str.startsWith('!');
+    });
     
     // Simple contradiction check: ensure no duplicate positive semantic tags
     const uniqueSemanticTags = new Set(semanticTags);
@@ -89,9 +107,21 @@ export class ObjectState {
     }
   }
 
+  /**
+   * Get the bounding box center of this object
+   */
+  getBBoxCenter(): THREE.Vector3 {
+    if (this.obj) {
+      const box = new THREE.Box3().setFromObject(this.obj);
+      return box.getCenter(new THREE.Vector3());
+    }
+    // Fallback to position
+    return new THREE.Vector3(this.position.x, this.position.y, this.position.z);
+  }
+
   toString(): string {
     const objName = this.obj?.name ?? null;
-    return `ObjectState(obj.name=${objName}, polygon=${this.polygon}, tags=${Array.from(this.tags)}, relations=${this.relations.length})`;
+    return `ObjectState(obj.name=${objName}, polygon=${this.polygon}, tags=${this.tags.toString()}, relations=${this.relations.length})`;
   }
 }
 
@@ -160,6 +190,13 @@ export class State {
   }
 
   /**
+   * Get an ObjectState by name/key - alias for get()
+   */
+  getObject(key: string): ObjectState | undefined {
+    return this.objs.get(key);
+  }
+
+  /**
    * Get all active object names
    */
   getActiveObjectNames(): string[] {
@@ -179,7 +216,7 @@ export class State {
     return {
       objs: Array.from(this.objs.entries()).map(([name, obj]) => ({
         name,
-        tags: Array.from(obj.tags),
+        tags: obj.tags.toArray().map(t => t.toString()),
         active: obj.active,
         relations: obj.relations.map(r => ({
           relation: r.relation.constructor.name,
@@ -201,7 +238,7 @@ export class State {
     
     for (const objData of data.objs) {
       const objState = new ObjectState();
-      objState.tags = new Set(objData.tags);
+      objState.tags = new TagSet(new Set(objData.tags.map((t: string) => new SemanticsTag(t))));
       objState.active = objData.active;
       
       // Reconstruct relations with proper relation objects
@@ -297,8 +334,8 @@ export function poseAffectsScore(state: State, objName: string): boolean {
   const obj = state.objs.get(objName);
   if (!obj) return false;
   
-  if (obj._poseAffectsScore !== null) {
-    return obj._poseAffectsScore;
+  if ((obj as any)._poseAffectsScore !== null) {
+    return (obj as any)._poseAffectsScore;
   }
   
   // An object's pose affects the score if:
@@ -314,7 +351,7 @@ export function poseAffectsScore(state: State, objName: string): boolean {
   for (const rel of obj.relations) {
     const relType = rel.relation.constructor.name;
     if (poseDependentRelations.includes(relType)) {
-      obj._poseAffectsScore = true;
+      (obj as any)._poseAffectsScore = true;
       return true;
     }
   }
@@ -327,7 +364,7 @@ export function poseAffectsScore(state: State, objName: string): boolean {
       if (rel.targetName === objName) {
         const relType = rel.relation.constructor.name;
         if (poseDependentRelations.includes(relType)) {
-          obj._poseAffectsScore = true;
+          (obj as any)._poseAffectsScore = true;
           return true;
         }
       }
@@ -335,6 +372,6 @@ export function poseAffectsScore(state: State, objName: string): boolean {
   }
   
   // If no pose-dependent relations found, pose doesn't affect score
-  obj._poseAffectsScore = false;
+  (obj as any)._poseAffectsScore = false;
   return false;
 }

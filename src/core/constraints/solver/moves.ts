@@ -374,6 +374,18 @@ export interface SolverState {
   temperature?: number; // For simulated annealing
   /** Alias - some consumers access objects directly */
   objects?: Map<string, ObjectState>;
+  /** Current energy (lower is better) */
+  energy: number;
+  /** Current score */
+  currentScore: number;
+  /** Best score found so far */
+  bestScore: number;
+  /** Variable assignments (variable id -> value) */
+  assignments: Map<string, any>;
+  /** Last proposed move */
+  lastMove: any | null;
+  /** Whether last move was accepted */
+  lastMoveAccepted: boolean;
 }
 
 /**
@@ -513,19 +525,19 @@ export class SimulatedAnnealingSolver extends Solver {
       
       if (moveType < 0.4) {
         // Translation move
-        const translation = {
-          x: (Math.random() - 0.5) * 0.5,
-          y: (Math.random() - 0.5) * 0.5,
-          z: (Math.random() - 0.5) * 0.5
-        };
+        const translation = new Vector3(
+          (Math.random() - 0.5) * 0.5,
+          (Math.random() - 0.5) * 0.5,
+          (Math.random() - 0.5) * 0.5
+        );
         moves.push(new TranslateMove(obj.name, translation, this.currentScore));
       } else if (moveType < 0.7) {
         // Rotation move
-        const rotation = {
-          x: (Math.random() - 0.5) * 0.3,
-          y: (Math.random() - 0.5) * 0.3,
-          z: (Math.random() - 0.5) * 0.3
-        };
+        const rotation = new Vector3(
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5) * 0.3
+        );
         moves.push(new RotateMove(obj.name, rotation, this.currentScore));
       } else if (moveType < 0.9 && objects.length > 1) {
         // Swap move
@@ -535,11 +547,11 @@ export class SimulatedAnnealingSolver extends Solver {
         }
       } else {
         // Small perturbation
-        const translation = {
-          x: (Math.random() - 0.5) * 0.1,
-          y: (Math.random() - 0.5) * 0.1,
-          z: (Math.random() - 0.5) * 0.1
-        };
+        const translation = new Vector3(
+          (Math.random() - 0.5) * 0.1,
+          (Math.random() - 0.5) * 0.1,
+          (Math.random() - 0.5) * 0.1
+        );
         moves.push(new TranslateMove(obj.name, translation, this.currentScore));
       }
     }
@@ -647,18 +659,18 @@ export class GreedySolver extends Solver {
       const moveType = Math.random();
       
       if (moveType < 0.5) {
-        const translation = {
-          x: (Math.random() - 0.5) * 0.5,
-          y: (Math.random() - 0.5) * 0.5,
-          z: (Math.random() - 0.5) * 0.5
-        };
+        const translation = new Vector3(
+          (Math.random() - 0.5) * 0.5,
+          (Math.random() - 0.5) * 0.5,
+          (Math.random() - 0.5) * 0.5
+        );
         moves.push(new TranslateMove(obj.name, translation, this.currentScore));
       } else {
-        const rotation = {
-          x: (Math.random() - 0.5) * 0.3,
-          y: (Math.random() - 0.5) * 0.3,
-          z: (Math.random() - 0.5) * 0.3
-        };
+        const rotation = new Vector3(
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5) * 0.3
+        );
         moves.push(new RotateMove(obj.name, rotation, this.currentScore));
       }
     }

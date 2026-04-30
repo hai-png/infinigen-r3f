@@ -2,11 +2,11 @@
  * MushroomGenerator - Mushroom varieties
  */
 import * as THREE from 'three';
-import { BaseObjectGenerator } from '../../utils/BaseObjectGenerator';
+import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export type MushroomType = 'button' | 'shiitake' | 'fly_agaric' | 'puffball' | 'morel';
-export interface MushroomConfig {
+export interface MushroomConfig extends BaseGeneratorConfig {
   capSize: number;
   stemHeight: number;
   stemThickness: number;

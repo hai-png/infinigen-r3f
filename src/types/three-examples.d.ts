@@ -225,3 +225,193 @@ declare module 'three/examples/jsm/libs/draco/draco_encoder' {
     dispose(): void;
   }
 }
+
+declare module '@react-three/postprocessing' {
+  import { Effect } from 'postprocessing';
+
+  export { Effect };
+
+  export interface EffectProps {
+    opacity?: number;
+    blendFunction?: number;
+  }
+
+  export class Bloom extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class Blur extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class Vignette extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class ChromaticAberration extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class Noise extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class HueSaturation extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class BrightnessContrast extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class ToneMapping extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class DepthOfField extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class SSAO extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export class N8AO extends Effect {
+    constructor(props?: any);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+  }
+
+  export const EffectComposer: any;
+}
+
+declare module 'postprocessing' {
+  export class Effect {
+    constructor(name?: string);
+    enabled: boolean;
+    setEnabled(enabled: boolean): void;
+    dispose(): void;
+    setAttributes(attributes: any): void;
+    setDefines(defines: any): void;
+    setMainCamera(camera: any): void;
+    setScene(scene: any): void;
+  }
+
+  export class BloomEffect extends Effect {
+    constructor(options?: any);
+    luminanceThreshold: number;
+    luminanceSmoothing: number;
+    intensity: number;
+    mipmapBlur: boolean;
+  }
+
+  export class VignetteEffect extends Effect {
+    constructor(options?: any);
+    darkness: number;
+    offset: number;
+  }
+
+  export class ChromaticAberrationEffect extends Effect {
+    constructor(options?: any);
+    offset: any;
+    radialModulation: boolean;
+  }
+
+  export class NoiseEffect extends Effect {
+    constructor(options?: any);
+    blendFunction: number;
+  }
+
+  export class HueSaturationEffect extends Effect {
+    constructor(options?: any);
+    hue: number;
+    saturation: number;
+  }
+
+  export class BrightnessContrastEffect extends Effect {
+    constructor(options?: any);
+    brightness: number;
+    contrast: number;
+  }
+
+  export class ToneMappingEffect extends Effect {
+    constructor(options?: any);
+  }
+
+  export class DepthOfFieldEffect extends Effect {
+    constructor(camera?: any, options?: any);
+    cocMaterial: any;
+    target: any;
+  }
+
+  export const BlendFunction: {
+    SKIP: number;
+    ADD: number;
+    ALPHA: number;
+    AVERAGE: number;
+    COLOR_BURN: number;
+    COLOR_DODGE: number;
+    DARKEN: number;
+    DIFFERENCE: number;
+    EXCLUSION: number;
+    LIGHTEN: number;
+    MULTIPLY: number;
+    DIVIDE: number;
+    NEGATION: number;
+    NORMAL: number;
+    OVERLAY: number;
+    REFLECT: number;
+    SCREEN: number;
+    SOFT_LIGHT: number;
+    SUBTRACT: number;
+  };
+
+  export const KernelSize: {
+    VERY_SMALL: number;
+    SMALL: number;
+    MEDIUM: number;
+    LARGE: number;
+    VERY_LARGE: number;
+    HUGE: number;
+  };
+
+  export enum EffectAttribute {
+    NONE = 0,
+    DEPTH = 1,
+    CONVOLUTION = 2,
+  }
+}
+
+// Missing @react-three/drei components
+declare module '@react-three/drei' {
+  export const GridHelper: React.FC<any>;
+  export const AxesHelper: React.FC<any>;
+  export const OrbitControls: React.FC<any>;
+  export const Text: React.FC<any>;
+  export const Environment: React.FC<any>;
+}
+
+// Missing @react-three/rapier exports
+declare module '@react-three/rapier' {
+  export const ColliderDesc: any;
+}

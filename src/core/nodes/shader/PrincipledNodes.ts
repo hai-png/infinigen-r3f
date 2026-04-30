@@ -5,7 +5,7 @@
  * Based on original: infinigen/core/nodes/nodegroups/shader_nodes.py
  */
 
-import { Color, Vector3 } from 'three';
+import { Color, Vector3, Material, MeshStandardMaterial } from 'three';
 import type { NodeDefinition, NodeSocket } from '../core/types';
 import { SocketType } from '../core/socket-types';
 
@@ -802,9 +802,9 @@ export function parseColor(input: Color | string | number): Color {
 /**
  * Create Three.js material from shader node output
  */
-export function createMaterialFromShader(shaderOutput: any, materialType: 'physical' | 'standard' | 'lambert' = 'physical'): THREE.Material {
+export function createMaterialFromShader(shaderOutput: any, materialType: 'physical' | 'standard' | 'lambert' = 'physical'): Material {
   // This would be implemented with actual Three.js material creation
   // For now, return placeholder
   console.warn('createMaterialFromShader not fully implemented');
-  return new THREE.MeshStandardMaterial();
+  return new MeshStandardMaterial();
 }

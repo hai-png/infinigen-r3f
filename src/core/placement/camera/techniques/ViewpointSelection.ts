@@ -1,6 +1,16 @@
 import * as THREE from 'three';
-import { SceneObject } from '../../../../types';
 import { BBox } from '../../../util/math/bbox';
+
+/**
+ * Local scene object representation for viewpoint calculations
+ */
+interface ViewpointSceneObject {
+  id?: string;
+  name?: string;
+  bbox?: BBox;
+  position?: THREE.Vector3;
+  category?: string;
+}
 
 /**
  * Viewpoint selection algorithms for optimal camera placement
@@ -28,8 +38,8 @@ export interface ViewpointMetrics {
 
 export interface ViewpointConfig {
   candidates: THREE.Vector3[];
-  scene: SceneObject[];
-  target?: SceneObject;
+  scene: ViewpointSceneObject[];
+  target?: ViewpointSceneObject;
   weights?: {
     visibility: number;
     composition: number;
@@ -50,8 +60,8 @@ export interface ViewpointConfig {
  */
 export function scoreViewpoint(
   position: THREE.Vector3,
-  scene: SceneObject[],
-  target?: SceneObject,
+  scene: ViewpointSceneObject[],
+  target?: ViewpointSceneObject,
   config?: Partial<ViewpointConfig>
 ): number {
   const metrics = evaluateViewpoint(position, scene, target, config);
@@ -82,22 +92,23 @@ export function scoreViewpoint(
  */
 export function evaluateViewpoint(
   position: THREE.Vector3,
-  scene: SceneObject[],
-  target?: SceneObject,
+  scene: ViewpointSceneObject[],
+  target?: ViewpointSceneObject,
   config?: Partial<ViewpointConfig>
 ): ViewpointMetrics {
   const targetObj = target || findSceneCenter(scene);
   const targetBBox = getSceneBounds(scene);
   
   // Calculate direction to target
-  const direction = new THREE.Vector3().subVectors(targetBBox.center, position).normalize();
+  const center = targetBBox.center();
+  const direction = new THREE.Vector3().subVectors(new THREE.Vector3(center.x, center.y, center.z), position).normalize();
   
   // Visibility analysis
   const visibleObjects = countVisibleObjects(position, direction, scene, config?.constraints);
   const totalObjects = scene.length;
   
   // Composition analysis
-  const centerDistance = calculateCenterDistance(position, targetBBox.center, direction);
+  const centerDistance = calculateCenterDistance(position, center, direction);
   const ruleOfThirds = calculateRuleOfThirdsScore(position, targetBBox);
   const leadingLines = calculateLeadingLinesScore(position, scene);
   
@@ -123,8 +134,8 @@ export function evaluateViewpoint(
  */
 export function selectBestViewpoint(
   candidates: THREE.Vector3[],
-  scene: SceneObject[],
-  target?: SceneObject,
+  scene: ViewpointSceneObject[],
+  target?: ViewpointSceneObject,
   config?: Partial<ViewpointConfig>
 ): ViewpointScore | null {
   if (!candidates || candidates.length === 0) {
@@ -140,7 +151,9 @@ export function selectBestViewpoint(
       const { minDistance, maxDistance, minHeight, maxHeight, avoidZones } = config.constraints;
       
       const targetBBox = getSceneBounds(scene);
-      const distance = candidate.distanceTo(targetBBox.center);
+      const c = targetBBox.center();
+      const centerVec = new THREE.Vector3(c.x, c.y, c.z);
+      const distance = candidate.distanceTo(centerVec);
       
       if (minDistance && distance < minDistance) continue;
       if (maxDistance && distance > maxDistance) continue;
@@ -148,7 +161,7 @@ export function selectBestViewpoint(
       if (maxHeight && candidate.y > maxHeight) continue;
       
       if (avoidZones) {
-        const inAvoidZone = avoidZones.some(zone => zone.containsPoint(candidate));
+        const inAvoidZone = avoidZones.some(zone => zone.containsPoint({ x: candidate.x, y: candidate.y, z: candidate.z }));
         if (inAvoidZone) continue;
       }
     }
@@ -194,7 +207,7 @@ export function generateViewpointCandidates(
   } = options;
   
   const candidates: THREE.Vector3[] = [];
-  const center = target.center;
+  const center = target.center();
   
   for (let i = 0; i < horizontalSteps; i++) {
     const theta = (i / horizontalSteps) * Math.PI * 2;
@@ -215,23 +228,27 @@ export function generateViewpointCandidates(
 
 // Helper functions
 
-function findSceneCenter(scene: SceneObject[]): SceneObject | null {
+function findSceneCenter(scene: ViewpointSceneObject[]): ViewpointSceneObject | null {
   if (scene.length === 0) return null;
   
   const center = new THREE.Vector3();
+  let count = 0;
   for (const obj of scene) {
     if (obj.bbox) {
-      center.add(obj.bbox.center);
+      const c = obj.bbox.center();
+      center.add(new THREE.Vector3(c.x, c.y, c.z));
+      count++;
     }
   }
-  center.divideScalar(scene.length);
+  if (count > 0) center.divideScalar(count);
   
   // Find closest object to center
   let closest = scene[0];
   let minDist = Infinity;
   for (const obj of scene) {
     if (obj.bbox) {
-      const dist = obj.bbox.center.distanceTo(center);
+      const c = obj.bbox.center();
+      const dist = center.distanceTo(new THREE.Vector3(c.x, c.y, c.z));
       if (dist < minDist) {
         minDist = dist;
         closest = obj;
@@ -242,18 +259,22 @@ function findSceneCenter(scene: SceneObject[]): SceneObject | null {
   return closest;
 }
 
-function getSceneBounds(scene: SceneObject[]): BBox {
+function getSceneBounds(scene: ViewpointSceneObject[]): BBox {
   if (scene.length === 0) {
-    return new BBox(new THREE.Vector3(), new THREE.Vector3());
+    return new BBox({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
   }
   
-  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
-  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const min = { x: Infinity, y: Infinity, z: Infinity };
+  const max = { x: -Infinity, y: -Infinity, z: -Infinity };
   
   for (const obj of scene) {
     if (obj.bbox) {
-      min.min(obj.bbox.min);
-      max.max(obj.bbox.max);
+      min.x = Math.min(min.x, obj.bbox.min.x);
+      min.y = Math.min(min.y, obj.bbox.min.y);
+      min.z = Math.min(min.z, obj.bbox.min.z);
+      max.x = Math.max(max.x, obj.bbox.max.x);
+      max.y = Math.max(max.y, obj.bbox.max.y);
+      max.z = Math.max(max.z, obj.bbox.max.z);
     }
   }
   
@@ -263,7 +284,7 @@ function getSceneBounds(scene: SceneObject[]): BBox {
 function countVisibleObjects(
   position: THREE.Vector3,
   direction: THREE.Vector3,
-  scene: SceneObject[],
+  scene: ViewpointSceneObject[],
   constraints?: ViewpointConfig['constraints']
 ): number {
   // Simplified visibility counting
@@ -274,7 +295,8 @@ function countVisibleObjects(
   for (const obj of scene) {
     if (!obj.bbox) continue;
     
-    const toObj = new THREE.Vector3().subVectors(obj.bbox.center, position).normalize();
+    const c = obj.bbox.center();
+    const toObj = new THREE.Vector3().subVectors(new THREE.Vector3(c.x, c.y, c.z), position).normalize();
     const dot = direction.dot(toObj);
     
     if (dot > viewCone) {
@@ -287,26 +309,29 @@ function countVisibleObjects(
 
 function calculateCenterDistance(
   position: THREE.Vector3,
-  target: THREE.Vector3,
+  target: { x: number; y: number; z: number },
   direction: THREE.Vector3
 ): number {
-  const toTarget = new THREE.Vector3().subVectors(target, position).normalize();
+  const targetVec = new THREE.Vector3(target.x, target.y, target.z);
+  const toTarget = new THREE.Vector3().subVectors(targetVec, position).normalize();
   return 1.0 - direction.dot(toTarget);
 }
 
 function calculateRuleOfThirdsScore(position: THREE.Vector3, target: BBox): number {
   // Score based on rule of thirds composition
-  const diagonal = target.diagonal();
-  const idealOffset = diagonal * 0.33;
+  const diag = target.diagonal();
+  const idealOffset = diag * 0.33;
   
   // Check if target is positioned at rule-of-thirds intersection
-  const centerOffset = position.distanceTo(target.center);
+  const c = target.center();
+  const centerVec = new THREE.Vector3(c.x, c.y, c.z);
+  const centerOffset = position.distanceTo(centerVec);
   const normalizedOffset = Math.abs(centerOffset - idealOffset) / idealOffset;
   
   return Math.max(0, 1.0 - normalizedOffset);
 }
 
-function calculateLeadingLinesScore(position: THREE.Vector3, scene: SceneObject[]): number {
+function calculateLeadingLinesScore(position: THREE.Vector3, scene: ViewpointSceneObject[]): number {
   // Detect strong linear arrangements in the scene
   if (scene.length < 3) return 0;
   
@@ -315,9 +340,11 @@ function calculateLeadingLinesScore(position: THREE.Vector3, scene: SceneObject[
   
   for (let i = 0; i < scene.length - 1; i++) {
     if (scene[i].bbox && scene[i + 1].bbox) {
+      const c1 = scene[i].bbox!.center();
+      const c2 = scene[i + 1].bbox!.center();
       const dir = new THREE.Vector3().subVectors(
-        scene[i + 1].bbox.center,
-        scene[i].bbox.center
+        new THREE.Vector3(c2.x, c2.y, c2.z),
+        new THREE.Vector3(c1.x, c1.y, c1.z)
       ).normalize();
       directions.push(dir);
     }
@@ -343,21 +370,23 @@ function calculateLeadingLinesScore(position: THREE.Vector3, scene: SceneObject[
 
 function calculateOcclusionRatio(
   position: THREE.Vector3,
-  target: SceneObject | null,
-  scene: SceneObject[]
+  target: ViewpointSceneObject | null,
+  scene: ViewpointSceneObject[]
 ): number {
   if (!target || !target.bbox) return 0;
   
   // Simplified occlusion calculation
   // In production, this would use shadow mapping or raycasting
   let occluded = 0;
-  const targetCenter = target.bbox.center;
+  const tc = target.bbox.center();
+  const targetCenter = new THREE.Vector3(tc.x, tc.y, tc.z);
   const toTarget = new THREE.Vector3().subVectors(targetCenter, position);
   
   for (const obj of scene) {
     if (obj === target || !obj.bbox) continue;
     
-    const toObj = new THREE.Vector3().subVectors(obj.bbox.center, position);
+    const oc = obj.bbox.center();
+    const toObj = new THREE.Vector3().subVectors(new THREE.Vector3(oc.x, oc.y, oc.z), position);
     const distToObj = toObj.length();
     const distToTarget = toTarget.length();
     
@@ -373,13 +402,14 @@ function calculateOcclusionRatio(
   return occluded / Math.max(scene.length - 1, 1);
 }
 
-function calculateDepthVariation(position: THREE.Vector3, scene: SceneObject[]): number {
+function calculateDepthVariation(position: THREE.Vector3, scene: ViewpointSceneObject[]): number {
   if (scene.length < 2) return 0;
   
   const distances: number[] = [];
   for (const obj of scene) {
     if (obj.bbox) {
-      distances.push(position.distanceTo(obj.bbox.center));
+      const c = obj.bbox.center();
+      distances.push(position.distanceTo(new THREE.Vector3(c.x, c.y, c.z)));
     }
   }
   

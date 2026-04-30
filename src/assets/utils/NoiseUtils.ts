@@ -168,10 +168,69 @@ export class NoiseUtils {
   }
 
   /**
+   * Generate 3D Perlin noise value at given coordinates
+   * @param x - X coordinate
+   * @param y - Y coordinate
+   * @param z - Z coordinate
+   * @returns Noise value in range [-1, 1]
+   */
+  public perlin3D(x: number, y: number, z: number): number {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+    const Z = Math.floor(z) & 255;
+
+    x -= Math.floor(x);
+    y -= Math.floor(y);
+    z -= Math.floor(z);
+
+    const u = this.fade(x);
+    const v = this.fade(y);
+    const w = this.fade(z);
+
+    const A  = this.permutationTable[X] + Y;
+    const AA = this.permutationTable[A] + Z;
+    const AB = this.permutationTable[A + 1] + Z;
+    const B  = this.permutationTable[X + 1] + Y;
+    const BA = this.permutationTable[B] + Z;
+    const BB = this.permutationTable[B + 1] + Z;
+
+    return this.lerp(
+      w,
+      this.lerp(
+        v,
+        this.lerp(u, this.grad3(this.permutationTable[AA], x, y, z), this.grad3(this.permutationTable[BA], x - 1, y, z)),
+        this.lerp(u, this.grad3(this.permutationTable[AB], x, y - 1, z), this.grad3(this.permutationTable[BB], x - 1, y - 1, z))
+      ),
+      this.lerp(
+        v,
+        this.lerp(u, this.grad3(this.permutationTable[AA + 1], x, y, z - 1), this.grad3(this.permutationTable[BA + 1], x - 1, y, z - 1)),
+        this.lerp(u, this.grad3(this.permutationTable[AB + 1], x, y - 1, z - 1), this.grad3(this.permutationTable[BB + 1], x - 1, y - 1, z - 1))
+      )
+    );
+  }
+
+  /**
+   * 3D gradient function for noise calculation
+   */
+  private grad3(hash: number, x: number, y: number, z: number): number {
+    const h = hash & 15;
+    const u = h < 8 ? x : y;
+    const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+    return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+  }
+
+  /**
    * Static method to generate 2D Perlin noise without instantiation
    */
   public static perlin2D(x: number, y: number): number {
     return globalNoiseInstance.perlin2D(x, y);
+  }
+
+  /**
+   * Static method to generate 3D Perlin noise without instantiation
+   */
+  public static perlin3D(x: number, y: number, z: number): number {
+    return globalNoiseInstance.perlin3D(x, y, z);
   }
 }
 

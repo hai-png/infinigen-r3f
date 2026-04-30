@@ -37,6 +37,10 @@ export class CoffeeTable extends BaseObjectGenerator<CoffeeTableParams> {
     };
   }
 
+  getDefaultParams() {
+    return this.getDefaultConfig();
+  }
+
   generate(params: Partial<CoffeeTableParams> = {}): THREE.Object3D {
     const finalParams = { ...this.getDefaultParams(), ...params };
     const rng = new SeededRandom(finalParams.variationSeed || this.seed);

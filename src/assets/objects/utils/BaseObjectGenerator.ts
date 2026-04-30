@@ -17,6 +17,12 @@ export interface BaseGeneratorConfig {
   lodLevel?: number;
 }
 
+export type ObjectStylePreset = 
+  | 'modern' | 'traditional' | 'industrial' 
+  | 'scandinavian' | 'rustic' | 'minimalist'
+  | 'art_deco' | 'mid_century' | 'contemporary'
+  | 'bohemian' | 'coastal' | 'farmhouse';
+
 export interface GeneratedObject<T extends THREE.Object3D = THREE.Object3D> {
   mesh: T;
   config: any;
