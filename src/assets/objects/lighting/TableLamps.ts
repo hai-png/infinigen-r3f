@@ -178,7 +178,8 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     const baseGeometry = this.getBaseGeometry(params);
     const baseMaterial = this.getMaterial(params.baseMaterial, params.baseColor);
     const base = new THREE.Mesh(baseGeometry, baseMaterial);
-    base.position.y = baseGeometry.parameters.height ? baseGeometry.parameters.height / 2 : 0.03;
+    const baseHeight = params.style === 'traditional' ? 0.08 : (params.style === 'art-deco' ? 0.1 : (params.style === 'rustic' ? 0.06 : 0.05));
+    base.position.y = baseHeight / 2;
     group.add(base);
     
     // Stem
@@ -296,7 +297,8 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     const baseGeometry = this.getBaseGeometry(params);
     const baseMaterial = this.getMaterial(params.baseMaterial, params.baseColor);
     const base = new THREE.Mesh(baseGeometry, baseMaterial);
-    base.position.y = baseGeometry.parameters.height ? baseGeometry.parameters.height / 2 : 0.04;
+    const baseHeight = params.style === 'traditional' ? 0.08 : (params.style === 'art-deco' ? 0.1 : (params.style === 'rustic' ? 0.06 : 0.05));
+    base.position.y = baseHeight / 2;
     group.add(base);
     
     // Tall elegant stem
@@ -454,26 +456,29 @@ export class TableLamps extends BaseObjectGenerator<TableLampParams> {
     
     // Find shades and add lights
     object.traverse((child) => {
-      if (child instanceof THREE.Mesh && 
-          (child.geometry.type.includes('Cylinder') || 
-           child.geometry.type.includes('Cone') ||
-           child.geometry.type.includes('Capsule'))) {
-        
-        const light = new THREE.PointLight(bulbColor, intensity, 6);
-        light.position.y = child.geometry.type.includes('Cone') ? -0.05 : -0.1;
-        child.add(light);
-        
-        // Visible bulb
-        if (params.bulbVisible) {
-          const bulbGeometry = new THREE.SphereGeometry(0.03, 16, 16);
-          const bulbMaterial = new THREE.MeshStandardMaterial({
-            color: 0xFFD7A0,
-            emissive: 0xFFD7A0,
-            emissiveIntensity: 0.6,
-          });
-          const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
-          bulb.position.y = child.geometry.type.includes('Cone') ? -0.05 : -0.1;
-          child.add(bulb);
+      if (child instanceof THREE.Mesh) {
+        const geo = child.geometry;
+        const isCylinder = geo instanceof THREE.CylinderGeometry;
+        const isCone = geo instanceof THREE.ConeGeometry;
+        const isCapsule = geo instanceof THREE.CapsuleGeometry;
+
+        if (isCylinder || isCone || isCapsule) {
+          const light = new THREE.PointLight(bulbColor, intensity, 6);
+          light.position.y = isCone ? -0.05 : -0.1;
+          child.add(light);
+          
+          // Visible bulb
+          if (params.bulbVisible) {
+            const bulbGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+            const bulbMaterial = new THREE.MeshStandardMaterial({
+              color: 0xFFD7A0,
+              emissive: 0xFFD7A0,
+              emissiveIntensity: 0.6,
+            });
+            const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+            bulb.position.y = isCone ? -0.05 : -0.1;
+            child.add(bulb);
+          }
         }
       }
     });

@@ -150,11 +150,17 @@ export class OutdoorLightGenerator {
     housing.position.copy(arm.position).add(this.getArmEndPosition(params));
     group.add(housing);
 
-    // Create actual light source
-    const light = this.createLightSource(params);
-    light.position.copy(housing.position).add(new THREE.Vector3(0, -0.2, 0));
-    group.add(light);
-    lights.push(light);
+    // Create actual light source group (bulb + light)
+    const lightContainer = this.createLightSource(params);
+    lightContainer.position.copy(housing.position).add(new THREE.Vector3(0, -0.2, 0));
+    group.add(lightContainer);
+    
+    // Find the actual light object within the group to add to results
+    lightContainer.traverse((child) => {
+      if (child instanceof THREE.Light) {
+        lights.push(child);
+      }
+    });
 
     // Add lens/glass cover
     const lens = this.createLens(params);

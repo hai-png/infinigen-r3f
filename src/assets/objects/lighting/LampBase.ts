@@ -9,9 +9,9 @@
  * - Light emission integration
  */
 
-import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, ConeGeometry, TorusGeometry, DoubleSide } from 'three';
+import * as THREE from 'three';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
-import { BBox } from '../../../core/util/math/index';
+import { BBox } from '../../../core/util/math/bbox';
 
 export interface LampParams extends BaseGeneratorConfig {
   style: 'modern' | 'traditional' | 'industrial' | 'minimal' | 'art-deco';
@@ -57,16 +57,16 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   /**
    * Generate the lamp base structure
    */
-  protected generateBase(params: LampParams, width: number = 0.2, height: number = 0.15): Group {
-    const group = new Group();
+  protected generateBase(params: LampParams, width: number = 0.2, height: number = 0.15): THREE.Group {
+    const group = new THREE.Group();
     const material = this.getBaseMaterial(params.baseMaterial, params.style);
     
     if (params.style === 'modern' || params.style === 'minimal') {
       // Sleek geometric base
       const baseGeo = params.style === 'modern' 
-        ? new BoxGeometry(width, height, width)
-        : new CylinderGeometry(width / 2, width / 2, height * 0.6, 32);
-      const base = new Mesh(baseGeo, material);
+        ? new THREE.BoxGeometry(width, height, width)
+        : new THREE.CylinderGeometry(width / 2, width / 2, height * 0.6, 32);
+      const base = new THREE.Mesh(baseGeo, material);
       base.position.y = height / 2;
       group.add(base);
     } else if (params.style === 'traditional') {
@@ -80,15 +80,15 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
       ];
       
       segments.forEach(seg => {
-        const segGeo = new CylinderGeometry(seg.radius, seg.radius, seg.height, 16);
-        const segMesh = new Mesh(segGeo, material);
+        const segGeo = new THREE.CylinderGeometry(seg.radius, seg.radius, seg.height, 16);
+        const segMesh = new THREE.Mesh(segGeo, material);
         segMesh.position.y = seg.y;
         group.add(segMesh);
       });
     } else if (params.style === 'industrial') {
       // Heavy industrial base with visible hardware
-      const baseGeo = new CylinderGeometry(width / 2, width / 2 + 0.05, height, 8);
-      const base = new Mesh(baseGeo, material);
+      const baseGeo = new THREE.CylinderGeometry(width / 2, width / 2 + 0.05, height, 8);
+      const base = new THREE.Mesh(baseGeo, material);
       base.position.y = height / 2;
       group.add(base);
       
@@ -96,9 +96,9 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
       const boltCount = 4;
       for (let i = 0; i < boltCount; i++) {
         const angle = (i / boltCount) * Math.PI * 2;
-        const boltGeo = new CylinderGeometry(0.015, 0.015, 0.03, 8);
+        const boltGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.03, 8);
         const boltMat = this.getMetalMaterial('steel');
-        const bolt = new Mesh(boltGeo, boltMat);
+        const bolt = new THREE.Mesh(boltGeo, boltMat);
         bolt.position.set(
           Math.cos(angle) * (width / 2 - 0.03),
           height / 2,
@@ -115,15 +115,15 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
       ];
       
       steps.forEach(step => {
-        const stepGeo = new BoxGeometry(step.size, step.height, step.size);
-        const stepMesh = new Mesh(stepGeo, material);
+        const stepGeo = new THREE.BoxGeometry(step.size, step.height, step.size);
+        const stepMesh = new THREE.Mesh(stepGeo, material);
         stepMesh.position.y = step.y;
         group.add(stepMesh);
       });
     } else {
       // Default simple base
-      const baseGeo = new CylinderGeometry(width / 2, width / 2, height, 16);
-      const base = new Mesh(baseGeo, material);
+      const baseGeo = new THREE.CylinderGeometry(width / 2, width / 2, height, 16);
+      const base = new THREE.Mesh(baseGeo, material);
       base.position.y = height / 2;
       group.add(base);
     }
@@ -134,26 +134,26 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   /**
    * Generate the stem/pole connecting base to shade
    */
-  protected generateStem(params: LampParams, height: number = 0.4, diameter: number = 0.03): Mesh {
+  protected generateStem(params: LampParams, height: number = 0.4, diameter: number = 0.03): THREE.Mesh {
     let geometry: any;
     
     if (params.style === 'industrial') {
       // Pipe-style stem with fittings
-      const stemGroup = new Group();
+      const stemGroup = new THREE.Group();
       
-      const pipeGeo = new CylinderGeometry(diameter, diameter, height, 16);
+      const pipeGeo = new THREE.CylinderGeometry(diameter, diameter, height, 16);
       const pipeMat = this.getMetalMaterial('steel');
-      const pipe = new Mesh(pipeGeo, pipeMat);
+      const pipe = new THREE.Mesh(pipeGeo, pipeMat);
       pipe.position.y = height / 2;
       stemGroup.add(pipe);
       
       // Add pipe fittings
-      const fittingGeo = new CylinderGeometry(diameter * 1.3, diameter * 1.3, 0.04, 16);
-      const fitting1 = new Mesh(fittingGeo, pipeMat);
+      const fittingGeo = new THREE.CylinderGeometry(diameter * 1.3, diameter * 1.3, 0.04, 16);
+      const fitting1 = new THREE.Mesh(fittingGeo, pipeMat);
       fitting1.position.y = 0.02;
       stemGroup.add(fitting1);
       
-      const fitting2 = new Mesh(fittingGeo, pipeMat);
+      const fitting2 = new THREE.Mesh(fittingGeo, pipeMat);
       fitting2.position.y = height - 0.02;
       stemGroup.add(fitting2);
       
@@ -164,14 +164,14 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
       geometry = new CylinderGeometry(diameter * 0.7, diameter * 1.3, height, 16);
     } else if (params.baseMaterial === 'wood') {
       // Turned wood stem
-      geometry = new CylinderGeometry(diameter * 0.8, diameter * 1.1, height, 16);
+      geometry = new THREE.CylinderGeometry(diameter * 0.8, diameter * 1.1, height, 16);
     } else {
       // Standard cylindrical stem
-      geometry = new CylinderGeometry(diameter, diameter, height, 16);
+      geometry = new THREE.CylinderGeometry(diameter, diameter, height, 16);
     }
     
     const material = this.getBaseMaterial(params.baseMaterial, params.style);
-    const stem = new Mesh(geometry, material);
+    const stem = new THREE.Mesh(geometry, material);
     stem.position.y = height / 2;
     
     return stem;
@@ -180,34 +180,34 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   /**
    * Generate the lampshade
    */
-  protected generateShade(params: LampParams, topRadius: number = 0.15, bottomRadius: number = 0.25, height: number = 0.25): Mesh {
+  protected generateShade(params: LampParams, topRadius: number = 0.15, bottomRadius: number = 0.25, height: number = 0.25): THREE.Mesh {
     let geometry: any;
     
     switch (params.shadeShape) {
       case 'cone':
-        geometry = new ConeGeometry(bottomRadius, height, 32, 1, true);
+        geometry = new THREE.ConeGeometry(bottomRadius, height, 32, 1, true);
         break;
       case 'sphere':
-        geometry = new SphereGeometry(bottomRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        geometry = new THREE.SphereGeometry(bottomRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
         break;
       case 'rectangle':
         // Rectangular prism shade (open bottom)
-        const boxGeo = new BoxGeometry(bottomRadius * 2, height, bottomRadius * 2);
+        const boxGeo = new THREE.BoxGeometry(bottomRadius * 2, height, bottomRadius * 2);
         // Would need CSG to hollow out - using solid for now
         geometry = boxGeo;
         break;
       case 'empire':
         // Empire shape - wider at bottom, curved sides
-        geometry = new CylinderGeometry(topRadius, bottomRadius * 1.1, height, 32, 1, true);
+        geometry = new THREE.CylinderGeometry(topRadius, bottomRadius * 1.1, height, 32, 1, true);
         break;
       case 'cylinder':
       default:
-        geometry = new CylinderGeometry(topRadius, bottomRadius, height, 32, 1, true);
+        geometry = new THREE.CylinderGeometry(topRadius, bottomRadius, height, 32, 1, true);
         break;
     }
     
     const material = this.getShadeMaterial(params.shadeMaterial, params.style);
-    const shade = new Mesh(geometry, material);
+    const shade = new THREE.Mesh(geometry, material);
     shade.position.y = height / 2;
     
     return shade;
@@ -216,13 +216,13 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   /**
    * Generate bulb and socket assembly
    */
-  protected generateBulbAssembly(params: LampParams): Group {
-    const group = new Group();
+  protected generateBulbAssembly(params: LampParams): THREE.Group {
+    const group = new THREE.Group();
     
     // Socket
-    const socketGeo = new CylinderGeometry(0.025, 0.03, 0.06, 16);
+    const socketGeo = new THREE.CylinderGeometry(0.025, 0.03, 0.06, 16);
     const socketMat = this.createPBRMaterial({ color: 0x333333, metalness: 0.5, roughness: 0.4 });
-    const socket = new Mesh(socketGeo, socketMat);
+    const socket = new THREE.Mesh(socketGeo, socketMat);
     socket.position.y = 0.03;
     group.add(socket);
     
@@ -233,7 +233,7 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
     switch (params.bulbType) {
       case 'edison':
         // Vintage Edison bulb with visible filament
-        bulbGeo = new SphereGeometry(0.04, 16, 16);
+        bulbGeo = new THREE.SphereGeometry(0.04, 16, 16);
         bulbMat = this.createPBRMaterial({ 
           color: 0xffdd88, 
           emissive: 0xffaa44,
@@ -244,18 +244,18 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
         break;
       case 'fluorescent':
         // Spiral CFL bulb
-        bulbGeo = new CylinderGeometry(0.02, 0.02, 0.08, 8);
+        bulbGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.08, 8);
         bulbMat = this.createPBRMaterial({ color: 0xffffff, emissive: 0xffffee, emissiveIntensity: 0.9 });
         break;
       case 'halogen':
         // Small halogen capsule
-        bulbGeo = new CylinderGeometry(0.015, 0.015, 0.04, 16);
+        bulbGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.04, 16);
         bulbMat = this.createPBRMaterial({ color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 1.0 });
         break;
       case 'led':
       default:
         // Modern LED bulb shape
-        bulbGeo = new SphereGeometry(0.035, 16, 16);
+        bulbGeo = new THREE.SphereGeometry(0.035, 16, 16);
         bulbMat = this.createPBRMaterial({ 
           color: 0xffffff, 
           emissive: 0xffffee,
@@ -266,17 +266,17 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
         break;
     }
     
-    const bulb = new Mesh(bulbGeo, bulbMat);
+    const bulb = new THREE.Mesh(bulbGeo, bulbMat);
     bulb.position.y = 0.08;
     group.add(bulb);
     
     // Edison bulb filament detail
     if (params.bulbType === 'edison') {
-      const filamentGeo = new CylinderGeometry(0.002, 0.002, 0.03, 4);
+      const filamentGeo = new THREE.CylinderGeometry(0.002, 0.002, 0.03, 4);
       const filamentMat = this.createEmissiveMaterial(0xff8800, 1.0);
       
       for (let i = 0; i < 5; i++) {
-        const filament = new Mesh(filamentGeo, filamentMat);
+        const filament = new THREE.Mesh(filamentGeo, filamentMat);
         filament.position.x = (i - 2) * 0.008;
         filament.position.y = 0.08;
         group.add(filament);
@@ -289,10 +289,10 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   /**
    * Generate power cord
    */
-  protected generateCord(params: LampParams, length: number): Mesh {
-    const cordGeo = new CylinderGeometry(0.005, 0.005, length, 8);
+  protected generateCord(params: LampParams, length: number): THREE.Mesh {
+    const cordGeo = new THREE.CylinderGeometry(0.005, 0.005, length, 8);
     const cordMat = this.createPBRMaterial({ color: 0x222222, metalness: 0.0, roughness: 0.8 });
-    const cord = new Mesh(cordGeo, cordMat);
+    const cord = new THREE.Mesh(cordGeo, cordMat);
     cord.position.y = -length / 2;
     
     return cord;
@@ -301,15 +301,15 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   /**
    * Generate switch based on type
    */
-  protected generateSwitch(params: LampParams): Mesh | null {
+  protected generateSwitch(params: LampParams): THREE.Mesh | null {
     switch (params.switchType) {
       case 'pull-chain':
-        const chainGeo = new CylinderGeometry(0.003, 0.003, 0.15, 8);
+        const chainGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.15, 8);
         const chainMat = this.getMetalMaterial('brass');
-        const chain = new Mesh(chainGeo, chainMat);
+        const chain = new THREE.Mesh(chainGeo, chainMat);
         
-        const pullGeo = new SphereGeometry(0.015, 8, 8);
-        const pull = new Mesh(pullGeo, chainMat);
+        const pullGeo = new THREE.SphereGeometry(0.015, 8, 8);
+        const pull = new THREE.Mesh(pullGeo, chainMat);
         pull.position.y = -0.075;
         chain.add(pull);
         
@@ -320,9 +320,9 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
         return null;
         
       case 'base':
-        const baseSwitchGeo = new CylinderGeometry(0.015, 0.015, 0.02, 16);
+        const baseSwitchGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.02, 16);
         const baseSwitchMat = this.createPBRMaterial({ color: 0x444444, metalness: 0.3, roughness: 0.5 });
-        return new Mesh(baseSwitchGeo, baseSwitchMat);
+        return new THREE.Mesh(baseSwitchGeo, baseSwitchMat);
         
       case 'touch':
         // Touch switch - no visible component
@@ -436,12 +436,12 @@ export abstract class LampBase extends BaseObjectGenerator<LampParams> {
   public getBoundingBox(params: LampParams): BBox {
     return new BBox(
       { x: -0.3, y: 0, z: -0.3 },
-      { x: 0.3, y: params.style === 'floor' ? 1.5 : 0.7, z: 0.3 }
+      { x: 0.3, y: (params.style as string) === 'floor' ? 1.5 : 0.7, z: 0.3 }
     );
   }
 
-  public getCollisionMesh(params: LampParams): Mesh {
-    const geometry = new CylinderGeometry(0.15, 0.2, 0.5, 16);
+  public getCollisionMesh(params: LampParams): THREE.Mesh {
+    const geometry = new THREE.CylinderGeometry(0.15, 0.2, 0.5, 16);
     return this.createMesh(geometry, this.getCollisionMaterial());
   }
 

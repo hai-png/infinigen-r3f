@@ -8,11 +8,12 @@ export interface RegistrableObject {
 export class ObjectRegistry {
   private static registry: Map<string, RegistrableObject> = new Map();
 
-  static register(obj: RegistrableObject) {
-    if (this.registry.has(obj.type)) {
-      throw new Error(`Object type ${obj.type} is already registered`);
+  static register(id: string, generatorClass: any, metadata: any) {
+    if (this.registry.has(id)) {
+      console.warn(`Object type ${id} is already registered`);
+      return;
     }
-    this.registry.set(obj.type, obj);
+    this.registry.set(id, { generatorClass, metadata } as any);
   }
 
   static get(type: string): RegistrableObject | undefined {
