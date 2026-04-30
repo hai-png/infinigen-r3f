@@ -498,7 +498,7 @@ export class RotateEulerNode implements VectorNodeBase {
   };
 
   execute(): RotateEulerOutputs {
-    const rotation = [...(this.inputs.rotation || [0, 0, 0])];
+    const rotation: [number, number, number] = [...(this.inputs.rotation || [0, 0, 0])] as [number, number, number];
     const angle = this.inputs.angle ?? 0;
     const axis = this.inputs.axis || 'z';
     
@@ -515,7 +515,7 @@ export class RotateEulerNode implements VectorNodeBase {
     }
     
     this.outputs.rotation = rotation;
-    return { rotation };
+    return { rotation }
   }
 }
 
@@ -1194,11 +1194,11 @@ export class CompareNode implements VectorNodeBase {
       compareComponent(v1[2], v2[2]),
     ];
     
-    const result = comparison[0] && comparison[1] && comparison[2];
+    const result = !!(comparison[0] && comparison[1] && comparison[2]);
     
     this.outputs.result = result;
     this.outputs.comparison = comparison;
-    return { result, comparison };
+    return { result, comparison }
   }
 }
 
@@ -1337,12 +1337,13 @@ export class SlerpNode implements VectorNodeBase {
     
     if (theta < 0.0001) {
       // Vectors are nearly parallel, use linear interpolation
-      const result: [number, number, number] = [
+      const interpResult: [number, number, number] = [
         s[0] * (1 - t) + e[0] * t,
         s[1] * (1 - t) + e[1] * t,
         s[2] * (1 - t) + e[2] * t,
       ];
-      return normalize(result);
+      this.outputs.result = normalize(interpResult);
+      return { result: normalize(interpResult) };
     }
     
     const sinTheta = Math.sin(theta);

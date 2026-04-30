@@ -60,6 +60,7 @@ export interface VectorTransformInputs {
   vector?: [number, number, number];
   fromSpace?: 'world' | 'object' | 'camera' | 'light';
   toSpace?: 'world' | 'object' | 'camera' | 'light';
+  objectMatrix?: number[];
 }
 
 export interface VectorTransformOutputs {
@@ -71,6 +72,7 @@ export interface NormalMapInputs {
   distance?: number;
   color?: [number, number, number];
   direction?: 'tangent' | 'object' | 'world' | 'camera';
+  space?: 'tangent' | 'object' | 'world' | 'camera';
 }
 
 export interface NormalMapOutputs {
@@ -83,6 +85,7 @@ export interface BumpInputs {
   distance?: number;
   useNormalMap?: boolean;
   invert?: boolean;
+  normal?: [number, number, number];
 }
 
 export interface BumpOutputs {
@@ -93,6 +96,7 @@ export interface DisplacementInputs {
   height?: number;
   midlevel?: number;
   scale?: number;
+  direction?: 'normal' | 'x' | 'y' | 'z';
 }
 
 export interface DisplacementOutputs {
@@ -162,6 +166,17 @@ export interface RotateEulerInputs {
 
 export interface RotateEulerOutputs {
   rotation: [number, number, number];
+}
+
+export interface QuaternionInputs {
+  quaternion?: [number, number, number, number];
+  vector?: [number, number, number];
+  angle?: number;
+  axis?: [number, number, number];
+}
+
+export interface QuaternionOutputs {
+  quaternion: [number, number, number, number];
 }
 
 // ============================================================================

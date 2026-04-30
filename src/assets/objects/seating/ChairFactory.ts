@@ -79,6 +79,13 @@ export class ChairFactory extends AssetFactory {
     return this.generateConfig();
   }
 
+  generate(config?: Partial<ChairConfig>): THREE.Object3D {
+    if (config) {
+      this.config = { ...this.generateConfig(), ...config };
+    }
+    return this.createAsset();
+  }
+
   /**
    * Generate random chair configuration
    */

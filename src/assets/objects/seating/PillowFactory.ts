@@ -44,6 +44,11 @@ export class PillowFactory extends AssetFactory<PillowConfig, PillowResult> {
     return this.generateConfig();
   }
 
+  generate(config?: Partial<PillowConfig>): PillowResult {
+    const mergedConfig = { ...this.getDefaultConfig(), ...config };
+    return this.create(mergedConfig);
+  }
+
   /**
    * Generate random pillow configuration
    */

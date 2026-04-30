@@ -178,3 +178,36 @@ Added `readonly type = 'ClassName'` to all classes inheriting from `Node`:
 - **Room.bounds errors**: 83 → 0 ✅
 - **Abstract 'type' property errors**: 74 → 0 ✅
 - **Files Modified**: 8
+
+---
+Task ID: 3-c
+Agent: Node-Errors-Fixer
+Task: Fix TS2339 errors in core/nodes
+
+Work Log:
+- Ran tsc to identify exact errors in the 4 target files (33+ errors total)
+- Read all error files and type definition files to understand the missing properties
+- **node-types.ts**: Added 18 missing enum members:
+  - Attribute section: `RemoveAttribute`
+  - Output section: `LevelOfDetail`, `RenderLayer`, `UVOutput`, `InstanceOutput`, `PointCloudOutput`, `TextOutput`, `BoundingBoxOutput`, `WireframeOutput`, `DebugOutput`
+  - Attribute input aliases: `PositionInput`, `NormalInput`, `TangentInput`, `UVMapInput`, `ColorInput`, `RadiusInput`, `IdInput`, `IndexInput`
+  - Shader aliases: `BSDF_PRINCIPLED`
+  - SCREAMING_SNAKE aliases: `TEX_NOISE`, `OUTPUT_NORMAL`, `OUTPUT_COLOR`, `OUTPUT_VECTOR`, `OUTPUT_MATERIAL`, `OUTPUT_VALUE`
+- **VectorNodes.ts**: Added missing properties to 4 interfaces:
+  - `VectorTransformInputs`: added `objectMatrix?: number[]`
+  - `NormalMapInputs`: added `space?: 'tangent' | 'object' | 'world' | 'camera'`
+  - `BumpInputs`: added `normal?: [number, number, number]`
+  - `DisplacementInputs`: added `direction?: 'normal' | 'x' | 'y' | 'z'`
+- **VectorNodes.ts**: Added `QuaternionInputs` and `QuaternionOutputs` interface exports
+- **VectorNodesExtended.ts**: Fixed 3 type errors:
+  - Line 517-518: Cast spread array to `[number, number, number]` tuple type in RotateEulerNode
+  - Line 1197-1201: Added `!!()` coercion to ensure boolean result in CompareNode
+  - Line 1345: Fixed SlerpNode early return to return `SlerpOutputs` object instead of raw tuple
+
+Stage Summary:
+- All 33+ TS2339/TS2353/TS2322/TS2741 errors in the 4 target files are resolved
+- `primitive-groups.ts`: 10 errors → 0
+- `output/OutputNodes.ts`: 9 errors → 0
+- `attribute/AttributeNodes.ts`: 9 errors → 0
+- `vector/VectorNodesExtended.ts`: ~15 errors → 0
+- Total project errors reduced (858 remaining, none in target files)

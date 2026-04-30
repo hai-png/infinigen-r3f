@@ -17,6 +17,7 @@ export enum NodeTypes {
   DomainSize = 'DomainSizeNode',
   StoreNamedAttribute = 'StoreNamedAttributeNode',
   NamedAttribute = 'NamedAttributeNode',
+  RemoveAttribute = 'RemoveAttributeNode',
   SampleIndex = 'SampleIndexNode',
   SampleNearest = 'SampleNearestNode',
   SampleNearestSurface = 'SampleNearestSurfaceNode',
@@ -282,6 +283,15 @@ export enum NodeTypes {
   ImageOutput = 'ImageOutputNode',
   MovieOutput = 'MovieOutputNode',
   SoundOutput = 'SoundOutputNode',
+  LevelOfDetail = 'LevelOfDetailNode',
+  RenderLayer = 'RenderLayerNode',
+  UVOutput = 'UVOutputNode',
+  InstanceOutput = 'InstanceOutputNode',
+  PointCloudOutput = 'PointCloudOutputNode',
+  TextOutput = 'TextOutputNode',
+  BoundingBoxOutput = 'BoundingBoxOutputNode',
+  WireframeOutput = 'WireframeOutputNode',
+  DebugOutput = 'DebugOutputNode',
 
   // Light
   PointLight = 'PointLightNode',
@@ -332,9 +342,23 @@ export enum NodeTypes {
   // Subdivision
   SubdivisionSurface = 'SubdivisionSurfaceNode',
 
+  // Attribute input aliases
+  PositionInput = InputPosition,
+  NormalInput = InputNormal,
+  TangentInput = Tangent,
+  UVMapInput = UVMap,
+  ColorInput = InputColor,
+  RadiusInput = 'RadiusInputNode',
+  IdInput = InputID,
+  IndexInput = Index,
+
+  // Shader aliases
+  BSDF_PRINCIPLED = 'PrincipledBSDFNode',
+
   // Aliases - SCREAMING_SNAKE_CASE aliases for PascalCase members
   VECTOR_MATH = VectorMath,
   TEX_COORD = TexCoord,
+  TEX_NOISE = TextureNoise,
   NORMAL_MAP = NormalMap,
   MAPPING = Mapping,
   LINE_OUTPUT = FileOutput,
@@ -344,6 +368,11 @@ export enum NodeTypes {
   COMPOSITE_OUTPUT = MovieOutput,
   AMBIENT_OCCLUSION_OUTPUT = AmbientOcclusion,
   COLOR_RAMP = ColorRamp,
+  OUTPUT_NORMAL = NormalOutput,
+  OUTPUT_COLOR = AlbedoOutput,
+  OUTPUT_VECTOR = VectorMath,
+  OUTPUT_MATERIAL = MaterialOutput,
+  OUTPUT_VALUE = Value,
 
   // CamelCase aliases for referenced names
   CompositeOutput = MovieOutput,

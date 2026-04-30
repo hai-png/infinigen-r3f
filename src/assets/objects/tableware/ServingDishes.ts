@@ -37,6 +37,10 @@ export class ServingDishesGenerator extends BaseObjectGenerator<ServingDishConfi
     seed: undefined
   };
 
+  getDefaultConfig(): ServingDishConfig {
+    return { ...this.defaultParams, seed: this.seed };
+  }
+
   private readonly sizeDimensions = {
     small: { width: 0.2, depth: 0.15, height: 0.05 },
     medium: { width: 0.3, depth: 0.22, height: 0.07 },

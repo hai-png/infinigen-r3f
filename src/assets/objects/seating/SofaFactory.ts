@@ -61,6 +61,13 @@ export class SofaFactory extends AssetFactory {
     return this.generateConfig();
   }
 
+  generate(config?: Partial<SofaConfig>): THREE.Object3D {
+    if (config) {
+      this.config = { ...this.generateConfig(), ...config };
+    }
+    return this.createAsset();
+  }
+
   /**
    * Generate random sofa configuration
    */

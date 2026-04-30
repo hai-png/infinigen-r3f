@@ -33,6 +33,7 @@ export abstract class Relation extends BoolExpression {
  */
 export class AnyRelation extends Relation {
   readonly type = 'AnyRelation';
+  readonly relationType = 'any';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }
@@ -67,6 +68,7 @@ export class AnyRelation extends Relation {
  */
 export class NegatedRelation extends Relation {
   readonly type = 'NegatedRelation';
+  readonly relationType = 'negated';
   constructor(public readonly relation: Relation) {
     super();
   }
@@ -101,6 +103,7 @@ export class NegatedRelation extends Relation {
  */
 export class AndRelations extends Relation {
   readonly type = 'AndRelations';
+  readonly relationType = 'and';
   constructor(public readonly relations: Relation[]) {
     super();
   }
@@ -143,6 +146,7 @@ export class AndRelations extends Relation {
  */
 export class OrRelations extends Relation {
   readonly type = 'OrRelations';
+  readonly relationType = 'or';
   constructor(public readonly relations: Relation[]) {
     super();
   }
@@ -208,6 +212,7 @@ export abstract class GeometryRelation extends Relation {
  */
 export class Touching extends GeometryRelation {
   readonly type = 'Touching';
+  readonly relationType = 'touching';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -250,6 +255,7 @@ export class Touching extends GeometryRelation {
  */
 export class SupportedBy extends GeometryRelation {
   readonly type = 'SupportedBy';
+  readonly relationType = 'supported_by';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -292,6 +298,7 @@ export class SupportedBy extends GeometryRelation {
  */
 export class CoPlanar extends GeometryRelation {
   readonly type = 'CoPlanar';
+  readonly relationType = 'co_planar';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -336,6 +343,7 @@ export class CoPlanar extends GeometryRelation {
  */
 export class StableAgainst extends GeometryRelation {
   readonly type = 'StableAgainst';
+  readonly relationType = 'stable_against';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression
@@ -376,6 +384,7 @@ export class StableAgainst extends GeometryRelation {
  */
 export class Facing extends GeometryRelation {
   readonly type = 'Facing';
+  readonly relationType = 'facing';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -418,6 +427,7 @@ export class Facing extends GeometryRelation {
  */
 export class Between extends Relation {
   readonly type = 'Between';
+  readonly relationType = 'between';
   constructor(
     public readonly objects1: ObjectSetExpression,
     public readonly objects2: ObjectSetExpression,
@@ -471,6 +481,7 @@ export class Between extends Relation {
  */
 export class AccessibleFrom extends GeometryRelation {
   readonly type = 'AccessibleFrom';
+  readonly relationType = 'accessible_from';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -513,6 +524,7 @@ export class AccessibleFrom extends GeometryRelation {
  */
 export class ReachableFrom extends GeometryRelation {
   readonly type = 'ReachableFrom';
+  readonly relationType = 'reachable_from';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -555,6 +567,7 @@ export class ReachableFrom extends GeometryRelation {
  */
 export class InFrontOf extends GeometryRelation {
   readonly type = 'InFrontOf';
+  readonly relationType = 'in_front_of';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -597,6 +610,7 @@ export class InFrontOf extends GeometryRelation {
  */
 export class Aligned extends GeometryRelation {
   readonly type = 'Aligned';
+  readonly relationType = 'aligned';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -641,6 +655,7 @@ export class Aligned extends GeometryRelation {
  */
 export class Hidden extends Relation {
   readonly type = 'Hidden';
+  readonly relationType = 'hidden';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }
@@ -676,6 +691,7 @@ export class Hidden extends Relation {
  */
 export class Visible extends Relation {
   readonly type = 'Visible';
+  readonly relationType = 'visible';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly viewpoint?: ObjectSetExpression
@@ -727,6 +743,7 @@ export class Visible extends Relation {
  */
 export class Grouped extends Relation {
   readonly type = 'Grouped';
+  readonly relationType = 'grouped';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly maxDistance: number = 2.0
@@ -768,6 +785,7 @@ export class Grouped extends Relation {
  */
 export class Distributed extends Relation {
   readonly type = 'Distributed';
+  readonly relationType = 'distributed';
   constructor(
     public readonly objects: ObjectSetExpression,
     public readonly minDistance: number = 1.0
@@ -809,6 +827,7 @@ export class Distributed extends Relation {
  */
 export class Coverage extends GeometryRelation {
   readonly type = 'Coverage';
+  readonly relationType = 'coverage';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -851,6 +870,7 @@ export class Coverage extends GeometryRelation {
  */
 export class SupportCoverage extends GeometryRelation {
   readonly type = 'SupportCoverage';
+  readonly relationType = 'support_coverage';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,
@@ -892,6 +912,7 @@ export class SupportCoverage extends GeometryRelation {
  */
 export class Stability extends Relation {
   readonly type = 'Stability';
+  readonly relationType = 'stability';
   constructor(public readonly objects: ObjectSetExpression) {
     super();
   }
@@ -927,6 +948,7 @@ export class Stability extends Relation {
  */
 export class Containment extends GeometryRelation {
   readonly type = 'Containment';
+  readonly relationType = 'containment';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression
@@ -967,6 +989,7 @@ export class Containment extends GeometryRelation {
  */
 export class Proximity extends GeometryRelation {
   readonly type = 'Proximity';
+  readonly relationType = 'proximity';
   constructor(
     objects1: ObjectSetExpression,
     objects2: ObjectSetExpression,

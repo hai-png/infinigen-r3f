@@ -67,6 +67,11 @@ export class OfficeChairFactory extends AssetFactory<OfficeChairConfig, OfficeCh
     return this.generateConfig();
   }
 
+  generate(config?: Partial<OfficeChairConfig>): OfficeChairResult {
+    const mergedConfig = { ...this.getDefaultConfig(), ...config };
+    return this.create(mergedConfig);
+  }
+
   /**
    * Generate random office chair configuration
    */
