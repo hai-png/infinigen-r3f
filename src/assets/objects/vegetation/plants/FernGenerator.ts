@@ -1,7 +1,7 @@
 /**
- * FernGenerator - Procedural fern species with fronds and pinnae
+ * FernGenerator - Procedural fern: central stem + frond leaves (visible pinnae)
+ * All geometries in Mesh(geometry, MeshStandardMaterial). Uses SeededRandom.
  */
-
 import * as THREE from 'three';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
 import { SeededRandom } from '../../../../core/util/math/index';
@@ -22,7 +22,7 @@ export class FernGenerator extends BaseObjectGenerator<FernConfig> {
     return {
       frondCount: 12,
       frondLength: 0.4,
-      pinnaePerFrond: 20,
+      pinnaePerFrond: 16,
       curvature: 0.5,
       species: 'boston',
       size: 1.0
@@ -34,7 +34,14 @@ export class FernGenerator extends BaseObjectGenerator<FernConfig> {
     const rng = new SeededRandom(this.seed);
     const group = new THREE.Group();
 
-    // Generate fronds
+    // Central stem base (small)
+    const baseGeom = new THREE.CylinderGeometry(0.008, 0.012, 0.05, 6);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x2d5a1f, roughness: 0.7, metalness: 0.0 });
+    const base = new THREE.Mesh(baseGeom, baseMat);
+    base.position.y = 0.025;
+    group.add(base);
+
+    // Generate fronds radiating outward and upward
     for (let i = 0; i < fullConfig.frondCount; i++) {
       const frond = this.createFrond(fullConfig, rng, i);
       group.add(frond);
@@ -46,26 +53,35 @@ export class FernGenerator extends BaseObjectGenerator<FernConfig> {
 
   private createFrond(config: FernConfig, rng: SeededRandom, index: number): THREE.Group {
     const frondGroup = new THREE.Group();
-    const angle = (index / config.frondCount) * Math.PI * 2;
-    const radius = 0.05;
+    // Spread fronds in a fan around the base
+    const baseAngle = (index / config.frondCount) * Math.PI * 2;
+    const tiltAngle = rng.uniform(0.3, 0.7); // How much the frond tilts outward
 
-    frondGroup.position.set(
-      Math.cos(angle) * radius,
-      0,
-      Math.sin(angle) * radius
-    );
-    frondGroup.rotation.y = -angle;
+    frondGroup.rotation.y = baseAngle;
+    frondGroup.rotation.x = -tiltAngle;
 
-    // Create rachis (central stem)
+    // Create rachis (central stem of frond) as a curved tube
     const rachis = this.createRachis(config, rng);
     frondGroup.add(rachis);
 
-    // Create pinnae (leaflets)
+    // Create pinnae (leaflets) — alternating on both sides, with visible thickness
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, config.frondLength * 0.5, config.curvature * 0.1),
+      new THREE.Vector3(0, config.frondLength, config.curvature * 0.2)
+    ]);
+
     for (let i = 0; i < config.pinnaePerFrond; i++) {
-      const pinna = this.createPinna(config, rng, i);
-      const t = i / config.pinnaePerFrond;
-      pinna.position.set(0, t * config.frondLength, 0);
-      pinna.rotation.z = Math.PI / 2 + t * 0.2;
+      const t = (i + 1) / (config.pinnaePerFrond + 1);
+      const point = curve.getPoint(t);
+      // Pinnae get shorter toward the tip
+      const pinnaLength = config.frondLength * 0.25 * (1 - t * 0.7);
+      const side = (i % 2 === 0) ? 1 : -1;
+
+      const pinna = this.createPinna(pinnaLength, rng, side);
+      pinna.position.copy(point);
+      pinna.rotation.z = side * (Math.PI / 2 - t * 0.3);
+      pinna.rotation.y = side * 0.2;
       frondGroup.add(pinna);
     }
 
@@ -75,26 +91,32 @@ export class FernGenerator extends BaseObjectGenerator<FernConfig> {
   private createRachis(config: FernConfig, rng: SeededRandom): THREE.Mesh {
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, config.frondLength * 0.5, 0),
+      new THREE.Vector3(0, config.frondLength * 0.5, config.curvature * 0.1),
       new THREE.Vector3(0, config.frondLength, config.curvature * 0.2)
     ]);
-
-    const geometry = new THREE.TubeGeometry(curve, 16, 0.01, 4, false);
-    const material = new THREE.MeshStandardMaterial({ color: 0x2d5a1f });
+    const geometry = new THREE.TubeGeometry(curve, 12, 0.006, 4, false);
+    const material = new THREE.MeshStandardMaterial({ color: 0x2d5a1f, roughness: 0.7, metalness: 0.0 });
     return new THREE.Mesh(geometry, material);
   }
 
-  private createPinna(config: FernConfig, rng: SeededRandom, index: number): THREE.Mesh {
-    const length = 0.08 * (1 - index / config.pinnaePerFrond * 0.5);
-    const width = 0.02;
-
+  /**
+   * Create a single pinna (leaflet) — visible shape with proper thickness
+   */
+  private createPinna(length: number, rng: SeededRandom, side: number): THREE.Mesh {
+    const width = 0.015;
+    // Use a tapered shape for visibility
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
-    shape.quadraticCurveTo(length * 0.5, width, length, 0);
-    shape.quadraticCurveTo(length * 0.5, -width, 0, 0);
+    shape.quadraticCurveTo(width * 2, length * 0.4, 0, length);
+    shape.quadraticCurveTo(-width * 2, length * 0.4, 0, 0);
 
-    const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.001, bevelEnabled: false });
-    const material = new THREE.MeshStandardMaterial({ color: 0x3d7a2f, side: THREE.DoubleSide });
+    const geometry = new THREE.ShapeGeometry(shape, 3);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x3d7a2f,
+      roughness: 0.6,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
     return new THREE.Mesh(geometry, material);
   }
 }

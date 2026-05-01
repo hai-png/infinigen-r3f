@@ -1,17 +1,10 @@
-import * as THREE from 'three';
-import { NoiseUtils } from '../utils/NoiseUtils';
-
 /**
- * FlowerGenerator - Procedural flower generation with multiple species
- * 
- * Features:
- * - Multiple flower varieties (daisy, tulip, rose, wildflower, mixed)
- * - Customizable petal count, shape, and colors
- * - Stem and leaf generation
- * - Scattering support for meadow creation
- * 
- * @module vegetation/plants
+ * FlowerGenerator - Procedural flower generation with stem + petals + center
+ * All geometries in Mesh(geometry, MeshStandardMaterial). Uses SeededRandom.
  */
+import * as THREE from 'three';
+import { SeededRandom } from '../../../../core/util/math/index';
+
 export interface FlowerConfig {
   petalCount: number;
   petalLength: number;
@@ -27,27 +20,23 @@ export interface FlowerConfig {
   density: number;
 }
 
-/**
- * Generates flower meshes with various types
- */
 export class FlowerGenerator {
-  private noiseUtils: NoiseUtils;
   private materialCache: Map<string, THREE.MeshStandardMaterial>;
 
   constructor() {
-    this.noiseUtils = new NoiseUtils();
     this.materialCache = new Map();
   }
 
   /**
-   * Generate a single flower mesh
+   * Generate a single flower mesh: stem + petals + center
    */
-  generateFlower(config: Partial<FlowerConfig> = {}): THREE.Group {
+  generateFlower(config: Partial<FlowerConfig> = {}, seed: number = 12345): THREE.Group {
+    const rng = new SeededRandom(seed);
     const finalConfig: FlowerConfig = {
       petalCount: 8,
       petalLength: 0.15,
       petalWidth: 0.08,
-      stemHeight: 0.4 + Math.random() * 0.2,
+      stemHeight: 0.4 + rng.uniform(0, 0.2),
       stemThickness: 0.02,
       colorBase: new THREE.Color(0xffffff),
       colorCenter: new THREE.Color(0xffdd00),
@@ -61,18 +50,18 @@ export class FlowerGenerator {
 
     const group = new THREE.Group();
 
-    // Create stem
+    // Stem
     const stem = this.createStem(finalConfig);
     group.add(stem);
 
-    // Create leaves
+    // Leaves on stem
     for (let i = 0; i < finalConfig.leafCount; i++) {
-      const leaf = this.createLeaf(finalConfig, i / finalConfig.leafCount);
+      const leaf = this.createLeaf(finalConfig, (i + 1) / (finalConfig.leafCount + 1), rng);
       group.add(leaf);
     }
 
-    // Create flower head (petals + center)
-    const flowerHead = this.createFlowerHead(finalConfig);
+    // Flower head (petals + center)
+    const flowerHead = this.createFlowerHead(finalConfig, rng);
     flowerHead.position.y = finalConfig.stemHeight;
     group.add(flowerHead);
 
@@ -82,7 +71,8 @@ export class FlowerGenerator {
   /**
    * Generate flower field with instanced rendering
    */
-  generateFlowerField(config: Partial<FlowerConfig> = {}): THREE.InstancedMesh {
+  generateFlowerField(config: Partial<FlowerConfig> = {}, seed: number = 12345): THREE.InstancedMesh {
+    const rng = new SeededRandom(seed);
     const finalConfig: FlowerConfig = {
       petalCount: 6,
       petalLength: 0.12,
@@ -99,7 +89,6 @@ export class FlowerGenerator {
       ...config,
     };
 
-    // Create base flower geometry
     const baseGeometry = this.createSimpleFlowerGeometry(finalConfig);
     const material = this.getFlowerMaterial(finalConfig);
 
@@ -108,16 +97,15 @@ export class FlowerGenerator {
     let instanceIndex = 0;
 
     for (let i = 0; i < finalConfig.count && instanceIndex < finalConfig.count; i++) {
-      if (Math.random() > finalConfig.density) continue;
+      if (rng.next() > finalConfig.density) continue;
 
-      const x = (Math.random() - 0.5) * finalConfig.spreadArea.width;
-      const z = (Math.random() - 0.5) * finalConfig.spreadArea.depth;
-
-      const scale = 0.8 + Math.random() * 0.4;
+      const x = (rng.next() - 0.5) * finalConfig.spreadArea.width;
+      const z = (rng.next() - 0.5) * finalConfig.spreadArea.depth;
+      const scale = 0.8 + rng.uniform(0, 0.4);
 
       dummy.position.set(x, 0, z);
       dummy.scale.set(scale, scale, scale);
-      dummy.rotation.y = Math.random() * Math.PI * 2;
+      dummy.rotation.y = rng.uniform(0, Math.PI * 2);
       dummy.updateMatrix();
 
       instancedMesh.setMatrixAt(instanceIndex++, dummy.matrix);
@@ -127,66 +115,38 @@ export class FlowerGenerator {
     return instancedMesh;
   }
 
-  /**
-   * Create flower stem
-   */
   private createStem(config: FlowerConfig): THREE.Mesh {
-    const geometry = new THREE.CylinderGeometry(
-      config.stemThickness * 0.7,
-      config.stemThickness,
-      config.stemHeight,
-      6
-    );
-
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x2d5a1e,
-      roughness: 0.7,
-      metalness: 0.0,
-    });
-
+    const geometry = new THREE.CylinderGeometry(config.stemThickness * 0.7, config.stemThickness, config.stemHeight, 6);
+    const material = new THREE.MeshStandardMaterial({ color: 0x2d5a1e, roughness: 0.7, metalness: 0.0 });
     const stem = new THREE.Mesh(geometry, material);
     stem.position.y = config.stemHeight / 2;
     return stem;
   }
 
-  /**
-   * Create leaf attached to stem
-   */
-  private createLeaf(config: FlowerConfig, heightRatio: number): THREE.Mesh {
-    const leafGeometry = new THREE.CircleGeometry(
-      config.stemThickness * 3,
-      8
-    );
-
-    // Flatten and shape the leaf
-    const positions = leafGeometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      positions[i + 1] *= 0.3; // Flatten
-      positions[i + 2] *= 0.1; // Make thin
-    }
-
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x3d7a2e,
-      roughness: 0.6,
-      side: THREE.DoubleSide,
-    });
-
-    const leaf = new THREE.Mesh(leafGeometry, material);
+  private createLeaf(config: FlowerConfig, heightRatio: number, rng: SeededRandom): THREE.Mesh {
+    // Leaf as a small elongated shape
+    const leafLength = config.stemThickness * 6;
+    const leafWidth = config.stemThickness * 3;
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.quadraticCurveTo(leafWidth, leafLength * 0.5, 0, leafLength);
+    shape.quadraticCurveTo(-leafWidth, leafLength * 0.5, 0, 0);
+    const geometry = new THREE.ShapeGeometry(shape, 4);
+    const material = new THREE.MeshStandardMaterial({ color: 0x3d7a2e, roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide });
+    const leaf = new THREE.Mesh(geometry, material);
     leaf.position.y = config.stemHeight * heightRatio;
-    leaf.rotation.x = Math.PI / 2 - 0.3;
-    leaf.rotation.z = Math.PI / 2;
-
+    leaf.rotation.z = Math.PI / 3 * (rng.boolean() ? 1 : -1);
+    leaf.rotation.y = rng.uniform(0, Math.PI * 2);
     return leaf;
   }
 
   /**
-   * Create flower head with petals and center
+   * Create flower head: petals arranged radially + center sphere
    */
-  private createFlowerHead(config: FlowerConfig): THREE.Group {
+  private createFlowerHead(config: FlowerConfig, rng: SeededRandom): THREE.Group {
     const group = new THREE.Group();
 
-    // Create petals based on variety
-    const petalGeometry = this.createPetalGeometry(config);
+    // Petals — each is a visible elliptical shape
     const petalMaterial = new THREE.MeshStandardMaterial({
       color: config.colorBase.clone(),
       roughness: 0.5,
@@ -196,24 +156,23 @@ export class FlowerGenerator {
 
     for (let i = 0; i < config.petalCount; i++) {
       const angle = (i / config.petalCount) * Math.PI * 2;
+      // Create petal as an elongated shape
+      const petalShape = new THREE.Shape();
+      const pw = config.petalWidth;
+      const pl = config.petalLength;
+      petalShape.moveTo(0, 0);
+      petalShape.quadraticCurveTo(pw, pl * 0.5, 0, pl);
+      petalShape.quadraticCurveTo(-pw, pl * 0.5, 0, 0);
+      const petalGeometry = new THREE.ShapeGeometry(petalShape, 4);
       const petal = new THREE.Mesh(petalGeometry, petalMaterial);
-
       petal.rotation.y = angle;
       petal.rotation.x = Math.PI / 4;
-
       group.add(petal);
     }
 
-    // Create center
-    const centerGeometry = new THREE.SphereGeometry(
-      config.stemThickness * 2,
-      8,
-      8
-    );
-    const centerMaterial = new THREE.MeshStandardMaterial({
-      color: config.colorCenter.clone(),
-      roughness: 0.8,
-    });
+    // Center — a small sphere
+    const centerGeometry = new THREE.SphereGeometry(config.stemThickness * 2.5, 8, 8);
+    const centerMaterial = new THREE.MeshStandardMaterial({ color: config.colorCenter.clone(), roughness: 0.8, metalness: 0.0 });
     const center = new THREE.Mesh(centerGeometry, centerMaterial);
     group.add(center);
 
@@ -221,130 +180,64 @@ export class FlowerGenerator {
   }
 
   /**
-   * Create petal geometry based on flower variety
-   */
-  private createPetalGeometry(config: FlowerConfig): THREE.BufferGeometry {
-    switch (config.variety) {
-      case 'tulip':
-        return this.createTulipPetal(config);
-      case 'rose':
-        return this.createRosePetal(config);
-      case 'wildflower':
-        return this.createWildflowerPetal(config);
-      case 'daisy':
-      default:
-        return this.createDaisyPetal(config);
-    }
-  }
-
-  private createDaisyPetal(config: FlowerConfig): THREE.BufferGeometry {
-    const geometry = new THREE.CircleGeometry(config.petalLength, 8);
-    
-    const positions = geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      positions[i] *= config.petalWidth / config.petalLength; // Elongate
-      positions[i + 2] *= 0.05; // Thin
-    }
-
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createTulipPetal(config: FlowerConfig): THREE.BufferGeometry {
-    const geometry = new THREE.CircleGeometry(config.petalLength, 8);
-    
-    const positions = geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      positions[i] *= config.petalWidth / config.petalLength;
-      positions[i + 2] *= 0.1;
-      
-      // Cup shape
-      const x = positions[i];
-      positions[i + 2] += Math.pow(x / config.petalWidth, 2) * 0.05;
-    }
-
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createRosePetal(config: FlowerConfig): THREE.BufferGeometry {
-    const geometry = new THREE.CircleGeometry(config.petalLength, 12);
-    
-    const positions = geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      positions[i] *= config.petalWidth / config.petalLength;
-      positions[i + 2] *= 0.08;
-      
-      // Wavy edge
-      const angle = Math.atan2(positions[i + 1], positions[i]);
-      positions[i + 2] += Math.sin(angle * 3) * 0.02;
-    }
-
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createWildflowerPetal(config: FlowerConfig): THREE.BufferGeometry {
-    const geometry = new THREE.CircleGeometry(config.petalLength * 0.8, 6);
-    
-    const positions = geometry.attributes.position.array as Float32Array;
-    for (let i = 0; i < positions.length; i += 3) {
-      positions[i] *= (config.petalWidth / config.petalLength) * 1.2;
-      positions[i + 2] *= 0.05;
-    }
-
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  /**
    * Create simplified flower geometry for instanced rendering
    */
   private createSimpleFlowerGeometry(config: FlowerConfig): THREE.BufferGeometry {
-    const geometry = new THREE.Group();
-    
-    // Simple representation: stem + flower head
-    const stemGeo = new THREE.CylinderGeometry(
-      config.stemThickness * 0.7,
-      config.stemThickness,
-      config.stemHeight,
-      6
-    );
-    
-    const headGeo = new THREE.SphereGeometry(
-      config.petalLength,
-      8,
-      8
-    );
+    const stemGeo = new THREE.CylinderGeometry(config.stemThickness * 0.7, config.stemThickness, config.stemHeight, 6);
+    const headGeo = new THREE.SphereGeometry(config.petalLength, 8, 8);
     headGeo.translate(0, config.stemHeight, 0);
-    
-    // Merge geometries (simplified approach)
-    return stemGeo;
-  }
 
-  /**
-   * Get flower material
-   */
-  private getFlowerMaterial(config: FlowerConfig): THREE.MeshStandardMaterial {
-    const cacheKey = `flower-${config.colorBase.getHex()}-${config.variety}`;
-    
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey)!;
+    // Merge stem and head
+    const stemPos = stemGeo.attributes.position;
+    const headPos = headGeo.attributes.position;
+    const totalVerts = stemPos.count + headPos.count;
+
+    const mergedPositions = new Float32Array(totalVerts * 3);
+    const mergedNormals = new Float32Array(totalVerts * 3);
+
+    for (let i = 0; i < stemPos.count; i++) {
+      mergedPositions[i * 3] = stemPos.getX(i);
+      mergedPositions[i * 3 + 1] = stemPos.getY(i);
+      mergedPositions[i * 3 + 2] = stemPos.getZ(i);
+      mergedNormals[i * 3] = stemGeo.attributes.normal.getX(i);
+      mergedNormals[i * 3 + 1] = stemGeo.attributes.normal.getY(i);
+      mergedNormals[i * 3 + 2] = stemGeo.attributes.normal.getZ(i);
     }
 
-    const material = new THREE.MeshStandardMaterial({
-      color: config.colorBase.clone(),
-      roughness: 0.5,
-      metalness: 0.0,
-    });
+    const offset = stemPos.count;
+    for (let i = 0; i < headPos.count; i++) {
+      mergedPositions[(offset + i) * 3] = headPos.getX(i);
+      mergedPositions[(offset + i) * 3 + 1] = headPos.getY(i);
+      mergedPositions[(offset + i) * 3 + 2] = headPos.getZ(i);
+      mergedNormals[(offset + i) * 3] = headGeo.attributes.normal.getX(i);
+      mergedNormals[(offset + i) * 3 + 1] = headGeo.attributes.normal.getY(i);
+      mergedNormals[(offset + i) * 3 + 2] = headGeo.attributes.normal.getZ(i);
+    }
 
+    const indices: number[] = [];
+    if (stemGeo.index) {
+      for (let i = 0; i < stemGeo.index.count; i++) indices.push(stemGeo.index.getX(i));
+    }
+    if (headGeo.index) {
+      for (let i = 0; i < headGeo.index.count; i++) indices.push(headGeo.index.getX(i) + offset);
+    }
+
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
+    if (indices.length > 0) merged.setIndex(indices);
+    merged.computeVertexNormals();
+    return merged;
+  }
+
+  private getFlowerMaterial(config: FlowerConfig): THREE.MeshStandardMaterial {
+    const cacheKey = `flower-${config.colorBase.getHex()}-${config.variety}`;
+    if (this.materialCache.has(cacheKey)) return this.materialCache.get(cacheKey)!;
+    const material = new THREE.MeshStandardMaterial({ color: config.colorBase.clone(), roughness: 0.5, metalness: 0.0 });
     this.materialCache.set(cacheKey, material);
     return material;
   }
 
-  /**
-   * Clear material cache
-   */
   dispose(): void {
     this.materialCache.forEach((material) => material.dispose());
     this.materialCache.clear();

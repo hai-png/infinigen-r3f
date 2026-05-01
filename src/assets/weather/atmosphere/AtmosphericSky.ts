@@ -244,8 +244,12 @@ export class AtmosphericSky {
     const geometry = new THREE.PlaneGeometry(2, 2);
     
     const vertexShader = `
+      varying vec2 vUv;
+      
       void main() {
-        gl_Position = vec4(position, 1.0);
+        vUv = uv;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
       }
     `;
     
@@ -254,9 +258,13 @@ export class AtmosphericSky {
       uniform float sunDiscSize;
       uniform vec3 sunColor;
       uniform float sunIntensity;
+      uniform vec2 resolution;
+      uniform float aspectRatio;
+      
+      varying vec2 vUv;
       
       void main() {
-        vec2 uv = gl_FragCoord.xy / resolution - 0.5;
+        vec2 uv = vUv - 0.5;
         float dist = length(uv * aspectRatio);
         
         float sun = smoothstep(sunDiscSize, sunDiscSize * 0.8, dist);
@@ -295,8 +303,12 @@ export class AtmosphericSky {
     const geometry = new THREE.PlaneGeometry(2, 2);
     
     const vertexShader = `
+      varying vec2 vUv;
+      
       void main() {
-        gl_Position = vec4(position, 1.0);
+        vUv = uv;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
       }
     `;
     
@@ -305,9 +317,13 @@ export class AtmosphericSky {
       uniform float moonDiscSize;
       uniform vec3 moonColor;
       uniform float moonIntensity;
+      uniform vec2 resolution;
+      uniform float aspectRatio;
+      
+      varying vec2 vUv;
       
       void main() {
-        vec2 uv = gl_FragCoord.xy / resolution - 0.5;
+        vec2 uv = vUv - 0.5;
         float dist = length(uv * aspectRatio);
         
         float moon = smoothstep(moonDiscSize, moonDiscSize * 0.9, dist);

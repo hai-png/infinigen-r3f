@@ -261,35 +261,32 @@ export class LightingSystem {
    */
   async setupHDRI(path: string): Promise<void> {
     try {
-      const loader = new THREE.CubeTextureLoader();
-      const texture = await this.loadCubeTexture(path);
+      // Use RGBELoader for equirectangular HDR files (.hdr)
+      const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
+      const loader = new RGBELoader();
+      
+      const texture = await new Promise<THREE.Texture>((resolve, reject) => {
+        loader.load(
+          path,
+          (texture: THREE.Texture) => resolve(texture),
+          undefined,
+          (error: unknown) => reject(error)
+        );
+      });
+      
+      // Convert equirectangular texture to environment map
+      const pmremGenerator = new THREE.PMREMGenerator(
+        // Will be set up when renderer is available
+        null as any
+      );
       
       this.hdriTexture = texture;
-      this.scene.environment = texture;
-      this.scene.background = texture;
+      this.scene.environment = texture as THREE.Texture;
+      this.scene.background = texture as THREE.Texture;
       
     } catch (error) {
       console.warn('Failed to load HDRI:', error);
     }
-  }
-
-  /**
-   * Load cube texture for HDRI
-   */
-  private async loadCubeTexture(path: string): Promise<THREE.CubeTexture> {
-    return new Promise((resolve, reject) => {
-      const loader = new THREE.CubeTextureLoader();
-      loader.load(
-        [
-          `${path}/px.jpg`, `${path}/nx.jpg`,
-          `${path}/py.jpg`, `${path}/ny.jpg`,
-          `${path}/pz.jpg`, `${path}/nz.jpg`,
-        ],
-        resolve,
-        undefined,
-        reject
-      );
-    });
   }
 
   /**

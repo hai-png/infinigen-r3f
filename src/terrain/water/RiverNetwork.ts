@@ -312,7 +312,46 @@ export class RiverNetwork {
       // Chance to spawn tributary
       if (Math.random() < this.config.tributaryProbability && 
           riverPoints.length > 10) {
-        // Tributary logic would go here
+        // Create a tributary that joins this river at the current point
+        // The tributary flows in from a perpendicular direction and merges
+        const tributaryDir = this.flowData![idx].direction;
+        const neighbors = [
+          [-1, -1], [0, -1], [1, -1],
+          [-1, 0],           [1, 0],
+          [-1, 1],  [0, 1],  [1, 1]
+        ];
+        // Pick a perpendicular offset direction for the tributary source
+        const perpOffset = (tributaryDir + 2) % 8;
+        const [tdc, tdr] = neighbors[perpOffset] || [1, 0];
+        const tribSourceCol = col + tdc * 5;
+        const tribSourceRow = row + tdr * 5;
+
+        if (tribSourceCol >= 0 && tribSourceCol < resolution && 
+            tribSourceRow >= 0 && tribSourceRow < resolution) {
+          const tribIdx = tribSourceRow * resolution + tribSourceCol;
+          if (!used[tribIdx] && this.flowData![tribIdx].accumulation > 5) {
+            // Trace tributary from its source to the current junction point
+            const tribPath = this.traceRiverPath(
+              tribIdx,
+              heightmap,
+              resolution,
+              worldSize,
+              used
+            );
+            // The tributary joins the main river - add its flow to the junction
+            if (tribPath.length > 0) {
+              // Merge tributary flow into the main river at junction
+              const junctionFlow = this.flowData![idx].accumulation;
+              for (const tp of tribPath) {
+                tp.flowRate += junctionFlow * 0.3;
+              }
+              // Store tributary as part of the river network by widening at junction
+              const currentWidth = riverPoints[riverPoints.length - 1].width;
+              riverPoints[riverPoints.length - 1].width = 
+                currentWidth + Math.sqrt(tribPath.length) * 0.5;
+            }
+          }
+        }
       }
     }
     

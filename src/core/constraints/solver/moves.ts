@@ -496,15 +496,75 @@ export class SimulatedAnnealingSolver extends Solver {
   }
 
   /**
-   * Perform a single step of simulated annealing
+   * Perform a single step of simulated annealing.
+   *
+   * Applies the Metropolis criterion:
+   *  1. Evaluate current state energy
+   *  2. Evaluate proposed state energy (apply proposal temporarily)
+   *  3. Accept if energy decreases, otherwise accept with probability
+   *     exp(-deltaE / T)
+   *  4. Update state if accepted
+   *  5. Cool down temperature
    */
   step(state: SolverState, proposal: any): SolverState {
     this.currentIteration++;
-    this.currentTemperature *= this.config.coolingRate;
+
+    // 1. Current energy
+    const currentEnergy = state.energy;
+
+    // 2. Proposed energy – if proposal carries a score use it, otherwise
+    //    fall back to evaluating the state with the proposed move applied
+    let proposedEnergy = currentEnergy;
+    if (proposal && proposal.score !== undefined && proposal.score !== 0) {
+      proposedEnergy = proposal.score;
+    } else if (proposal && proposal.newState) {
+      // Try to evaluate the proposed state
+      try {
+        proposedEnergy = this.evaluateState(proposal.newState instanceof State ? proposal.newState : this.initialState);
+      } catch {
+        proposedEnergy = currentEnergy; // fallback
+      }
+    }
+
+    // 3. Metropolis criterion
+    const deltaE = proposedEnergy - currentEnergy;
+    let accepted = false;
+    if (deltaE <= 0) {
+      accepted = true; // always accept improvements
+    } else if (this.currentTemperature > 0) {
+      accepted = Math.random() < Math.exp(-deltaE / this.currentTemperature);
+    }
+
+    // 4. Update state
+    let newEnergy = currentEnergy;
+    const newAssignments = new Map(state.assignments);
+    if (accepted) {
+      newEnergy = proposedEnergy;
+      if (proposal && proposal.variableId) {
+        newAssignments.set(proposal.variableId, proposal.newValue);
+      }
+    }
+
+    // Track best
+    const newBestScore = (newEnergy < state.bestScore || state.bestScore === -Infinity)
+      ? newEnergy : state.bestScore;
+
+    // 5. Cool down
+    this.currentTemperature = Math.max(
+      this.currentTemperature * this.config.coolingRate,
+      0.01
+    );
+
     return {
       ...state,
       iteration: this.currentIteration,
       temperature: this.currentTemperature,
+      energy: newEnergy,
+      currentScore: -newEnergy,
+      bestScore: newBestScore,
+      assignments: newAssignments,
+      lastMove: proposal ?? null,
+      lastMoveAccepted: accepted,
     };
   }
   

@@ -25,10 +25,10 @@ import {
   Raycaster,
   Box3,
   Sphere,
-  MathUtils,
   Plane,
   Triangle
 } from 'three';
+import { SeededRandom } from '../../core/util/math/index';
 
 // ============================================================================
 // Type Definitions
@@ -130,10 +130,12 @@ export type BiomeRule = Biome;
 // ============================================================================
 
 /**
- * Generate a unique instance ID
+ * Generate a unique instance ID using seeded random
  */
-function generateInstanceId(): string {
-  return `inst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+let _idRng: SeededRandom | null = null;
+function generateInstanceId(seed?: number): string {
+  if (!_idRng) _idRng = new SeededRandom(seed ?? Date.now());
+  return `inst_${Date.now()}_${_idRng.nextInt(0, 999999999).toString(36)}`;
 }
 
 /**
@@ -188,7 +190,8 @@ function calculateSlope(normal: Vector3, upVector: Vector3 = new Vector3(0, 1, 0
 }
 
 /**
- * Generate a random quaternion within specified Euler angle ranges
+ * Generate a random quaternion within specified Euler angle ranges.
+ * Uses SeededRandom instead of MathUtils.randFloat to avoid Math.random().
  */
 function randomQuaternion(
   minYaw: number,
@@ -196,11 +199,14 @@ function randomQuaternion(
   minPitch: number,
   maxPitch: number,
   minRoll: number,
-  maxRoll: number
+  maxRoll: number,
+  rng?: SeededRandom
 ): Quaternion {
-  const yaw = MathUtils.randFloat(minYaw, maxYaw) * (Math.PI / 180);
-  const pitch = MathUtils.randFloat(minPitch, maxPitch) * (Math.PI / 180);
-  const roll = MathUtils.randFloat(minRoll, maxRoll) * (Math.PI / 180);
+  // Use SeededRandom if provided, otherwise fall back to a static instance
+  const _rng = rng || new SeededRandom(Date.now());
+  const yaw = _rng.uniform(minYaw, maxYaw) * (Math.PI / 180);
+  const pitch = _rng.uniform(minPitch, maxPitch) * (Math.PI / 180);
+  const roll = _rng.uniform(minRoll, maxRoll) * (Math.PI / 180);
   
   const qx = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pitch);
   const qy = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw);
@@ -237,14 +243,15 @@ function poissonDiskSampling(
   const gridWidth = Math.ceil(width / cellSize);
   const gridHeight = Math.ceil(height / cellSize);
   const grid = new Array(gridWidth * gridHeight).fill(-1);
+  const rng = seed !== undefined ? new SeededRandom(seed) : new SeededRandom(42);
   
   const samples: Vector2[] = [];
   const queue: Vector2[] = [];
   
   // First sample
   const firstSample = new Vector2(
-    Math.random() * width,
-    Math.random() * height
+    rng.uniform(0, width),
+    rng.uniform(0, height)
   );
   samples.push(firstSample);
   queue.push(firstSample);
@@ -254,13 +261,13 @@ function poissonDiskSampling(
   grid[gridY * gridWidth + gridX] = 0;
   
   while (queue.length > 0) {
-    const index = Math.floor(Math.random() * queue.length);
+    const index = rng.nextInt(0, queue.length - 1);
     const sample = queue[index];
     
     let found = false;
     for (let i = 0; i < k; i++) {
-      const angle = Math.atan2(sample.y, sample.x) + Math.random() * Math.PI * 2;
-      const dist = MathUtils.randFloat(radius, radius * 2);
+      const angle = Math.atan2(sample.y, sample.x) + rng.uniform(0, Math.PI * 2);
+      const dist = rng.uniform(radius, radius * 2);
       
       const newX = sample.x + Math.cos(angle) * dist;
       const newY = sample.y + Math.sin(angle) * dist;
@@ -326,6 +333,7 @@ export class InstanceScatterSystem {
   private instances: Map<string, ScatterInstance>;
   private raycaster: Raycaster;
   private seed: number;
+  private rng: SeededRandom;
   private currentPositions: Vector3[];
   
   constructor(config?: Partial<ScatterConfig>, rules?: Partial<ScatterRules>) {
@@ -372,10 +380,8 @@ export class InstanceScatterSystem {
     this.instances = new Map();
     this.raycaster = new Raycaster();
     this.seed = this.config.seed ?? Date.now();
+    this.rng = new SeededRandom(this.seed);
     this.currentPositions = [];
-    
-    // Seed random number generator
-    MathUtils.seededRandom(this.seed);
   }
   
   /**
@@ -822,8 +828,8 @@ export class InstanceScatterSystem {
       case 'random':
         for (let i = 0; i < this.config.count; i++) {
           points.push(new Vector2(
-            Math.random() * (triangles ? 100 : area),
-            Math.random() * (triangles ? 100 : area)
+            this.rng.uniform(0, 1) * (triangles ? 100 : area),
+            this.rng.uniform(0, 1) * (triangles ? 100 : area)
           ));
         }
         break;
@@ -833,7 +839,7 @@ export class InstanceScatterSystem {
         const cols = Math.ceil(area / gridSize);
         for (let x = 0; x < cols; x++) {
           for (let y = 0; y < cols; y++) {
-            if (Math.random() < 0.7) { // 70% fill rate
+            if (this.rng.next() < 0.7) { // 70% fill rate
               points.push(new Vector2(x * gridSize, y * gridSize));
             }
           }
@@ -876,7 +882,7 @@ export class InstanceScatterSystem {
     if (pool.length === 0) return null;
     
     const totalWeight = pool.reduce((sum, obj) => sum + obj.weight, 0);
-    let random = Math.random() * totalWeight;
+    let random = this.rng.next() * totalWeight;
     
     for (const obj of pool) {
       random -= obj.weight;
@@ -926,7 +932,7 @@ export class InstanceScatterSystem {
   }
   
   /**
-   * Calculate rotation for an instance
+   * Calculate rotation for an instance — uses SeededRandom
    */
   private calculateRotation(normal: Vector3, objectId: string): Quaternion {
     let rotation: Quaternion;
@@ -945,7 +951,8 @@ export class InstanceScatterSystem {
         this.config.randomRotation.minPitch,
         this.config.randomRotation.maxPitch,
         this.config.randomRotation.minRoll,
-        this.config.randomRotation.maxRoll
+        this.config.randomRotation.maxRoll,
+        this.rng
       );
     } else {
       rotation = new Quaternion();
@@ -959,7 +966,8 @@ export class InstanceScatterSystem {
         this.config.randomRotation.minPitch,
         this.config.randomRotation.maxPitch,
         this.config.randomRotation.minRoll,
-        this.config.randomRotation.maxRoll
+        this.config.randomRotation.maxRoll,
+        this.rng
       );
       rotation.multiply(randomRot);
     }
@@ -981,9 +989,9 @@ export class InstanceScatterSystem {
     const maxScale = obj.maxScale || this.config.randomScale.max;
     
     return new Vector3(
-      MathUtils.randFloat(minScale.x, maxScale.x),
-      MathUtils.randFloat(minScale.y, maxScale.y),
-      MathUtils.randFloat(minScale.z, maxScale.z)
+      this.rng.uniform(minScale.x, maxScale.x),
+      this.rng.uniform(minScale.y, maxScale.y),
+      this.rng.uniform(minScale.z, maxScale.z)
     );
   }
 }

@@ -3,7 +3,7 @@
  * 
  * Orchestrates the entire data generation workflow:
  * - Scene generation with procedural assets
- * - Multi-view rendering
+ * - Multi-view rendering with OffscreenCanvas + WebGLRenderer
  * - Ground truth extraction
  * - Annotation generation
  * - Format conversion and export
@@ -74,7 +74,7 @@ export interface GeneratedView {
   cameraPose: CameraPose;
   
   // Rendered images
-  colorImage?: string; // Blob URL or path
+  colorImage?: string; // Blob URL or data URL
   depthImage?: string;
   normalImage?: string;
   segmentationImage?: string;
@@ -131,6 +131,61 @@ export interface PipelineProgress {
 export type ProgressCallback = (progress: PipelineProgress) => void;
 
 // ============================================================================
+// Helper: Create an OffscreenCanvas + WebGLRenderer for headless rendering
+// ============================================================================
+
+function createOffscreenRenderer(width: number, height: number): {
+  renderer: THREE.WebGLRenderer;
+  canvas: OffscreenCanvas | HTMLCanvasElement;
+  dispose: () => void;
+} {
+  let canvas: OffscreenCanvas | HTMLCanvasElement;
+  try {
+    canvas = new OffscreenCanvas(width, height);
+  } catch {
+    canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas as any,
+    antialias: true,
+    preserveDrawingBuffer: true,
+    alpha: true,
+  });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+
+  return {
+    renderer,
+    canvas,
+    dispose: () => {
+      renderer.dispose();
+    },
+  };
+}
+
+/**
+ * Convert rendered canvas to an image URL (blob URL or data URL)
+ */
+async function canvasToImageUrl(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<string> {
+  try {
+    if (canvas instanceof OffscreenCanvas) {
+      const blob = await canvas.convertToBlob({ type: 'image/png' });
+      return URL.createObjectURL(blob);
+    } else {
+      return (canvas as HTMLCanvasElement).toDataURL('image/png');
+    }
+  } catch {
+    return '';
+  }
+}
+
+// ============================================================================
 // Main DataPipeline Class
 // ============================================================================
 
@@ -175,7 +230,6 @@ export class DataPipeline {
     this.exporter = new SceneExporter(scene);
     this.groundTruthGen = new GroundTruthGenerator(scene);
     
-    // Create temporary camera for annotation generator
     const tempCamera = new THREE.PerspectiveCamera(
       this.config.fovRange[0],
       this.config.imageWidth / this.config.imageHeight,
@@ -191,23 +245,14 @@ export class DataPipeline {
     this.batchProcessor = new BatchProcessor(this.jobManager);
   }
 
-  /**
-   * Configure pipeline
-   */
   setConfig(config: Partial<PipelineConfig>): void {
     this.config = { ...this.config, ...config };
   }
 
-  /**
-   * Set progress callback
-   */
   onProgressUpdate(callback: ProgressCallback): void {
     this.onProgress = callback;
   }
 
-  /**
-   * Generate complete dataset for a scene
-   */
   async generateDataset(): Promise<GeneratedScene> {
     const startTime = performance.now();
     const reportProgress = (phase: PipelineProgress['phase'], progress: number, message: string) => {
@@ -216,41 +261,33 @@ export class DataPipeline {
 
     try {
       reportProgress('scene_generation', 0, 'Initializing scene generation...');
-
-      // Step 1: Setup scene with seed
       await this.setupScene();
       reportProgress('scene_generation', 100, 'Scene setup complete');
 
-      // Step 2: Generate camera poses
       reportProgress('camera_setup', 0, 'Generating camera poses...');
       const cameras = this.generateCameraPoses();
       reportProgress('camera_setup', 100, `Generated ${cameras.length} camera poses`);
 
-      // Step 3: Render all views
       reportProgress('rendering', 0, 'Starting multi-view rendering...');
       const views = await this.renderAllViews(cameras, (current, total) => {
         reportProgress('rendering', (current / total) * 100, `Rendering view ${current}/${total}`);
       });
       reportProgress('rendering', 100, 'All views rendered');
 
-      // Step 4: Generate ground truth
       reportProgress('ground_truth', 0, 'Extracting ground truth data...');
       const groundTruth = await this.extractGroundTruth();
       reportProgress('ground_truth', 100, 'Ground truth extraction complete');
 
-      // Step 5: Generate annotations
       reportProgress('annotation', 0, 'Generating annotations...');
       const annotations = await this.generateAnnotations();
       reportProgress('annotation', 100, 'Annotations generated');
 
-      // Step 6: Export scene
       reportProgress('export', 0, 'Exporting scene files...');
       const exports = await this.exportScene();
       reportProgress('export', 100, 'Export complete');
 
       const totalTime = performance.now() - startTime;
 
-      // Compile results
       const result: GeneratedScene = {
         sceneId: this.config.sceneId!,
         seed: this.config.seed!,
@@ -270,7 +307,6 @@ export class DataPipeline {
       };
 
       reportProgress('complete', 100, `Dataset generation complete in ${totalTime.toFixed(2)}ms`);
-
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -279,14 +315,7 @@ export class DataPipeline {
     }
   }
 
-  /**
-   * Setup scene with procedural generation
-   */
   private async setupScene(): Promise<void> {
-    // Set random seed for reproducibility
-    // In a real implementation, this would configure all random generators
-    
-    // Add metadata to scene
     this.scene.userData = {
       ...this.scene.userData,
       sceneId: this.config.sceneId,
@@ -297,14 +326,10 @@ export class DataPipeline {
     };
   }
 
-  /**
-   * Generate random camera poses around the scene
-   */
   private generateCameraPoses(): CameraPose[] {
     const cameras: CameraPose[] = [];
     const { seed, cameraCount, fovRange, distanceRange, elevationRange, azimuthRange } = this.config;
 
-    // Simple pseudo-random number generator based on seed
     let randomState = seed || 12345;
     const random = () => {
       randomState = (randomState * 1103515245 + 12345) & 0x7fffffff;
@@ -312,13 +337,11 @@ export class DataPipeline {
     };
 
     for (let i = 0; i < cameraCount!; i++) {
-      // Random spherical coordinates
       const azimuth = (azimuthRange![0] + random() * (azimuthRange![1] - azimuthRange![0])) * (Math.PI / 180);
       const elevation = (elevationRange![0] + random() * (elevationRange![1] - elevationRange![0])) * (Math.PI / 180);
       const distance = distanceRange![0] + random() * (distanceRange![1] - distanceRange![0]);
       const fov = fovRange![0] + random() * (fovRange![1] - fovRange![0]);
 
-      // Convert to Cartesian coordinates
       const x = distance * Math.cos(elevation) * Math.sin(azimuth);
       const y = distance * Math.sin(elevation);
       const z = distance * Math.cos(elevation) * Math.cos(azimuth);
@@ -326,7 +349,7 @@ export class DataPipeline {
       cameras.push({
         id: `camera_${i.toString().padStart(3, '0')}`,
         position: [x, y, z],
-        target: [0, 0, 0], // Look at origin
+        target: [0, 0, 0],
         up: [0, 1, 0],
         fov,
       });
@@ -335,9 +358,6 @@ export class DataPipeline {
     return cameras;
   }
 
-  /**
-   * Render all camera views
-   */
   private async renderAllViews(
     cameras: CameraPose[],
     onProgress?: (current: number, total: number) => void
@@ -349,15 +369,14 @@ export class DataPipeline {
       const camera = cameras[i];
       const startTime = performance.now();
 
-      // Update camera
       const threeCamera = new THREE.PerspectiveCamera(camera.fov, imageWidth / imageHeight, 0.1, 1000);
       threeCamera.position.set(...camera.position);
       threeCamera.lookAt(...camera.target);
 
-      // Render color image (placeholder - would use WebGL renderer)
+      // Render color image using OffscreenCanvas + WebGLRenderer
       const colorImage = await this.renderColorImage(threeCamera);
       
-      // Render ground truth images
+      // Render ground truth images using OffscreenCanvas + WebGLRenderer
       let depthImage: string | undefined;
       let normalImage: string | undefined;
       let segmentationImage: string | undefined;
@@ -400,73 +419,144 @@ export class DataPipeline {
   }
 
   /**
-   * Render color image (placeholder)
+   * Render color image using OffscreenCanvas + WebGLRenderer
    */
   private async renderColorImage(camera: THREE.Camera): Promise<string> {
-    // In production, this would use THREE.WebGLRenderer
-    // For now, return placeholder
-    return '';
+    const { imageWidth, imageHeight } = this.config;
+    const { renderer, canvas, dispose } = createOffscreenRenderer(imageWidth, imageHeight);
+
+    renderer.render(this.scene, camera);
+
+    const imageUrl = await canvasToImageUrl(canvas);
+    dispose();
+    return imageUrl;
   }
 
   /**
-   * Render depth image
+   * Render depth image using OffscreenCanvas + WebGLRenderer
+   * Uses MeshDepthMaterial override for depth visualization
    */
   private async renderDepthImage(camera: THREE.Camera): Promise<string> {
-    const depthData = await this.groundTruthGen.generateDepth({
-      width: this.config.imageWidth,
-      height: this.config.imageHeight,
-      camera,
+    const { imageWidth, imageHeight } = this.config;
+    const { renderer, canvas, dispose } = createOffscreenRenderer(imageWidth, imageHeight);
+
+    // Create a depth-override scene
+    const depthScene = new THREE.Scene();
+    depthScene.background = new THREE.Color(0x000000);
+    const depthMaterial = new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking,
     });
 
-    // Convert to image (placeholder)
-    return '';
+    // Clone objects with depth material
+    this.scene.traverse((object) => {
+      if ((object as any).isMesh) {
+        const mesh = object.clone() as any;
+        mesh.material = depthMaterial;
+        depthScene.add(mesh);
+      }
+    });
+
+    renderer.render(depthScene, camera);
+    depthScene.clear();
+
+    const imageUrl = await canvasToImageUrl(canvas);
+    dispose();
+    return imageUrl;
   }
 
   /**
-   * Render normal image
+   * Render normal image using OffscreenCanvas + WebGLRenderer
+   * Uses MeshNormalMaterial override for normal visualization
    */
   private async renderNormalImage(camera: THREE.Camera): Promise<string> {
-    const normalData = await this.groundTruthGen.generateNormals({
-      width: this.config.imageWidth,
-      height: this.config.imageHeight,
-      camera,
+    const { imageWidth, imageHeight } = this.config;
+    const { renderer, canvas, dispose } = createOffscreenRenderer(imageWidth, imageHeight);
+
+    // Create a normal-override scene
+    const normalScene = new THREE.Scene();
+    normalScene.background = new THREE.Color(0x8080ff);
+    const normalMaterial = new THREE.MeshNormalMaterial();
+
+    this.scene.traverse((object) => {
+      if ((object as any).isMesh) {
+        const mesh = object.clone() as any;
+        mesh.material = normalMaterial;
+        normalScene.add(mesh);
+      }
     });
 
-    // Convert to image (placeholder)
-    return '';
+    renderer.render(normalScene, camera);
+    normalScene.clear();
+
+    const imageUrl = await canvasToImageUrl(canvas);
+    dispose();
+    return imageUrl;
   }
 
   /**
-   * Render segmentation image
+   * Render segmentation image using OffscreenCanvas + WebGLRenderer
+   * Each object gets a unique color for instance segmentation
    */
   private async renderSegmentationImage(camera: THREE.Camera): Promise<string> {
-    const segData = await this.groundTruthGen.generateSegmentation({
-      width: this.config.imageWidth,
-      height: this.config.imageHeight,
-      camera,
+    const { imageWidth, imageHeight } = this.config;
+    const { renderer, canvas, dispose } = createOffscreenRenderer(imageWidth, imageHeight);
+
+    const segScene = new THREE.Scene();
+    segScene.background = new THREE.Color(0x000000);
+
+    let objectIndex = 1;
+    this.scene.traverse((object: any) => {
+      if (object.isMesh && object.geometry) {
+        const mesh = object.clone();
+        // Assign a unique color per object instance
+        const hue = (objectIndex * 0.618033988749895) % 1; // Golden ratio for good distribution
+        const color = new THREE.Color().setHSL(hue, 0.8, 0.5);
+        mesh.material = new THREE.MeshBasicMaterial({ color });
+        segScene.add(mesh);
+        objectIndex++;
+      }
     });
 
-    // Convert to image (placeholder)
-    return '';
+    renderer.render(segScene, camera);
+    segScene.clear();
+
+    const imageUrl = await canvasToImageUrl(canvas);
+    dispose();
+    return imageUrl;
   }
 
   /**
-   * Render albedo image
+   * Render albedo (base color) image using OffscreenCanvas + WebGLRenderer
+   * Replaces all materials with unlit versions preserving only base color
    */
   private async renderAlbedoImage(camera: THREE.Camera): Promise<string> {
-    const albedoData = await this.groundTruthGen.generateAlbedo({
-      width: this.config.imageWidth,
-      height: this.config.imageHeight,
-      camera,
+    const { imageWidth, imageHeight } = this.config;
+    const { renderer, canvas, dispose } = createOffscreenRenderer(imageWidth, imageHeight);
+
+    const albedoScene = new THREE.Scene();
+    albedoScene.background = new THREE.Color(0x000000);
+
+    this.scene.traverse((object: any) => {
+      if (object.isMesh && object.material) {
+        const mesh = object.clone();
+        // Use unlit material preserving only the base color
+        const baseColor = object.material.color ?? new THREE.Color(0.8, 0.8, 0.8);
+        mesh.material = new THREE.MeshBasicMaterial({ color: baseColor });
+        if (object.material.map) {
+          mesh.material.map = object.material.map;
+        }
+        albedoScene.add(mesh);
+      }
     });
 
-    // Convert to image (placeholder)
-    return '';
+    renderer.render(albedoScene, camera);
+    albedoScene.clear();
+
+    const imageUrl = await canvasToImageUrl(canvas);
+    dispose();
+    return imageUrl;
   }
 
-  /**
-   * Extract ground truth data
-   */
   private async extractGroundTruth(): Promise<GroundTruthMetadata> {
     const camera = new THREE.PerspectiveCamera(
       this.config.fovRange![0],
@@ -521,9 +611,6 @@ export class DataPipeline {
     return gtData;
   }
 
-  /**
-   * Generate annotations
-   */
   private async generateAnnotations(): Promise<AnnotationResult> {
     const camera = new THREE.PerspectiveCamera(
       this.config.fovRange![0],
@@ -544,9 +631,6 @@ export class DataPipeline {
     return await this.annotationGen.generate();
   }
 
-  /**
-   * Export scene to configured formats
-   */
   private async exportScene(): Promise<ExportResult[]> {
     const exports: ExportResult[] = [];
 
@@ -566,9 +650,6 @@ export class DataPipeline {
     return exports;
   }
 
-  /**
-   * Count vertices in scene
-   */
   private countVertices(): number {
     let count = 0;
     this.scene.traverse((object) => {
@@ -579,9 +660,6 @@ export class DataPipeline {
     return count;
   }
 
-  /**
-   * Count triangles in scene
-   */
   private countTriangles(): number {
     let count = 0;
     this.scene.traverse((object) => {
@@ -597,29 +675,19 @@ export class DataPipeline {
     return count;
   }
 
-  /**
-   * Run batch processing for multiple scenes
-   */
   async runBatch(config: BatchConfig): Promise<BatchResult> {
     return await this.batchProcessor.processBatch(config, async (job) => {
-      // Create new scene for each job
       const jobScene = new THREE.Scene();
-      
-      // Copy configuration with job-specific seed
       const jobConfig = {
         ...this.config,
         sceneId: `scene_${job.id}`,
         seed: job.seed,
       };
-
       const pipeline = new DataPipeline(jobScene, jobConfig);
       return await pipeline.generateDataset();
     });
   }
 
-  /**
-   * Get pipeline statistics
-   */
   getStatistics(): {
     config: PipelineConfig;
     sceneStats: {
@@ -638,9 +706,6 @@ export class DataPipeline {
     };
   }
 
-  /**
-   * Count objects in scene
-   */
   private countObjects(): number {
     let count = 0;
     this.scene.traverse((object) => {
@@ -651,9 +716,6 @@ export class DataPipeline {
     return count;
   }
 
-  /**
-   * Cleanup resources
-   */
   dispose(): void {
     this.jobManager.dispose();
     this.batchProcessor.dispose();

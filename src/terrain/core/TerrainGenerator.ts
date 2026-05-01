@@ -40,6 +40,7 @@ export class TerrainGenerator {
   private width: number;
   private height: number;
   private permutationTable: number[];
+  private cachedHeightMap: HeightMap | null = null;
 
   constructor(config: Partial<TerrainConfig> = {}) {
     this.config = {
@@ -87,6 +88,9 @@ export class TerrainGenerator {
     const normalMap = this.calculateNormals(heightMap);
     const slopeMap = this.calculateSlopes(heightMap);
     const biomeMask = this.generateBiomeMask(heightMap, slopeMap);
+
+    // Cache heightmap for getHeightAt() lookups
+    this.cachedHeightMap = heightMap;
 
     return {
       heightMap,
@@ -487,6 +491,10 @@ export class TerrainGenerator {
       return 0;
     }
 
+    if (!this.cachedHeightMap) {
+      return 0;
+    }
+
     const xf = x - xi;
     const yf = y - yi;
 
@@ -495,8 +503,15 @@ export class TerrainGenerator {
     const idx01 = (yi + 1) * this.width + xi;
     const idx11 = (yi + 1) * this.width + (xi + 1);
 
-    // Bilinear interpolation would require storing the heightmap
-    // For now, return interpolated value from stored data
-    return 0; // Placeholder - actual implementation would need access to generated heightmap
+    // Bilinear interpolation
+    const h00 = this.cachedHeightMap[idx00];
+    const h10 = this.cachedHeightMap[idx10];
+    const h01 = this.cachedHeightMap[idx01];
+    const h11 = this.cachedHeightMap[idx11];
+
+    return h00 * (1 - xf) * (1 - yf) +
+           h10 * xf * (1 - yf) +
+           h01 * (1 - xf) * yf +
+           h11 * xf * yf;
   }
 }

@@ -14,6 +14,15 @@ export {
   BooleanDomain
 } from '../language/types';
 
+// Concrete domain classes for spatial reasoning
+export {
+  Domain as ReasoningDomain,
+  DomainType as ReasoningDomainType,
+  BoxDomain,
+  SurfaceDomain,
+  RoomDomain,
+} from './domain';
+
 // Domain extraction from constraints
 export {
   constraintDomain,

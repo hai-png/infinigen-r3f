@@ -31,12 +31,16 @@ import * as THREE from 'three';
 import { RockGenerator, RockConfig, RockType, RockInstance } from './ground/RockGenerator';
 import { InstanceScatterSystem, ScatterConfig, ScatterRules, Biome } from './InstanceScatterSystem';
 import { NoiseUtils } from '../../terrain/utils/NoiseUtils';
+import { SeededRandom } from '../../core/util/math/index';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 export interface RockScatterConfig {
+  // Seed for deterministic generation
+  seed: number;
+
   // Density settings
   boulderDensity: number;      // Large rocks per square km
   gravelDensity: number;       // Small rocks per square meter
@@ -172,10 +176,14 @@ export class RockScatterSystem {
   private instances: RockInstance[];
   private instancedMeshes: THREE.InstancedMesh[];
   private group: THREE.Group;
+  private rng: SeededRandom;
   
   constructor(config?: Partial<RockScatterConfig>) {
-    // Default configuration
+    // Default configuration — use SeededRandom for seed generation, never Math.random()
+    const seed = config?.seed ?? 42;
+    this.rng = new SeededRandom(seed);
     this.config = {
+      seed,
       boulderDensity: 10,
       gravelDensity: 2,
       pebbleDensity: 4,
@@ -199,7 +207,7 @@ export class RockScatterSystem {
     };
     
     this.rockGenerator = new RockGenerator({
-      seed: Math.random() * 10000,
+      seed: seed,
       boulderDensity: this.config.boulderDensity,
       gravelDensity: this.config.gravelDensity,
       clusterProbability: this.config.clusterProbability,
@@ -270,7 +278,7 @@ export class RockScatterSystem {
     
     // Update rock generator
     this.rockGenerator.updateConfig({
-      seed: Math.random() * 10000,
+      seed: this.rng.nextFloat() * 10000,
       boulderDensity: this.config.boulderDensity,
       gravelDensity: this.config.gravelDensity,
       clusterProbability: this.config.clusterProbability,
@@ -447,9 +455,9 @@ export class RockScatterSystem {
     const color = rockType.colorBase.clone();
     const variation = rockType.colorVariation;
     
-    color.r += (Math.random() - 0.5) * variation.r;
-    color.g += (Math.random() - 0.5) * variation.g;
-    color.b += (Math.random() - 0.5) * variation.b;
+    color.r += (this.rng.next() - 0.5) * variation.r;
+    color.g += (this.rng.next() - 0.5) * variation.g;
+    color.b += (this.rng.next() - 0.5) * variation.b;
     
     return new THREE.MeshStandardMaterial({
       color,

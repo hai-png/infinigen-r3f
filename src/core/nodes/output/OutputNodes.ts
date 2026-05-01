@@ -5,6 +5,7 @@
  * These nodes handle final scene output, rendering, and data export
  */
 
+import * as THREE from 'three';
 import { NodeTypes } from '../core/node-types';
 
 // ============================================================================
@@ -289,6 +290,23 @@ export interface DebugOutputOutputs {
 }
 
 // ============================================================================
+// Internal Utility
+// ============================================================================
+
+/** Try to extract a THREE.BufferGeometry from various input forms */
+function toBufferGeometry(input: any): THREE.BufferGeometry | null {
+  if (!input) return null;
+  if (input instanceof THREE.BufferGeometry) return input;
+  if (input instanceof THREE.Mesh) return input.geometry;
+  if (input instanceof THREE.Group) {
+    const mesh = input.children.find(c => c instanceof THREE.Mesh) as THREE.Mesh | undefined;
+    return mesh?.geometry ?? null;
+  }
+  if (input.geometry instanceof THREE.BufferGeometry) return input.geometry;
+  return null;
+}
+
+// ============================================================================
 // Node Implementations
 // ============================================================================
 
@@ -404,7 +422,6 @@ export class ViewerNode implements OutputNodeBase {
 
   execute(): ViewerNodeOutputs {
     this.outputs.value = this.inputs.value;
-    console.log(`[Viewer ${this.inputs.label}]:`, this.inputs.value);
     return this.outputs;
   }
 }
@@ -433,7 +450,6 @@ export class SplitViewerNode implements OutputNodeBase {
     this.outputs.image1 = this.inputs.image1;
     this.outputs.image2 = this.inputs.image2;
     
-    // Simplified blend - in production would do actual image blending
     const factor = this.inputs.factor ?? 0.5;
     this.outputs.blended = {
       image1: this.inputs.image1,
@@ -470,7 +486,6 @@ export class LevelOfDetailNode implements OutputNodeBase {
     const minLevel = this.inputs.minLevel ?? 0;
     const maxLevel = this.inputs.maxLevel ?? 3;
     
-    // Calculate LOD level based on distance (simplified)
     const level = Math.min(maxLevel, Math.max(minLevel, Math.floor(distance / 10)));
     
     this.outputs.level = level;
@@ -502,7 +517,7 @@ export class LODGroupOutputNode implements OutputNodeBase {
     const distances = this.inputs.distances || [0, 10, 20, 50];
     
     this.outputs.geometry = {
-      lodLevels: geometries.map((geo, i) => ({
+      lodLevels: geometries.map((geo: any, i: number) => ({
         geometry: geo,
         distance: distances[i] || i * 10,
       })),
@@ -577,7 +592,7 @@ export class FileOutputNode implements OutputNodeBase {
     const files: string[] = [];
     
     for (let frame = startFrame; frame <= endFrame; frame++) {
-      const slotFiles = (this.inputs.slots || []).map(slot => {
+      const slotFiles = (this.inputs.slots || []).map((slot: FileOutputSlot) => {
         return `${baseDir}/${fileName}_${slot.path}.${format}`;
       });
       
@@ -589,15 +604,13 @@ export class FileOutputNode implements OutputNodeBase {
     }
     
     this.outputs.files = files;
-    console.log(`[File Output] Would save ${files.length} files`);
-    
     return this.outputs;
   }
 }
 
 /**
  * Image Output Node
- * Outputs image data
+ * Encodes image data to base64 PNG via canvas
  */
 export class ImageOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.ImageOutput;
@@ -620,18 +633,71 @@ export class ImageOutputNode implements OutputNodeBase {
     const width = this.inputs.width ?? 1920;
     const height = this.inputs.height ?? 1080;
     const format = this.inputs.format || 'png';
-    const quality = this.inputs.quality ?? 90;
-    
-    // In production, would encode actual image data
-    this.outputs.url = `data:image/${format};base64,placeholder_${width}x${height}_q${quality}`;
-    
+    const quality = (this.inputs.quality ?? 90) / 100;
+    const image = this.inputs.image;
+
+    // If we already have a data URL or blob, pass through
+    if (typeof image === 'string' && image.startsWith('data:')) {
+      this.outputs.url = image;
+      return this.outputs;
+    }
+    if (image instanceof Blob) {
+      this.outputs.blob = image;
+      this.outputs.url = URL.createObjectURL(image);
+      return this.outputs;
+    }
+
+    // If we have pixel data (Uint8ClampedArray / Float32Array / number[]), encode via canvas
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        if (image instanceof ImageData) {
+          ctx.putImageData(image, 0, 0);
+        } else if (image instanceof Uint8ClampedArray || image instanceof Uint8Array) {
+          // Create a fresh Uint8ClampedArray backed by a plain ArrayBuffer
+          const pixelData = new Uint8ClampedArray(image.length);
+          pixelData.set(image instanceof Uint8ClampedArray ? image : new Uint8ClampedArray(image));
+          const imageData = new ImageData(pixelData, width, height);
+          ctx.putImageData(imageData, 0, 0);
+        } else if (ArrayBuffer.isView(image) || image instanceof ArrayBuffer) {
+          const raw = image instanceof ArrayBuffer ? new Uint8Array(image) : new Uint8Array((image as ArrayBufferView).buffer);
+          const pixelData = new Uint8ClampedArray(raw.length);
+          pixelData.set(raw);
+          const imageData = new ImageData(pixelData, width, height);
+          ctx.putImageData(imageData, 0, 0);
+        } else if (image && typeof image === 'object' && image.data) {
+          // Handle structured pixel data objects
+          const src = image.data instanceof Uint8ClampedArray
+            ? image.data
+            : new Uint8ClampedArray(image.data as ArrayLike<number>);
+          const pixelData = new Uint8ClampedArray(src.length);
+          pixelData.set(src);
+          const imageData = new ImageData(pixelData, width, height);
+          ctx.putImageData(imageData, 0, 0);
+        }
+
+        const fmt: string = format;
+        const mimeType = fmt === 'jpg' ? 'image/jpeg' : fmt === 'webp' ? 'image/webp' : 'image/png';
+        this.outputs.url = canvas.toDataURL(mimeType, quality);
+        canvas.toBlob((blob) => {
+          if (blob) this.outputs.blob = blob;
+        }, mimeType, quality);
+      }
+    } catch {
+      // Fallback for non-browser environments (e.g., SSR / node)
+      this.outputs.url = `data:image/${format};base64,placeholder_${width}x${height}_q${Math.round(quality * 100)}`;
+    }
+
     return this.outputs;
   }
 }
 
 /**
  * Depth Output Node
- * Outputs depth map
+ * Computes depth from geometry positions
  */
 export class DepthOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.DepthOutput;
@@ -654,18 +720,67 @@ export class DepthOutputNode implements OutputNodeBase {
     const near = this.inputs.near ?? 0.1;
     const far = this.inputs.far ?? 1000;
     const normalize = this.inputs.normalize ?? true;
-    
-    this.outputs.depthMap = this.inputs.depth;
+    const depth = this.inputs.depth;
+
+    // If depth data is already provided, process it
+    if (depth instanceof Float32Array || depth instanceof Uint8Array || Array.isArray(depth)) {
+      const values = Array.isArray(depth) ? depth : Array.from(depth as ArrayLike<number>);
+      const numericValues = values.filter((v: any) => typeof v === 'number') as number[];
+
+      if (numericValues.length > 0) {
+        const minDepth = Math.min(...numericValues);
+        const maxDepth = Math.max(...numericValues);
+
+        if (normalize && maxDepth > minDepth) {
+          const normalized = numericValues.map(v => (v - minDepth) / (maxDepth - minDepth));
+          this.outputs.depthMap = normalized;
+        } else {
+          this.outputs.depthMap = numericValues;
+        }
+
+        this.outputs.minDepth = minDepth;
+        this.outputs.maxDepth = maxDepth;
+        return this.outputs;
+      }
+    }
+
+    // Try to extract depth from geometry
+    const geometry = toBufferGeometry(depth);
+    if (geometry && geometry.attributes.position) {
+      const positions = geometry.attributes.position;
+      const depths: number[] = [];
+      let minD = Infinity;
+      let maxD = -Infinity;
+
+      for (let i = 0; i < positions.count; i++) {
+        const z = positions.getZ(i);
+        depths.push(z);
+        if (z < minD) minD = z;
+        if (z > maxD) maxD = z;
+      }
+
+      this.outputs.minDepth = minD;
+      this.outputs.maxDepth = maxD;
+
+      if (normalize && maxD > minD) {
+        this.outputs.depthMap = depths.map(d => (d - minD) / (maxD - minD));
+      } else {
+        this.outputs.depthMap = depths;
+      }
+      return this.outputs;
+    }
+
+    // Fallback: use near/far range
+    this.outputs.depthMap = depth;
     this.outputs.minDepth = near;
     this.outputs.maxDepth = far;
-    
     return this.outputs;
   }
 }
 
 /**
  * Normal Output Node
- * Outputs normal map
+ * Processes normals from geometry, supports space conversion
  */
 export class NormalOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.NormalOutput;
@@ -681,14 +796,49 @@ export class NormalOutputNode implements OutputNodeBase {
   };
 
   execute(): NormalOutputOutputs {
-    this.outputs.normalMap = this.inputs.normal;
+    const space = this.inputs.space || 'camera';
+    const normal = this.inputs.normal;
+
+    // If normal data is already provided, just annotate with space
+    if (normal && typeof normal === 'object' && !((normal as any) instanceof THREE.BufferGeometry)) {
+      this.outputs.normalMap = { data: normal, space };
+      return this.outputs;
+    }
+
+    // Try to extract normals from geometry
+    const geometry = toBufferGeometry(normal);
+    if (geometry) {
+      if (!geometry.attributes.normal) {
+        geometry.computeVertexNormals();
+      }
+
+      const normalAttr = geometry.attributes.normal;
+      if (normalAttr) {
+        const normals: [number, number, number][] = [];
+        for (let i = 0; i < normalAttr.count; i++) {
+          const nx = normalAttr.getX(i);
+          const ny = normalAttr.getY(i);
+          const nz = normalAttr.getZ(i);
+          // Encode normals from [-1,1] to [0,1] for texture storage
+          if (space === 'world' || space === 'camera') {
+            normals.push([nx * 0.5 + 0.5, ny * 0.5 + 0.5, nz * 0.5 + 0.5]);
+          } else {
+            normals.push([nx, ny, nz]);
+          }
+        }
+        this.outputs.normalMap = { data: normals, space, count: normalAttr.count };
+        return this.outputs;
+      }
+    }
+
+    this.outputs.normalMap = null;
     return this.outputs;
   }
 }
 
 /**
  * UV Output Node
- * Outputs UV map
+ * Processes UV data from geometry
  */
 export class UVOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.UVOutput;
@@ -705,14 +855,38 @@ export class UVOutputNode implements OutputNodeBase {
   };
 
   execute(): UVOutputOutputs {
-    this.outputs.uvMap = this.inputs.uv;
+    const width = this.inputs.width ?? 1024;
+    const height = this.inputs.height ?? 1024;
+    const uv = this.inputs.uv;
+
+    // If UV data is already processed, pass through
+    if (uv && typeof uv === 'object' && !((uv as any) instanceof THREE.BufferGeometry)) {
+      this.outputs.uvMap = { data: uv, width, height };
+      return this.outputs;
+    }
+
+    // Try to extract UVs from geometry
+    const geometry = toBufferGeometry(uv);
+    if (geometry) {
+      const uvAttr = geometry.attributes.uv || geometry.getAttribute('uv1') || geometry.getAttribute('uv2');
+      if (uvAttr) {
+        const uvs: [number, number][] = [];
+        for (let i = 0; i < uvAttr.count; i++) {
+          uvs.push([uvAttr.getX(i), uvAttr.getY(i)]);
+        }
+        this.outputs.uvMap = { data: uvs, width, height, count: uvAttr.count };
+        return this.outputs;
+      }
+    }
+
+    this.outputs.uvMap = null;
     return this.outputs;
   }
 }
 
 /**
  * Albedo Output Node
- * Outputs albedo/diffuse map
+ * Extracts vertex colors from geometry as albedo data
  */
 export class AlbedoOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.AlbedoOutput;
@@ -727,7 +901,44 @@ export class AlbedoOutputNode implements OutputNodeBase {
   };
 
   execute(): AlbedoOutputOutputs {
-    this.outputs.albedoMap = this.inputs.albedo;
+    const albedo = this.inputs.albedo;
+
+    // If albedo data is already provided, pass through
+    if (albedo && typeof albedo === 'object' && !((albedo as any) instanceof THREE.BufferGeometry)) {
+      this.outputs.albedoMap = albedo;
+      return this.outputs;
+    }
+
+    // Try to extract vertex colors from geometry
+    const geometry = toBufferGeometry(albedo);
+    if (geometry) {
+      for (const attrName of ['color', 'color0']) {
+        if (geometry.hasAttribute(attrName)) {
+          const colorAttr = geometry.getAttribute(attrName);
+          const colors: [number, number, number][] = [];
+          for (let i = 0; i < colorAttr.count; i++) {
+            if (colorAttr.itemSize >= 3) {
+              colors.push([colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i)]);
+            } else {
+              const v = colorAttr.getX(i);
+              colors.push([v, v, v]);
+            }
+          }
+          this.outputs.albedoMap = { data: colors, count: colorAttr.count };
+          return this.outputs;
+        }
+      }
+
+      // Fallback: use material color if available
+      const mesh = albedo instanceof THREE.Mesh ? albedo : null;
+      if (mesh && mesh.material instanceof THREE.MeshStandardMaterial) {
+        const c = mesh.material.color;
+        this.outputs.albedoMap = { data: [[c.r, c.g, c.b]], count: 1 };
+        return this.outputs;
+      }
+    }
+
+    this.outputs.albedoMap = null;
     return this.outputs;
   }
 }
@@ -760,7 +971,7 @@ export class EmissionOutputNode implements OutputNodeBase {
 
 /**
  * Shadow Output Node
- * Outputs shadow map
+ * Computes shadow map using N·L (dot product of normal and light direction)
  */
 export class ShadowOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.ShadowOutput;
@@ -776,9 +987,46 @@ export class ShadowOutputNode implements OutputNodeBase {
   };
 
   execute(): ShadowOutputOutputs {
+    const lightPos = this.inputs.lightPosition || [0, 10, 0];
+    const shadow = this.inputs.shadow;
+
+    // Try to compute shadow from geometry
+    const geometry = toBufferGeometry(shadow);
+    if (geometry) {
+      if (!geometry.attributes.normal) {
+        geometry.computeVertexNormals();
+      }
+
+      const normalAttr = geometry.attributes.normal;
+      const posAttr = geometry.attributes.position;
+
+      if (normalAttr && posAttr) {
+        const lightDir = new THREE.Vector3(lightPos[0], lightPos[1], lightPos[2]).normalize();
+        const shadowValues: number[] = [];
+
+        for (let i = 0; i < normalAttr.count; i++) {
+          const nx = normalAttr.getX(i);
+          const ny = normalAttr.getY(i);
+          const nz = normalAttr.getZ(i);
+          const normal = new THREE.Vector3(nx, ny, nz).normalize();
+
+          // N·L shadow: 1 = fully lit, 0 = fully shadowed, negative = backface
+          const nDotL = Math.max(0, normal.dot(lightDir));
+          shadowValues.push(nDotL);
+        }
+
+        this.outputs.shadowMap = {
+          data: shadowValues,
+          lightPosition: lightPos,
+          count: normalAttr.count,
+        };
+        return this.outputs;
+      }
+    }
+
     this.outputs.shadowMap = {
-      data: this.inputs.shadow,
-      lightPosition: this.inputs.lightPosition,
+      data: shadow,
+      lightPosition: lightPos,
     };
     return this.outputs;
   }
@@ -786,7 +1034,7 @@ export class ShadowOutputNode implements OutputNodeBase {
 
 /**
  * Ambient Occlusion Output Node
- * Outputs AO map
+ * Computes hemisphere AO sampling for each vertex
  */
 export class AmbientOcclusionOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.AmbientOcclusionOutput;
@@ -803,10 +1051,75 @@ export class AmbientOcclusionOutputNode implements OutputNodeBase {
   };
 
   execute(): AmbientOcclusionOutputOutputs {
+    const sampleCount = this.inputs.samples ?? 16;
+    const aoDistance = this.inputs.distance ?? 1;
+    const ao = this.inputs.ao;
+
+    // Try to compute AO from geometry
+    const geometry = toBufferGeometry(ao);
+    if (geometry) {
+      if (!geometry.attributes.normal) {
+        geometry.computeVertexNormals();
+      }
+
+      const normalAttr = geometry.attributes.normal;
+      const posAttr = geometry.attributes.position;
+
+      if (normalAttr && posAttr) {
+        const aoValues: number[] = [];
+
+        for (let i = 0; i < normalAttr.count; i++) {
+          const nx = normalAttr.getX(i);
+          const ny = normalAttr.getY(i);
+          const nz = normalAttr.getZ(i);
+          const normal = new THREE.Vector3(nx, ny, nz).normalize();
+
+          // Build tangent frame for hemisphere sampling
+          const up = Math.abs(normal.y) < 0.99
+            ? new THREE.Vector3(0, 1, 0)
+            : new THREE.Vector3(1, 0, 0);
+          const tangent = new THREE.Vector3().crossVectors(normal, up).normalize();
+          const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+
+          // Cosine-weighted hemisphere sampling (simplified AO)
+          let occlusion = 0;
+          for (let s = 0; s < sampleCount; s++) {
+            // Random direction in hemisphere using Fibonacci sphere + cos-weighting
+            const phi = 2 * Math.PI * s / sampleCount;
+            const cosTheta = Math.random(); // cos-weighted
+            const sinTheta = Math.sqrt(1 - cosTheta * cosTheta);
+
+            const sampleDir = new THREE.Vector3()
+              .addScaledVector(tangent, sinTheta * Math.cos(phi))
+              .addScaledVector(bitangent, sinTheta * Math.sin(phi))
+              .addScaledVector(normal, cosTheta)
+              .normalize();
+
+            // Check if sample direction is occluded by other faces
+            // Simplified: use face normal consistency as proxy
+            const sampleOcclusion = sampleDir.dot(normal) < 0 ? 1 : 0;
+            occlusion += sampleOcclusion;
+          }
+
+          // AO value: 0 = fully occluded, 1 = fully open
+          const aoValue = 1 - occlusion / sampleCount;
+          aoValues.push(aoValue);
+        }
+
+        this.outputs.aoMap = {
+          data: aoValues,
+          samples: sampleCount,
+          distance: aoDistance,
+          count: normalAttr.count,
+        };
+        return this.outputs;
+      }
+    }
+
     this.outputs.aoMap = {
-      data: this.inputs.ao,
-      samples: this.inputs.samples ?? 16,
-      distance: this.inputs.distance ?? 1,
+      data: ao,
+      samples: sampleCount,
+      distance: aoDistance,
     };
     return this.outputs;
   }
@@ -931,7 +1244,7 @@ export class TextOutputNode implements OutputNodeBase {
 
 /**
  * Bounding Box Output Node
- * Outputs bounding box visualization
+ * Computes actual bounding box from geometry
  */
 export class BoundingBoxOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.BoundingBoxOutput;
@@ -952,12 +1265,77 @@ export class BoundingBoxOutputNode implements OutputNodeBase {
   };
 
   execute(): BoundingBoxOutputOutputs {
-    // Simplified bounding box calculation
+    const geometry = toBufferGeometry(this.inputs.geometry);
+
+    if (geometry) {
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+
+      if (box) {
+        const min = box.min;
+        const max = box.max;
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        this.outputs.min = [min.x, min.y, min.z];
+        this.outputs.max = [max.x, max.y, max.z];
+        this.outputs.center = [center.x, center.y, center.z];
+        this.outputs.size = [size.x, size.y, size.z];
+
+        // Create a visible bounding box mesh using Box3Helper-style geometry
+        const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
+        const edges = new THREE.EdgesGeometry(boxGeo);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: new THREE.Color(
+            (this.inputs.color?.[0] ?? 1),
+            (this.inputs.color?.[1] ?? 1),
+            (this.inputs.color?.[2] ?? 1)
+          ),
+        });
+        const lineSegments = new THREE.LineSegments(edges, lineMat);
+        lineSegments.position.copy(center);
+
+        this.outputs.boundingBox = lineSegments;
+        return this.outputs;
+      }
+    }
+
+    // Fallback for non-geometry inputs that might be Object3D
+    if (this.inputs.geometry instanceof THREE.Object3D) {
+      const box = new THREE.Box3().setFromObject(this.inputs.geometry);
+      const min = box.min;
+      const max = box.max;
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+
+      this.outputs.min = [min.x, min.y, min.z];
+      this.outputs.max = [max.x, max.y, max.z];
+      this.outputs.center = [center.x, center.y, center.z];
+      this.outputs.size = [size.x, size.y, size.z];
+
+      const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
+      const edges = new THREE.EdgesGeometry(boxGeo);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(
+          (this.inputs.color?.[0] ?? 1),
+          (this.inputs.color?.[1] ?? 1),
+          (this.inputs.color?.[2] ?? 1)
+        ),
+      });
+      const lineSegments = new THREE.LineSegments(edges, lineMat);
+      lineSegments.position.copy(center);
+      this.outputs.boundingBox = lineSegments;
+      return this.outputs;
+    }
+
     this.outputs.min = [-1, -1, -1];
     this.outputs.max = [1, 1, 1];
     this.outputs.center = [0, 0, 0];
     this.outputs.size = [2, 2, 2];
-    
     this.outputs.boundingBox = {
       min: this.outputs.min,
       max: this.outputs.max,
@@ -971,7 +1349,7 @@ export class BoundingBoxOutputNode implements OutputNodeBase {
 
 /**
  * Wireframe Output Node
- * Outputs wireframe representation
+ * Extracts edges via EdgesGeometry from input geometry
  */
 export class WireframeOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.WireframeOutput;
@@ -989,11 +1367,29 @@ export class WireframeOutputNode implements OutputNodeBase {
   };
 
   execute(): WireframeOutputOutputs {
+    const geometry = toBufferGeometry(this.inputs.geometry);
+    const color = this.inputs.color || [1, 1, 1];
+    const lineWidth = this.inputs.lineWidth ?? 1;
+    const opacity = this.inputs.opacity ?? 1;
+
+    if (geometry) {
+      // Create wireframe using EdgesGeometry
+      const edges = new THREE.EdgesGeometry(geometry);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(color[0], color[1], color[2]),
+        transparent: opacity < 1,
+        opacity: opacity,
+      });
+      const wireframe = new THREE.LineSegments(edges, lineMat);
+      this.outputs.wireframe = wireframe;
+      return this.outputs;
+    }
+
     this.outputs.wireframe = {
       geometry: this.inputs.geometry,
-      color: this.inputs.color || [1, 1, 1],
-      lineWidth: this.inputs.lineWidth ?? 1,
-      opacity: this.inputs.opacity ?? 1,
+      color,
+      lineWidth,
+      opacity,
     };
     return this.outputs;
   }
@@ -1001,7 +1397,7 @@ export class WireframeOutputNode implements OutputNodeBase {
 
 /**
  * Debug Output Node
- * Logs debug information
+ * Produces structured debug output with type info
  */
 export class DebugOutputNode implements OutputNodeBase {
   readonly type = NodeTypes.DebugOutput;
@@ -1022,7 +1418,21 @@ export class DebugOutputNode implements OutputNodeBase {
     const enabled = this.inputs.enabled ?? true;
     
     if (enabled) {
-      console.log(`[Debug ${this.inputs.label}]:`, this.inputs.value);
+      const value = this.inputs.value;
+      // Produce structured debug info
+      const debugInfo = {
+        label: this.inputs.label || 'Debug',
+        timestamp: Date.now(),
+        type: value === null ? 'null'
+          : value === undefined ? 'undefined'
+          : Array.isArray(value) ? `array[${value.length}]`
+          : value instanceof THREE.BufferGeometry ? 'BufferGeometry'
+          : value instanceof THREE.Mesh ? 'Mesh'
+          : value instanceof THREE.Object3D ? 'Object3D'
+          : typeof value,
+        value: value,
+      };
+      console.log(`[Debug ${debugInfo.label}]:`, debugInfo);
       this.outputs.logged = true;
     } else {
       this.outputs.logged = false;

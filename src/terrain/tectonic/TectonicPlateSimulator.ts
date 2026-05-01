@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { Vector3 } from 'three';
 import { NoiseUtils } from '../utils/NoiseUtils';
+import { SeededRandom } from '../../core/util/math/index';
 
 export interface PlateConfig {
   seed: number;
@@ -51,13 +52,14 @@ export interface PlateBoundary {
 export class TectonicPlateSimulator {
   private config: PlateConfig;
   private noise: NoiseUtils;
+  private rng: SeededRandom;
   private plates: TectonicPlate[] = [];
   private boundaries: PlateBoundary[] = [];
   private plateMap: Int32Array | null = null;
   
   constructor(config?: Partial<PlateConfig>) {
     this.config = {
-      seed: Math.random() * 10000,
+      seed: Date.now() % 10000,
       numPlates: 8,
       plateVelocity: 0.5,
       convergenceUpliftRate: 0.1,
@@ -70,6 +72,7 @@ export class TectonicPlateSimulator {
     };
     
     this.noise = new NoiseUtils(this.config.seed);
+    this.rng = new SeededRandom(this.config.seed);
   }
   
   /**
@@ -86,7 +89,7 @@ export class TectonicPlateSimulator {
     this.plates = [];
     for (let i = 0; i < this.config.numPlates; i++) {
       const angle = (i / this.config.numPlates) * Math.PI * 2;
-      const radius = (Math.random() * 0.6 + 0.2) * worldSize / 2;
+      const radius = (this.rng.next() * 0.6 + 0.2) * worldSize / 2;
       
       const centroid = new THREE.Vector3(
         Math.cos(angle) * radius,
@@ -95,22 +98,22 @@ export class TectonicPlateSimulator {
       );
       
       // Random velocity direction
-      const velocityAngle = Math.random() * Math.PI * 2;
+      const velocityAngle = this.rng.next() * Math.PI * 2;
       const velocity = new THREE.Vector3(
         Math.cos(velocityAngle),
         0,
         Math.sin(velocityAngle)
-      ).multiplyScalar(this.config.plateVelocity * (0.5 + Math.random() * 0.5));
+      ).multiplyScalar(this.config.plateVelocity * (0.5 + this.rng.next() * 0.5));
       
       // Determine plate type based on size and position
-      const isContinental = Math.random() > 0.4;
+      const isContinental = this.rng.next() > 0.4;
       
       this.plates.push({
         id: i,
         centroid,
         velocity,
         rotation: 0,
-        angularVelocity: (Math.random() - 0.5) * 0.01,
+        angularVelocity: (this.rng.next() - 0.5) * 0.01,
         type: isContinental ? 'continental' : 'oceanic',
         thickness: isContinental ? 35 : 7, // km
         density: isContinental ? 2.7 : 3.0, // g/cm³
@@ -366,7 +369,7 @@ export class TectonicPlateSimulator {
       const subductingPlate = p1.type === 'continental' ? p2 : p1;
       
       for (const idx of boundary.cells) {
-        if (Math.random() > this.config.volcanicActivity) continue;
+        if (this.rng.next() > this.config.volcanicActivity) continue;
         
         const row = Math.floor(idx / resolution);
         const col = idx % resolution;
@@ -391,7 +394,7 @@ export class TectonicPlateSimulator {
           );
           
           positions.push(volcanoPos);
-          intensities.push(Math.random() * 0.5 + 0.5);
+          intensities.push(this.rng.next() * 0.5 + 0.5);
         }
       }
     }
@@ -448,6 +451,7 @@ export class TectonicPlateSimulator {
   updateConfig(config: Partial<PlateConfig>): void {
     this.config = { ...this.config, ...config };
     this.noise = new NoiseUtils(this.config.seed);
+    this.rng = new SeededRandom(this.config.seed);
     this.plates = [];
     this.boundaries = [];
     this.plateMap = null;

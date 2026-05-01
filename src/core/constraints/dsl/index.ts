@@ -48,3 +48,12 @@ export {
   parseConstraintSource,
   compileConstraint
 } from './ConstraintDSL';
+
+// Evaluator
+export {
+  evaluateProgram,
+  evaluateConstraint,
+  EvalContext,
+  ConstraintViolationError,
+  EvaluationError,
+} from './evaluator';

@@ -4,4 +4,4 @@
  */
 
 export { HybridBridge, bridge } from './hybrid-bridge';
-export type { BridgeRequest, BridgeResponse } from './hybrid-bridge';
+export type { BridgeRequest, BridgeResponse, HybridBridgeConfig } from './hybrid-bridge';

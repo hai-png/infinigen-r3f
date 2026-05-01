@@ -4,6 +4,7 @@
  * Ported from Blender Geometry Nodes
  */
 
+import * as THREE from 'three';
 import { Camera } from 'three';
 import type { NodeBase, AttributeDomain } from '../core/types';
 
@@ -61,7 +62,7 @@ export class CameraDataNode implements CameraNodeBase {
     };
   }
 
-  execute(camera: Camera): CameraDataOutputs {
+  execute(camera: Camera, targetPosition?: THREE.Vector3): CameraDataOutputs {
     const type = this.inputs.type || 'view_matrix';
     
     if (type === 'view_matrix') {
@@ -74,10 +75,27 @@ export class CameraDataNode implements CameraNodeBase {
     }
 
     this.outputs.cameraMatrixWorld = camera.matrixWorld.toArray();
-    
-    // Calculate depth and distance (simplified)
-    this.outputs.depth = 0;
-    this.outputs.distance = 0;
+
+    // Compute depth and distance
+    const cameraPos = new THREE.Vector3();
+    camera.getWorldPosition(cameraPos);
+    const cameraDir = new THREE.Vector3(0, 0, -1);
+    cameraDir.applyQuaternion(camera.quaternion);
+
+    if (targetPosition) {
+      // Distance from camera to target
+      this.outputs.distance = cameraPos.distanceTo(targetPosition);
+
+      // Depth: projection of (target - camera) onto camera forward axis
+      const toTarget = new THREE.Vector3().subVectors(targetPosition, cameraPos);
+      this.outputs.depth = toTarget.dot(cameraDir);
+    } else {
+      // Without a specific target, use near/far midpoint as depth
+      const near = (camera as any).near ?? 0.1;
+      const far = (camera as any).far ?? 1000;
+      this.outputs.depth = (near + far) / 2;
+      this.outputs.distance = this.outputs.depth;
+    }
 
     return this.outputs;
   }

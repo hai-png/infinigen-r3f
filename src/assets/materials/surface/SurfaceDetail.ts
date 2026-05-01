@@ -1,7 +1,8 @@
 /**
  * Microsurface Detail Generator - Bump, normal, displacement maps
+ * Adds normal map detail to materials
  */
-import { Texture, CanvasTexture } from 'three';
+import { Texture, CanvasTexture, RepeatWrapping } from 'three';
 import { SeededRandom } from '../../../core/util/MathUtils';
 import { Noise3D } from '../../../core/util/math/noise';
 
@@ -16,12 +17,52 @@ export interface SurfaceParams {
 export class SurfaceDetailGenerator {
   generate(params: SurfaceParams, seed: number): { bumpMap: Texture; normalMap: Texture; displacementMap: Texture } {
     const rng = new SeededRandom(seed);
-    
+
     return {
       bumpMap: this.generateBumpMap(params, rng),
       normalMap: this.generateNormalMap(params, rng),
       displacementMap: this.generateDisplacementMap(params, rng),
     };
+  }
+
+  /**
+   * Apply surface detail to an existing material by blending normal maps
+   */
+  generateNormalDetail(params: SurfaceParams, seed: number): Texture {
+    const rng = new SeededRandom(seed);
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return new CanvasTexture(canvas);
+
+    ctx.fillStyle = '#8080ff';
+    ctx.fillRect(0, 0, size, size);
+
+    const noise = new Noise3D(rng.seed);
+
+    // Multi-octave normal perturbation for fine detail
+    for (let y = 0; y < size; y += 2) {
+      for (let x = 0; x < size; x += 2) {
+        // Two octaves of detail
+        const nx1 = noise.perlin(x / 40 * params.detailFrequency, y / 40 * params.detailFrequency, 0);
+        const nx2 = noise.perlin(x / 20 * params.detailFrequency, y / 20 * params.detailFrequency, 0) * 0.5;
+        const ny1 = noise.perlin(x / 40 * params.detailFrequency, y / 40 * params.detailFrequency, 100);
+        const ny2 = noise.perlin(x / 20 * params.detailFrequency, y / 20 * params.detailFrequency, 100) * 0.5;
+
+        const nx = (nx1 + nx2) * params.normalStrength * 30 * params.detailAmplitude;
+        const ny = (ny1 + ny2) * params.normalStrength * 30 * params.detailAmplitude;
+
+        const r = Math.max(0, Math.min(255, 128 + nx));
+        const g = Math.max(0, Math.min(255, 128 + ny));
+        ctx.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},255)`;
+        ctx.fillRect(x, y, 2, 2);
+      }
+    }
+
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = RepeatWrapping;
+    return texture;
   }
 
   private generateBumpMap(params: SurfaceParams, rng: SeededRandom): Texture {
@@ -30,18 +71,22 @@ export class SurfaceDetailGenerator {
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext('2d');
     if (!ctx) return new CanvasTexture(canvas);
-    
+
     const noise = new Noise3D(rng.seed);
     for (let y = 0; y < size; y += 2) {
       for (let x = 0; x < size; x += 2) {
-        const n = noise.perlin(x / 50 * params.detailFrequency, y / 50 * params.detailFrequency, 0);
-        const value = 128 + n * params.detailAmplitude * params.bumpScale * 127;
+        const n1 = noise.perlin(x / 50 * params.detailFrequency, y / 50 * params.detailFrequency, 0);
+        const n2 = noise.perlin(x / 25 * params.detailFrequency, y / 25 * params.detailFrequency, 0) * 0.5;
+        const value = 128 + (n1 + n2) * params.detailAmplitude * params.bumpScale * 127;
         const v = Math.max(0, Math.min(255, value));
-        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillStyle = `rgb(${Math.floor(v)},${Math.floor(v)},${Math.floor(v)})`;
         ctx.fillRect(x, y, 2, 2);
       }
     }
-    return new CanvasTexture(canvas);
+
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = RepeatWrapping;
+    return texture;
   }
 
   private generateNormalMap(params: SurfaceParams, rng: SeededRandom): Texture {
@@ -50,22 +95,25 @@ export class SurfaceDetailGenerator {
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext('2d');
     if (!ctx) return new CanvasTexture(canvas);
-    
+
     ctx.fillStyle = '#8080ff';
     ctx.fillRect(0, 0, size, size);
-    
+
     const noise = new Noise3D(rng.seed);
     for (let y = 0; y < size; y += 4) {
       for (let x = 0; x < size; x += 4) {
         const nx = noise.perlin(x / 40, y / 40, 0) * params.normalStrength * 30;
         const ny = noise.perlin(x / 40, y / 40, 100) * params.normalStrength * 30;
-        const r = 128 + nx;
-        const g = 128 + ny;
-        ctx.fillStyle = `rgb(${Math.max(0,Math.min(255,r))}, ${Math.max(0,Math.min(255,g))}, 255)`;
+        const r = Math.max(0, Math.min(255, 128 + nx));
+        const g = Math.max(0, Math.min(255, 128 + ny));
+        ctx.fillStyle = `rgb(${Math.floor(r)},${Math.floor(g)},255)`;
         ctx.fillRect(x, y, 4, 4);
       }
     }
-    return new CanvasTexture(canvas);
+
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = RepeatWrapping;
+    return texture;
   }
 
   private generateDisplacementMap(params: SurfaceParams, rng: SeededRandom): Texture {
@@ -74,18 +122,21 @@ export class SurfaceDetailGenerator {
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext('2d');
     if (!ctx) return new CanvasTexture(canvas);
-    
+
     const noise = new Noise3D(rng.seed);
     for (let y = 0; y < size; y += 4) {
       for (let x = 0; x < size; x += 4) {
         const n = noise.perlin(x / 30 * params.detailFrequency, y / 30 * params.detailFrequency, 0);
         const value = 128 + n * params.displacementScale * 127;
         const v = Math.max(0, Math.min(255, value));
-        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillStyle = `rgb(${Math.floor(v)},${Math.floor(v)},${Math.floor(v)})`;
         ctx.fillRect(x, y, 4, 4);
       }
     }
-    return new CanvasTexture(canvas);
+
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = RepeatWrapping;
+    return texture;
   }
 
   getDefaultParams(): SurfaceParams {

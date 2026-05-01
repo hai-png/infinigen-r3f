@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { NoiseUtils } from '../../utils/NoiseUtils';
+import { SeededRandom, noise2D as perlin2D } from '../../../../core/util/MathUtils';
+import { Noise3D } from '../../../../core/util/math/noise';
 
 export interface CeramicTileMaterialConfig {
   baseColor: THREE.Color;
@@ -11,6 +12,7 @@ export interface CeramicTileMaterialConfig {
   pattern: 'straight' | 'herringbone' | 'basketweave' | 'diagonal';
   enableWear: boolean;
   wearAmount: number;
+  seed: number;
 }
 
 export class CeramicTileMaterial {
@@ -18,6 +20,7 @@ export class CeramicTileMaterial {
   private material: THREE.MeshStandardMaterial;
 
   constructor(config?: Partial<CeramicTileMaterialConfig>) {
+    const seed = config?.seed ?? 42;
     this.config = {
       baseColor: new THREE.Color(0xffffff),
       groutColor: new THREE.Color(0x9e9e9e),
@@ -28,6 +31,7 @@ export class CeramicTileMaterial {
       pattern: 'straight',
       enableWear: false,
       wearAmount: 0.2,
+      seed,
       ...config,
     };
     this.material = this.createMaterial();
@@ -51,6 +55,8 @@ export class CeramicTileMaterial {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
+    const rng = new SeededRandom(this.config.seed);
+    const noise = new Noise3D(rng.seed);
     
     const imageData = ctx.createImageData(size, size);
     const tilesPerUnit = 1 / this.config.tileSize;
@@ -96,14 +102,14 @@ export class CeramicTileMaterial {
           b = this.config.baseColor.b;
           
           // Add subtle variation
-          const noise = NoiseUtils.perlin2D(x * 0.01, y * 0.01) * 0.05;
-          r += noise;
-          g += noise;
-          b += noise;
+          const noiseVal = perlin2D(x * 0.01, y * 0.01) * 0.05;
+          r += noiseVal;
+          g += noiseVal;
+          b += noiseVal;
           
           // Add wear if enabled
           if (this.config.enableWear) {
-            const wearNoise = NoiseUtils.perlin2D(x * 0.02, y * 0.02);
+            const wearNoise = perlin2D(x * 0.02, y * 0.02);
             if (wearNoise > 0.7) {
               const wearFactor = (wearNoise - 0.7) / 0.3 * this.config.wearAmount;
               r *= (1 - wearFactor);

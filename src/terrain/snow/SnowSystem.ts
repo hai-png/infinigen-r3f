@@ -153,8 +153,17 @@ export class SnowSystem {
       const y = positions[i + 2]; // Z is Y in terrain space
       const z = positions[i + 1];
       
-      // Sample snow depth (simplified - would need proper UV mapping in production)
-      const snowDepth = this.params.baseDepth;
+      // Sample snow depth from the depth map
+      let snowDepth = this.params.baseDepth;
+      if (this.snowDepthMap && this.width > 0 && this.height > 0) {
+        // Map world coordinates to depth map indices
+        const mapX = Math.floor(x);
+        const mapY = Math.floor(y);
+        if (mapX >= 0 && mapX < this.width && mapY >= 0 && mapY < this.height) {
+          const depthIdx = mapY * this.width + mapX;
+          snowDepth = this.snowDepthMap[depthIdx];
+        }
+      }
       
       newPositions[i] = x;
       newPositions[i + 1] = z + snowDepth;

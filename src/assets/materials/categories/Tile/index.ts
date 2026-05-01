@@ -9,7 +9,6 @@
 
 export { CeramicTileMaterial } from './CeramicTileMaterial';
 export type { CeramicTileMaterialConfig as CeramicTileParams, CeramicTileMaterialConfig as CeramicTilePreset } from './CeramicTileMaterial';
-// TODO: Implement StoneTileMaterial
-// export { StoneTileMaterial, StoneTileParams, StoneTilePreset } from './StoneTileMaterial';
-// TODO: Implement MosaicMaterial
-// export { MosaicMaterial, MosaicParams, MosaicPreset } from './MosaicMaterial';
+
+export { TileGenerator } from './TileGenerator';
+export type { TileParams } from './TileGenerator';

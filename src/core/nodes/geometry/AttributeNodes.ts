@@ -717,7 +717,53 @@ export function executeAttributeStatistic(node: AttributeStatisticNode, geometry
 }
 
 /**
+ * Möller-Trumbore ray-triangle intersection
+ * Returns { hit: true, t, u, v } or { hit: false }
+ */
+function mollerTrumbore(
+  origin: Vector3,
+  direction: Vector3,
+  v0: Vector3,
+  v1: Vector3,
+  v2: Vector3,
+  epsilon: number = 1e-8
+): { hit: true; t: number; u: number; v: number } | { hit: false } {
+  const edge1 = new Vector3().subVectors(v1, v0);
+  const edge2 = new Vector3().subVectors(v2, v0);
+  const h = new Vector3().crossVectors(direction, edge2);
+  const a = edge1.dot(h);
+
+  // Ray is parallel to triangle
+  if (Math.abs(a) < epsilon) {
+    return { hit: false };
+  }
+
+  const f = 1 / a;
+  const s = new Vector3().subVectors(origin, v0);
+  const u = f * s.dot(h);
+
+  if (u < 0 || u > 1) {
+    return { hit: false };
+  }
+
+  const q = new Vector3().crossVectors(s, edge1);
+  const v = f * direction.dot(q);
+
+  if (v < 0 || u + v > 1) {
+    return { hit: false };
+  }
+
+  const t = f * edge2.dot(q);
+  if (t > epsilon) {
+    return { hit: true, t, u, v };
+  }
+
+  return { hit: false };
+}
+
+/**
  * Execute Raycast Node
+ * Implements Möller-Trumbore ray-triangle intersection for accurate raycasting
  */
 export function executeRaycast(node: RaycastNode, geometry: THREE.BufferGeometry): {
   isHit: boolean;
@@ -727,21 +773,112 @@ export function executeRaycast(node: RaycastNode, geometry: THREE.BufferGeometry
   distance: number;
 } {
   const { startPosition, endPosition } = node.inputs;
-  
-  // Simple raycast implementation
-  // In production, use Three.js Raycaster
+
+  if (!startPosition || !endPosition) {
+    return {
+      isHit: false,
+      hitPosition: new Vector3(),
+      hitNormal: new Vector3(),
+      hitFaceIndex: -1,
+      distance: 0,
+    };
+  }
+
   const direction = new Vector3().subVectors(endPosition, startPosition);
-  const distance = direction.length();
+  const rayLength = direction.length();
   direction.normalize();
-  
-  // For now, return no hit
-  // TODO: Implement proper ray-triangle intersection
+
+  const posAttr = geometry.attributes.position;
+  const indexAttr = geometry.index;
+
+  if (!posAttr) {
+    return {
+      isHit: false,
+      hitPosition: new Vector3(),
+      hitNormal: new Vector3(),
+      hitFaceIndex: -1,
+      distance: rayLength,
+    };
+  }
+
+  let closestT = Infinity;
+  let closestFaceIndex = -1;
+  let closestU = 0;
+  let closestV = 0;
+  let closestV0 = new Vector3();
+  let closestV1 = new Vector3();
+  let closestV2 = new Vector3();
+
+  // Iterate over all triangles
+  if (indexAttr) {
+    // Indexed geometry
+    for (let i = 0; i < indexAttr.count; i += 3) {
+      const i0 = indexAttr.getX(i);
+      const i1 = indexAttr.getX(i + 1);
+      const i2 = indexAttr.getX(i + 2);
+
+      const v0 = new Vector3(posAttr.getX(i0), posAttr.getY(i0), posAttr.getZ(i0));
+      const v1 = new Vector3(posAttr.getX(i1), posAttr.getY(i1), posAttr.getZ(i1));
+      const v2 = new Vector3(posAttr.getX(i2), posAttr.getY(i2), posAttr.getZ(i2));
+
+      const result = mollerTrumbore(startPosition, direction, v0, v1, v2);
+      if (result.hit && result.t < closestT) {
+        closestT = result.t;
+        closestFaceIndex = Math.floor(i / 3);
+        closestU = result.u;
+        closestV = result.v;
+        closestV0 = v0;
+        closestV1 = v1;
+        closestV2 = v2;
+      }
+    }
+  } else {
+    // Non-indexed geometry (every 3 vertices = 1 triangle)
+    for (let i = 0; i < posAttr.count; i += 3) {
+      const v0 = new Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+      const v1 = new Vector3(posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1));
+      const v2 = new Vector3(posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2));
+
+      const result = mollerTrumbore(startPosition, direction, v0, v1, v2);
+      if (result.hit && result.t < closestT) {
+        closestT = result.t;
+        closestFaceIndex = Math.floor(i / 3);
+        closestU = result.u;
+        closestV = result.v;
+        closestV0 = v0;
+        closestV1 = v1;
+        closestV2 = v2;
+      }
+    }
+  }
+
+  if (closestT < Infinity) {
+    // Compute hit position: P = (1-u-v)*V0 + u*V1 + v*V2
+    const hitPosition = new Vector3()
+      .addScaledVector(closestV0, 1 - closestU - closestV)
+      .addScaledVector(closestV1, closestU)
+      .addScaledVector(closestV2, closestV);
+
+    // Compute face normal from triangle edges
+    const edge1 = new Vector3().subVectors(closestV1, closestV0);
+    const edge2 = new Vector3().subVectors(closestV2, closestV0);
+    const hitNormal = new Vector3().crossVectors(edge1, edge2).normalize();
+
+    return {
+      isHit: true,
+      hitPosition,
+      hitNormal,
+      hitFaceIndex: closestFaceIndex,
+      distance: closestT,
+    };
+  }
+
   return {
     isHit: false,
     hitPosition: new Vector3(),
     hitNormal: new Vector3(),
     hitFaceIndex: -1,
-    distance: distance,
+    distance: rayLength,
   };
 }
 

@@ -379,15 +379,113 @@ export class WeatherSystem {
   }
 
   /**
-   * Trigger lightning flash
+   * Trigger lightning flash with visual effect
    */
   private triggerLightning(): void {
-    // Flash the scene with bright light
-    const flashColor = 0xffffff;
-    const flashIntensity = 2.0;
+    // Create bright ambient flash
+    const flashLight = new THREE.PointLight(0xffffff, 5.0, 500);
+    flashLight.position.set(
+      (Math.random() - 0.5) * 100,
+      60 + Math.random() * 30,
+      (Math.random() - 0.5) * 100
+    );
+    this.scene.add(flashLight);
+
+    // Create lightning bolt geometry
+    const boltGroup = new THREE.Group();
+    const boltMaterial = new THREE.MeshBasicMaterial({
+      color: 0xeeeeff,
+      transparent: true,
+      opacity: 0.9,
+    });
+
+    // Generate jagged bolt path from cloud to ground
+    const startX = (Math.random() - 0.5) * 100;
+    const startZ = (Math.random() - 0.5) * 100;
+    const startY = 70;
+    const endY = 0;
+    const segments = 8;
+    const points: THREE.Vector3[] = [];
     
-    // In production, would add actual lightning bolt mesh and sound
-    console.log('⚡ Lightning strike!');
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const y = startY + (endY - startY) * t;
+      const jagX = i === 0 || i === segments ? 0 : (Math.random() - 0.5) * 8;
+      const jagZ = i === 0 || i === segments ? 0 : (Math.random() - 0.5) * 8;
+      points.push(new THREE.Vector3(startX + jagX, y, startZ + jagZ));
+    }
+
+    // Create bolt mesh as a series of thin cylinders connecting the points
+    for (let i = 0; i < points.length - 1; i++) {
+      const start = points[i];
+      const end = points[i + 1];
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const midPoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      
+      const boltGeo = new THREE.CylinderGeometry(0.08, 0.08, length, 4);
+      const boltMesh = new THREE.Mesh(boltGeo, boltMaterial);
+      boltMesh.position.copy(midPoint);
+      
+      // Orient cylinder along the direction
+      const axis = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction.normalize());
+      boltMesh.quaternion.copy(quaternion);
+      
+      boltGroup.add(boltMesh);
+    }
+
+    // Add a glow around the bolt
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x8888ff,
+      transparent: true,
+      opacity: 0.3,
+    });
+    for (let i = 0; i < points.length - 1; i++) {
+      const start = points[i];
+      const end = points[i + 1];
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const midPoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      
+      const glowGeo = new THREE.CylinderGeometry(0.5, 0.5, length, 4);
+      const glowMesh = new THREE.Mesh(glowGeo, glowMaterial);
+      glowMesh.position.copy(midPoint);
+      
+      const axis = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction.normalize());
+      glowMesh.quaternion.copy(quaternion);
+      
+      boltGroup.add(glowMesh);
+    }
+
+    this.scene.add(boltGroup);
+
+    // Remove lightning after a short duration
+    const flashDuration = 100 + Math.random() * 200;
+    setTimeout(() => {
+      this.scene.remove(flashLight);
+      this.scene.remove(boltGroup);
+      flashLight.dispose();
+      boltGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+        }
+      });
+    }, flashDuration);
+
+    // Second flash (flicker effect)
+    if (Math.random() > 0.5) {
+      setTimeout(() => {
+        const secondFlash = new THREE.PointLight(0xffffff, 3.0, 500);
+        secondFlash.position.copy(flashLight.position);
+        this.scene.add(secondFlash);
+        setTimeout(() => {
+          this.scene.remove(secondFlash);
+          secondFlash.dispose();
+        }, 50 + Math.random() * 100);
+      }, flashDuration + 50 + Math.random() * 100);
+    }
   }
 
   /**

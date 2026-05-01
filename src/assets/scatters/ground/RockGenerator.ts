@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { NoiseUtils } from '../../../terrain/utils/NoiseUtils';
+import { SeededRandom } from '../../../core/util/math/index';
 
 export interface RockConfig {
   seed: number;
@@ -87,10 +88,11 @@ const DEFAULT_ROCK_TYPES: RockType[] = [
 export class RockGenerator {
   private config: RockConfig;
   private noise: NoiseUtils;
+  private rng: SeededRandom;
 
   constructor(config?: Partial<RockConfig>) {
     this.config = {
-      seed: Math.random() * 10000,
+      seed: 42, // Default deterministic seed — never use Math.random()
       boulderDensity: 10, // per square km
       gravelDensity: 2, // per square meter
       clusterProbability: 0.3,
@@ -102,6 +104,7 @@ export class RockGenerator {
       rockTypes: DEFAULT_ROCK_TYPES,
       ...config,
     };
+    this.rng = new SeededRandom(this.config.seed);
 
     this.noise = new NoiseUtils(this.config.seed);
   }
@@ -177,8 +180,8 @@ export class RockGenerator {
     erosionMap?: Float32Array
   ): RockInstance | null {
     // Random sample position
-    const gridX = Math.floor(Math.random() * resolution);
-    const gridZ = Math.floor(Math.random() * resolution);
+    const gridX = Math.floor(this.rng.next() * resolution);
+    const gridZ = Math.floor(this.rng.next() * resolution);
 
     if (gridX >= resolution || gridZ >= resolution) return null;
 
@@ -205,12 +208,12 @@ export class RockGenerator {
     // Check slope preference
     const slope = Math.acos(normal.y);
     const slopePreference = this.evaluateSlopePreference(slope);
-    if (Math.random() > slopePreference) return null;
+    if (this.rng.next() > slopePreference) return null;
 
     // Consider erosion factor
     if (erosionMap) {
       const erosion = erosionMap[idx];
-      if (erosion > 0.7 && Math.random() > 0.3) {
+      if (erosion > 0.7 && this.rng.next() > 0.3) {
         // High erosion areas have fewer exposed rocks
         return null;
       }
@@ -226,7 +229,7 @@ export class RockGenerator {
       this.noise.perlin2D(worldX * 0.01, worldZ * 0.01) * 0.5 + 0.5
     );
 
-    const variation = 1 + (Math.random() - 0.5) * this.config.sizeVariation;
+    const variation = 1 + (this.rng.next() - 0.5) * this.config.sizeVariation;
     const scale = baseScale * variation;
 
     // Calculate rotation
@@ -276,8 +279,8 @@ export class RockGenerator {
         const numGravel = Math.floor(localDensity * sampleInterval * sampleInterval);
 
         for (let g = 0; g < numGravel; g++) {
-          const offsetX = Math.random() * sampleInterval;
-          const offsetZ = Math.random() * sampleInterval;
+          const offsetX = this.rng.next() * sampleInterval;
+          const offsetZ = this.rng.next() * sampleInterval;
           
           const sampleX = Math.min(resolution - 1, x + offsetX);
           const sampleZ = Math.min(resolution - 1, z + offsetZ);
@@ -300,7 +303,7 @@ export class RockGenerator {
           const normal = normals[posIndex];
 
           const rockType = this.selectRockType(sampleWorldX, sampleWorldZ, sampleHeight);
-          const scale = THREE.MathUtils.lerp(0.05, 0.3, Math.random());
+          const scale = THREE.MathUtils.lerp(0.05, 0.3, this.rng.next());
 
           const rotation = this.calculateRotation(normal);
 
@@ -338,8 +341,8 @@ export class RockGenerator {
 
     for (let c = 0; c < numClusters; c++) {
       // Find cluster center
-      const centerX = Math.floor(Math.random() * resolution);
-      const centerZ = Math.floor(Math.random() * resolution);
+      const centerX = Math.floor(this.rng.next() * resolution);
+      const centerZ = Math.floor(this.rng.next() * resolution);
       const centerIdx = centerZ * resolution + centerX;
 
       const centerHeight = heights[centerIdx];
@@ -362,7 +365,7 @@ export class RockGenerator {
         THREE.MathUtils.lerp(
           this.config.clusterSize[0],
           this.config.clusterSize[1],
-          Math.random()
+          this.rng.next()
         )
       );
 
@@ -372,8 +375,8 @@ export class RockGenerator {
       // Generate rocks in cluster
       for (let r = 0; r < clusterSize; r++) {
         // Offset from center
-        const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * 3;
+        const angle = this.rng.uniform(0, Math.PI * 2);
+        const radius = this.rng.next() * 3;
         const offsetX = Math.cos(angle) * radius;
         const offsetZ = Math.sin(angle) * radius;
 
@@ -407,7 +410,7 @@ export class RockGenerator {
         const scale = THREE.MathUtils.lerp(
           rockType.scaleMin * 0.5,
           rockType.scaleMax * 0.8,
-          Math.random()
+          this.rng.next()
         );
 
         const rotation = this.calculateRotation(normal);
@@ -479,12 +482,12 @@ export class RockGenerator {
     quaternion.setFromUnitVectors(up, normal);
     const euler = new THREE.Euler().setFromQuaternion(quaternion);
 
-    // Add random rotation around normal
-    euler.z += Math.random() * Math.PI * 2;
+    // Add random rotation around normal — use SeededRandom
+    euler.z += this.rng.uniform(0, Math.PI * 2);
 
     // Add slight tilt for natural look
-    euler.x += (Math.random() - 0.5) * 0.2;
-    euler.y += (Math.random() - 0.5) * 0.2;
+    euler.x += (this.rng.next() - 0.5) * 0.2;
+    euler.y += (this.rng.next() - 0.5) * 0.2;
 
     return euler;
   }
@@ -544,6 +547,7 @@ export class RockGenerator {
    */
   updateConfig(config: Partial<RockConfig>): void {
     this.config = { ...this.config, ...config };
+    this.rng = new SeededRandom(this.config.seed);
     this.noise = new NoiseUtils(this.config.seed);
   }
 

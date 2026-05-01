@@ -16,6 +16,71 @@ export interface SimulationNodeBase extends NodeBase {
 }
 
 // ============================================================================
+// Simulation Configuration Types
+// ============================================================================
+
+export interface SoftBodyConfig {
+  mass: number;
+  stiffness: number;
+  damping: number;
+  pressure: number;
+  collisionMargin: number;
+  /** Spring constant for internal springs */
+  springStiffness: number;
+  /** Number of solver iterations per substep */
+  solverIterations: number;
+}
+
+export interface ParticleCollisionConfig {
+  bounce: number;
+  friction: number;
+  stickiness: number;
+  /** Collision margin distance */
+  margin: number;
+  /** Maximum collision impulses per step */
+  maxCollisions: number;
+  /** Whether to kill particles on collision */
+  killOnCollision: boolean;
+}
+
+export interface FluidFlowConfig {
+  flowType: 'inflow' | 'outflow' | 'geometry';
+  velocity: Vector3;
+  sourceVolume: number;
+  /** Emission density (particles per unit volume per second) */
+  density: number;
+  /** Temperature of emitted fluid */
+  temperature: number;
+  /** Fuel value for fire simulation */
+  fuel: number;
+}
+
+export interface ClothConfig {
+  mass: number;
+  structuralStiffness: number;
+  bendingStiffness: number;
+  damping: number;
+  pressure: number;
+  /** Shear stiffness for diagonal springs */
+  shearStiffness: number;
+  /** Air drag coefficient */
+  airDrag: number;
+  /** Pin stiffness for pinned vertices */
+  pinStiffness: number;
+  /** Self-collision distance */
+  selfCollisionDistance: number;
+}
+
+export interface ClothPinGroupConfig {
+  pinnedVertices: number[];
+  pinStrength: number;
+  /** Whether pinned vertices are completely fixed (strength=1) or partially */
+  isAbsolute: boolean;
+  /** Target position offset for pinned vertices */
+  targetOffset: Vector3;
+}
+
+// ============================================================================
 // Rigid Body Simulation Nodes
 // ============================================================================
 
@@ -57,6 +122,11 @@ export class RigidBodyWorldNode implements SimulationNodeBase {
     const gravity = this.inputs.gravity || [0, -9.81, 0];
     this.outputs.gravity.set(gravity[0], gravity[1], gravity[2]);
     this.outputs.substeps = this.inputs.substeps ?? 60;
+    this.outputs.world = {
+      gravity: this.outputs.gravity.clone(),
+      substeps: this.outputs.substeps,
+      solverIterations: this.inputs.solverIterations ?? 10,
+    };
     return this.outputs;
   }
 }
@@ -104,11 +174,23 @@ export class RigidBodyConstraintsNode implements SimulationNodeBase {
   execute(): RigidBodyConstraintsOutputs {
     const pivotA = this.inputs.pivotA || [0, 0, 0];
     const pivotB = this.inputs.pivotB || [0, 0, 0];
+    const axisA = this.inputs.axisA || [0, 0, 1];
+    const axisB = this.inputs.axisB || [0, 0, 1];
     
     this.outputs.pivotA.set(pivotA[0], pivotA[1], pivotA[2]);
     this.outputs.pivotB.set(pivotB[0], pivotB[1], pivotB[2]);
     this.outputs.type = this.inputs.constraintType ?? 'fixed';
-    
+
+    this.outputs.constraint = {
+      type: this.outputs.type,
+      pivotA: this.outputs.pivotA.clone(),
+      pivotB: this.outputs.pivotB.clone(),
+      axisA: new Vector3(axisA[0], axisA[1], axisA[2]).normalize(),
+      axisB: new Vector3(axisB[0], axisB[1], axisB[2]).normalize(),
+      limitLower: this.inputs.limitLower || [0, 0, 0],
+      limitUpper: this.inputs.limitUpper || [0, 0, 0],
+    };
+
     return this.outputs;
   }
 }
@@ -130,6 +212,7 @@ export interface SoftBodySetupInputs {
 }
 
 export interface SoftBodySetupOutputs {
+  config: SoftBodyConfig;
   mass: number;
   stiffness: number;
   damping: number;
@@ -147,19 +230,55 @@ export class SoftBodySetupNode implements SimulationNodeBase {
 
   constructor(inputs: SoftBodySetupInputs = {}) {
     this.inputs = inputs;
+    const mass = inputs.mass ?? 1.0;
+    const stiffness = inputs.stiffness ?? 0.5;
+    const damping = inputs.damping ?? 0.1;
+    const pressure = inputs.pressure ?? 0.0;
+    const collisionMargin = inputs.collisionMargin ?? 0.01;
+
     this.outputs = {
-      mass: inputs.mass ?? 1.0,
-      stiffness: inputs.stiffness ?? 0.5,
-      damping: inputs.damping ?? 0.1,
-      pressure: inputs.pressure ?? 0.0,
+      config: {
+        mass,
+        stiffness,
+        damping,
+        pressure,
+        collisionMargin,
+        springStiffness: stiffness * 0.8,
+        solverIterations: 5,
+      },
+      mass,
+      stiffness,
+      damping,
+      pressure,
     };
   }
 
   execute(): SoftBodySetupOutputs {
-    this.outputs.mass = this.inputs.mass ?? 1.0;
-    this.outputs.stiffness = this.inputs.stiffness ?? 0.5;
-    this.outputs.damping = this.inputs.damping ?? 0.1;
-    this.outputs.pressure = this.inputs.pressure ?? 0.0;
+    const mass = this.inputs.mass ?? 1.0;
+    const stiffness = this.inputs.stiffness ?? 0.5;
+    const damping = this.inputs.damping ?? 0.1;
+    const pressure = this.inputs.pressure ?? 0.0;
+    const collisionMargin = this.inputs.collisionMargin ?? 0.01;
+
+    // Derive dependent parameters from primary inputs
+    const springStiffness = stiffness * 0.8;
+    const solverIterations = Math.max(3, Math.ceil(stiffness * 10));
+
+    this.outputs.mass = mass;
+    this.outputs.stiffness = stiffness;
+    this.outputs.damping = damping;
+    this.outputs.pressure = pressure;
+
+    this.outputs.config = {
+      mass,
+      stiffness,
+      damping,
+      pressure,
+      collisionMargin,
+      springStiffness,
+      solverIterations,
+    };
+
     return this.outputs;
   }
 }
@@ -251,6 +370,7 @@ export interface ParticleCollisionInputs {
 }
 
 export interface ParticleCollisionOutputs {
+  config: ParticleCollisionConfig;
   bounce: number;
   friction: number;
   stickiness: number;
@@ -267,17 +387,48 @@ export class ParticleCollisionNode implements SimulationNodeBase {
 
   constructor(inputs: ParticleCollisionInputs = {}) {
     this.inputs = inputs;
+    const bounce = inputs.bounce ?? 0.5;
+    const friction = inputs.friction ?? 0.1;
+    const stickiness = inputs.stickiness ?? 0.0;
+
     this.outputs = {
-      bounce: inputs.bounce ?? 0.5,
-      friction: inputs.friction ?? 0.1,
-      stickiness: inputs.stickiness ?? 0.0,
+      config: {
+        bounce,
+        friction,
+        stickiness,
+        margin: 0.001,
+        maxCollisions: 10,
+        killOnCollision: false,
+      },
+      bounce,
+      friction,
+      stickiness,
     };
   }
 
   execute(): ParticleCollisionOutputs {
-    this.outputs.bounce = this.inputs.bounce ?? 0.5;
-    this.outputs.friction = this.inputs.friction ?? 0.1;
-    this.outputs.stickiness = this.inputs.stickiness ?? 0.0;
+    const bounce = this.inputs.bounce ?? 0.5;
+    const friction = this.inputs.friction ?? 0.1;
+    const stickiness = this.inputs.stickiness ?? 0.0;
+
+    // Derive dependent collision parameters
+    const margin = Math.max(0.0001, bounce * 0.002);
+    const maxCollisions = Math.ceil(10 / Math.max(0.1, bounce));
+    const killOnCollision = bounce < 0.01 && stickiness > 0.9;
+
+    this.outputs.bounce = bounce;
+    this.outputs.friction = friction;
+    this.outputs.stickiness = stickiness;
+
+    this.outputs.config = {
+      bounce,
+      friction,
+      stickiness,
+      margin,
+      maxCollisions,
+      killOnCollision,
+    };
+
     return this.outputs;
   }
 }
@@ -344,6 +495,7 @@ export interface FluidFlowInputs {
 }
 
 export interface FluidFlowOutputs {
+  config: FluidFlowConfig;
   flowType: string;
   velocity: Vector3;
   sourceVolume: number;
@@ -360,18 +512,49 @@ export class FluidFlowNode implements SimulationNodeBase {
 
   constructor(inputs: FluidFlowInputs = {}) {
     this.inputs = inputs;
+    const flowType = inputs.flowType ?? 'inflow';
+    const velocity = inputs.velocity || [0, 0, 0];
+    const sourceVolume = inputs.sourceVolume ?? 1.0;
+
     this.outputs = {
-      flowType: inputs.flowType ?? 'inflow',
-      velocity: new Vector3(),
-      sourceVolume: inputs.sourceVolume ?? 1.0,
+      config: {
+        flowType,
+        velocity: new Vector3(velocity[0], velocity[1], velocity[2]),
+        sourceVolume,
+        density: 1.0,
+        temperature: 300,
+        fuel: 0,
+      },
+      flowType,
+      velocity: new Vector3(velocity[0], velocity[1], velocity[2]),
+      sourceVolume,
     };
   }
 
   execute(): FluidFlowOutputs {
     const velocity = this.inputs.velocity || [0, 0, 0];
+    const flowType = this.inputs.flowType ?? 'inflow';
+    const sourceVolume = this.inputs.sourceVolume ?? 1.0;
+
     this.outputs.velocity.set(velocity[0], velocity[1], velocity[2]);
-    this.outputs.flowType = this.inputs.flowType ?? 'inflow';
-    this.outputs.sourceVolume = this.inputs.sourceVolume ?? 1.0;
+    this.outputs.flowType = flowType;
+    this.outputs.sourceVolume = sourceVolume;
+
+    // Derive dependent flow parameters
+    const speed = Math.sqrt(velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2);
+    const density = flowType === 'outflow' ? 0 : Math.max(0.1, speed * 0.5);
+    const temperature = flowType === 'inflow' ? 300 + speed * 10 : 300;
+    const fuel = flowType === 'inflow' ? Math.max(0, sourceVolume - 0.5) : 0;
+
+    this.outputs.config = {
+      flowType,
+      velocity: this.outputs.velocity.clone(),
+      sourceVolume,
+      density,
+      temperature,
+      fuel,
+    };
+
     return this.outputs;
   }
 }
@@ -393,6 +576,7 @@ export interface ClothSetupInputs {
 }
 
 export interface ClothSetupOutputs {
+  config: ClothConfig;
   mass: number;
   structuralStiffness: number;
   bendingStiffness: number;
@@ -411,21 +595,63 @@ export class ClothSetupNode implements SimulationNodeBase {
 
   constructor(inputs: ClothSetupInputs = {}) {
     this.inputs = inputs;
+    const mass = inputs.mass ?? 0.5;
+    const structuralStiffness = inputs.structuralStiffness ?? 10.0;
+    const bendingStiffness = inputs.bendingStiffness ?? 0.5;
+    const damping = inputs.damping ?? 0.01;
+    const pressure = inputs.pressure ?? 0.0;
+
     this.outputs = {
-      mass: inputs.mass ?? 0.5,
-      structuralStiffness: inputs.structuralStiffness ?? 10.0,
-      bendingStiffness: inputs.bendingStiffness ?? 0.5,
-      damping: inputs.damping ?? 0.01,
-      pressure: inputs.pressure ?? 0.0,
+      config: {
+        mass,
+        structuralStiffness,
+        bendingStiffness,
+        damping,
+        pressure,
+        shearStiffness: structuralStiffness * 0.5,
+        airDrag: damping * 2,
+        pinStiffness: 1.0,
+        selfCollisionDistance: 0.01,
+      },
+      mass,
+      structuralStiffness,
+      bendingStiffness,
+      damping,
+      pressure,
     };
   }
 
   execute(): ClothSetupOutputs {
-    this.outputs.mass = this.inputs.mass ?? 0.5;
-    this.outputs.structuralStiffness = this.inputs.structuralStiffness ?? 10.0;
-    this.outputs.bendingStiffness = this.inputs.bendingStiffness ?? 0.5;
-    this.outputs.damping = this.inputs.damping ?? 0.01;
-    this.outputs.pressure = this.inputs.pressure ?? 0.0;
+    const mass = this.inputs.mass ?? 0.5;
+    const structuralStiffness = this.inputs.structuralStiffness ?? 10.0;
+    const bendingStiffness = this.inputs.bendingStiffness ?? 0.5;
+    const damping = this.inputs.damping ?? 0.01;
+    const pressure = this.inputs.pressure ?? 0.0;
+
+    // Derive dependent cloth parameters
+    const shearStiffness = structuralStiffness * 0.5;
+    const airDrag = Math.max(0.001, damping * 2);
+    const pinStiffness = structuralStiffness > 20 ? 1.0 : structuralStiffness / 20;
+    const selfCollisionDistance = Math.max(0.001, mass * 0.02);
+
+    this.outputs.mass = mass;
+    this.outputs.structuralStiffness = structuralStiffness;
+    this.outputs.bendingStiffness = bendingStiffness;
+    this.outputs.damping = damping;
+    this.outputs.pressure = pressure;
+
+    this.outputs.config = {
+      mass,
+      structuralStiffness,
+      bendingStiffness,
+      damping,
+      pressure,
+      shearStiffness,
+      airDrag,
+      pinStiffness,
+      selfCollisionDistance,
+    };
+
     return this.outputs;
   }
 }
@@ -440,6 +666,7 @@ export interface ClothPinGroupInputs {
 }
 
 export interface ClothPinGroupOutputs {
+  config: ClothPinGroupConfig;
   pinnedVertices: number[];
   pinStrength: number;
 }
@@ -455,15 +682,41 @@ export class ClothPinGroupNode implements SimulationNodeBase {
 
   constructor(inputs: ClothPinGroupInputs = {}) {
     this.inputs = inputs;
+    const pinnedVertices: number[] = [];
+    const pinStrength = inputs.pinStrength ?? 1.0;
+
     this.outputs = {
-      pinnedVertices: [],
-      pinStrength: inputs.pinStrength ?? 1.0,
+      config: {
+        pinnedVertices,
+        pinStrength,
+        isAbsolute: pinStrength >= 1.0,
+        targetOffset: new Vector3(0, 0, 0),
+      },
+      pinnedVertices,
+      pinStrength,
     };
   }
 
   execute(): ClothPinGroupOutputs {
-    this.outputs.pinnedVertices = this.inputs.vertexGroup || [];
-    this.outputs.pinStrength = this.inputs.pinStrength ?? 1.0;
+    const pinnedVertices = this.inputs.vertexGroup || [];
+    const pinStrength = this.inputs.pinStrength ?? 1.0;
+
+    this.outputs.pinnedVertices = pinnedVertices;
+    this.outputs.pinStrength = pinStrength;
+
+    // Derive dependent pin group parameters
+    const isAbsolute = pinStrength >= 1.0;
+    // Target offset: if pins are soft (strength < 1), allow some drift
+    const offsetScale = (1 - pinStrength) * 0.1;
+    const targetOffset = new Vector3(offsetScale, offsetScale, offsetScale);
+
+    this.outputs.config = {
+      pinnedVertices,
+      pinStrength,
+      isAbsolute,
+      targetOffset,
+    };
+
     return this.outputs;
   }
 }
@@ -507,5 +760,3 @@ export function createClothSetupNode(inputs?: ClothSetupInputs): ClothSetupNode 
 export function createClothPinGroupNode(inputs?: ClothPinGroupInputs): ClothPinGroupNode {
   return new ClothPinGroupNode(inputs);
 }
-
-

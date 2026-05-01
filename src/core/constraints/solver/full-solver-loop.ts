@@ -109,7 +109,10 @@ export class FullSolverLoop {
       const energyDelta = this.evaluateProposal(proposal);
 
       // Accept/reject based on Metropolis criterion
-      const accepted = this.saSolver.acceptProposal(energyDelta, temperature);
+      // acceptProposal takes (currentEnergy, proposedEnergy) and uses internal temperature
+      const currentEnergy = this.state!.energy;
+      const proposedEnergy = currentEnergy + energyDelta;
+      const accepted = this.saSolver.acceptProposal(currentEnergy, proposedEnergy);
       
       if (accepted) {
         this.applyProposal(proposal);

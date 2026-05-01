@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { InstancedMesh } from 'three';
+import { SeededRandom } from '../../core/util/math/index';
 
 /**
  * Configuration for grass scattering
@@ -26,6 +27,9 @@ export interface GrassScatterConfig {
   // Area constraints
   area: THREE.Box3;
   excludeObjects?: THREE.Object3D[];
+
+  // Seed for deterministic generation
+  seed: number;
 }
 
 /**
@@ -37,8 +41,10 @@ export class GrassScatterSystem {
   private mesh: InstancedMesh | null = null;
   private dummy = new THREE.Object3D();
   private time: number = 0;
+  private rng: SeededRandom;
 
   constructor(config: Partial<GrassScatterConfig>) {
+    const seed = config.seed ?? 42;
     this.config = {
       density: 50,
       minSpacing: 0.1,
@@ -56,8 +62,10 @@ export class GrassScatterSystem {
         new THREE.Vector3(-10, 0, -10),
         new THREE.Vector3(10, 0, 10)
       ),
+      seed,
       ...config
     };
+    this.rng = new SeededRandom(seed);
   }
 
   /**
@@ -95,9 +103,9 @@ export class GrassScatterSystem {
       // Find valid position with minimum spacing
       do {
         position = new THREE.Vector3(
-          this.config.area.min.x + Math.random() * size.x,
+          this.config.area.min.x + this.rng.next() * size.x,
           this.config.area.min.y,
-          this.config.area.min.z + Math.random() * size.z
+          this.config.area.min.z + this.rng.next() * size.z
         );
         attempts++;
       } while (
@@ -113,11 +121,11 @@ export class GrassScatterSystem {
       this.dummy.position.copy(position);
       
       // Random rotation around Y axis
-      this.dummy.rotation.y = Math.random() * Math.PI * 2;
+      this.dummy.rotation.y = this.rng.uniform(0, Math.PI * 2);
       
       // Random scale variation
-      const heightScale = 1 + (Math.random() - 0.5) * this.config.bladeHeightVariation;
-      const widthScale = 0.8 + Math.random() * 0.4;
+      const heightScale = 1 + (this.rng.next() - 0.5) * this.config.bladeHeightVariation;
+      const widthScale = 0.8 + this.rng.next() * 0.4;
       this.dummy.scale.set(widthScale, heightScale, 1);
       
       this.dummy.updateMatrix();
@@ -126,7 +134,7 @@ export class GrassScatterSystem {
       // Color variation
       if (this.config.bladeColorVariation > 0) {
         const color = this.config.bladeColor.clone();
-        const variation = (Math.random() - 0.5) * this.config.bladeColorVariation;
+        const variation = (this.rng.next() - 0.5) * this.config.bladeColorVariation;
         color.offsetHSL(0, 0, variation);
         this.mesh.setColorAt(i, color);
       }

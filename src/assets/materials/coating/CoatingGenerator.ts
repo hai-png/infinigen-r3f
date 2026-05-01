@@ -1,8 +1,9 @@
 /**
  * Coating Generator - Varnish, lacquer, paint, powder coating
+ * Uses MeshPhysicalMaterial for clearcoat support (NOT MeshStandardMaterial)
  */
 import * as THREE from 'three';
-import { Color } from 'three';
+import { Color, MeshPhysicalMaterial } from 'three';
 import { BaseMaterialGenerator, MaterialOutput } from '../BaseMaterialGenerator';
 import { SeededRandom } from '../../../core/util/MathUtils';
 
@@ -27,9 +28,25 @@ export class CoatingGenerator extends BaseMaterialGenerator<CoatingParams> {
   constructor() { super(); }
   getDefaultParams(): CoatingParams { return { ...CoatingGenerator.DEFAULT_PARAMS }; }
 
+  /**
+   * Override createBaseMaterial to return MeshPhysicalMaterial
+   * Required for clearcoat support
+   */
+  protected createBaseMaterial(): MeshPhysicalMaterial {
+    return new MeshPhysicalMaterial({
+      color: 0xffffff,
+      roughness: 0.3,
+      metalness: 0.0,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.15,
+    });
+  }
+
   generate(params: Partial<CoatingParams> = {}, seed?: number): MaterialOutput {
     const finalParams = this.mergeParams(CoatingGenerator.DEFAULT_PARAMS, params);
-    const material = this.createBaseMaterial() as THREE.MeshPhysicalMaterial;
+    
+    // Use MeshPhysicalMaterial - required for clearcoat
+    const material = this.createBaseMaterial();
     
     material.color = finalParams.color;
     material.roughness = 1 - finalParams.glossiness;
@@ -39,8 +56,13 @@ export class CoatingGenerator extends BaseMaterialGenerator<CoatingParams> {
     if (finalParams.type === 'powder') {
       material.roughness = 0.4;
       material.metalness = 0.0;
+      material.clearcoat = 0.2;
     } else if (finalParams.type === 'anodized') {
       material.metalness = 0.5;
+      material.clearcoat = 0.8;
+    } else if (finalParams.type === 'lacquer') {
+      material.clearcoat = 1.0;
+      material.clearcoatRoughness = 0.05;
     }
     
     return { material: material as any, maps: { map: null, roughnessMap: null, normalMap: null }, params: finalParams };

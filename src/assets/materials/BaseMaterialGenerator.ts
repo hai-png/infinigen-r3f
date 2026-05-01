@@ -2,7 +2,7 @@
  * Base Material Generator
  * Abstract base class for all material generators following Infinigen's pattern
  */
-import { Material, Texture, Color } from 'three';
+import { Material, Texture, CanvasTexture, Color } from 'three';
 import { SeededRandom } from '../../core/util/math/distributions';
 
 export interface MaterialOutput {
@@ -68,9 +68,7 @@ export abstract class BaseMaterialGenerator<T extends Record<string, unknown>> {
       ctx.fillStyle = hex;
       ctx.fillRect(0, 0, size, size);
     }
-    // Note: CanvasTexture requires browser environment
-    // In Node.js, this would need a different implementation
-    return {} as Texture;
+    return new CanvasTexture(canvas);
   }
 
   /**

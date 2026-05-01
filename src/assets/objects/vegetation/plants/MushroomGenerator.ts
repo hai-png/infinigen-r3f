@@ -1,5 +1,6 @@
 /**
- * MushroomGenerator - Mushroom varieties
+ * MushroomGenerator - Mushroom varieties: stem + cap
+ * All geometries in Mesh(geometry, MeshStandardMaterial). Uses SeededRandom.
  */
 import * as THREE from 'three';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../../utils/BaseObjectGenerator';
@@ -28,6 +29,7 @@ export class MushroomGenerator extends BaseObjectGenerator<MushroomConfig> {
     group.add(stem, cap);
     if (fullConfig.gillDetail && fullConfig.mushroomType !== 'puffball') {
       const gills = this.createGills(fullConfig);
+      gills.position.y = fullConfig.stemHeight;
       group.add(gills);
     }
     group.userData.tags = ['vegetation', 'mushroom', fullConfig.mushroomType];
@@ -36,36 +38,56 @@ export class MushroomGenerator extends BaseObjectGenerator<MushroomConfig> {
 
   private createStem(config: MushroomConfig): THREE.Mesh {
     const geom = new THREE.CylinderGeometry(config.stemThickness * 0.8, config.stemThickness, config.stemHeight, 8);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc });
-    return new THREE.Mesh(geom, mat);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.8, metalness: 0.0 });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.y = config.stemHeight / 2;
+    mesh.castShadow = true;
+    return mesh;
   }
 
   private createCap(config: MushroomConfig): THREE.Mesh {
-    let geom: THREE.SphereGeometry;
+    let geom: THREE.BufferGeometry;
     switch (config.mushroomType) {
       case 'fly_agaric':
-        geom = new THREE.SphereGeometry(config.capSize, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        // Half-sphere cap (dome shape)
+        geom = new THREE.SphereGeometry(config.capSize, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
         break;
       case 'morel':
-        geom = new THREE.SphereGeometry(config.capSize, 16, 16, 0, Math.PI * 2, 0, Math.PI / 3);
+        // Elongated conical cap
+        geom = new THREE.ConeGeometry(config.capSize * 0.8, config.capSize * 2, 12);
+        break;
+      case 'puffball':
+        // Nearly full sphere
+        geom = new THREE.SphereGeometry(config.capSize, 16, 12);
         break;
       default:
-        geom = new THREE.SphereGeometry(config.capSize, 16, 16);
+        // Button / shiitake — dome-shaped cap
+        geom = new THREE.SphereGeometry(config.capSize, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
     }
-    const color = config.mushroomType === 'fly_agaric' ? 0xff0000 : 0x8b4513;
-    const mat = new THREE.MeshStandardMaterial({ color });
-    return new THREE.Mesh(geom, mat);
+
+    const colorMap: Record<string, number> = {
+      fly_agaric: 0xff0000,
+      morel: 0x8b6914,
+      puffball: 0xf0ead6,
+      shiitake: 0x8b6914,
+      button: 0xf5f5dc,
+    };
+    const color = colorMap[config.mushroomType] || 0x8b4513;
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.0 });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   private createGills(config: MushroomConfig): THREE.Group {
     const group = new THREE.Group();
     const count = 16;
+    const gillMat = new THREE.MeshStandardMaterial({ color: 0xffc0cb, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide });
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
-      const gill = new THREE.Mesh(
-        new THREE.PlaneGeometry(config.capSize * 0.8, 0.02),
-        new THREE.MeshStandardMaterial({ color: 0xffc0cb, side: THREE.DoubleSide })
-      );
+      const gillGeom = new THREE.PlaneGeometry(config.capSize * 0.8, 0.02);
+      const gill = new THREE.Mesh(gillGeom, gillMat);
       gill.rotation.x = Math.PI / 2;
       gill.rotation.z = angle;
       gill.position.y = -0.01;

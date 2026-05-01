@@ -25,6 +25,7 @@
     "allowImportingTsExtensions": false,
     "noEmit": false,
     "jsx": "react-jsx",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@infinigen/r3f": ["./src/index.ts"],

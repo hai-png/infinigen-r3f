@@ -75,27 +75,29 @@ export class HydraulicErosion {
       return data;
     }
 
-    // Initialize droplets
-    this.droplets = [];
-    for (let i = 0; i < this.config.dropletCount; i++) {
-      this.droplets.push({
-        position: new THREE.Vector2(
-          Math.random() * width,
-          Math.random() * height
-        ),
-        direction: new THREE.Vector2(
-          Math.random() - 0.5,
-          Math.random() - 0.5
-        ).normalize(),
-        speed: 1,
-        water: 1,
-        sediment: 0,
-        active: true,
-      });
-    }
-
     // Simulate erosion for each iteration
+    // Each iteration creates NEW random droplets (modeling repeated rainfall)
+    // while accumulating erosion on the heightmap
     for (let iter = 0; iter < this.config.iterations; iter++) {
+      // Create fresh droplets for this iteration
+      this.droplets = [];
+      for (let i = 0; i < this.config.dropletCount; i++) {
+        this.droplets.push({
+          position: new THREE.Vector2(
+            Math.random() * width,
+            Math.random() * height
+          ),
+          direction: new THREE.Vector2(
+            Math.random() - 0.5,
+            Math.random() - 0.5
+          ).normalize(),
+          speed: 1,
+          water: 1,
+          sediment: 0,
+          active: true,
+        });
+      }
+
       this.simulateDroplets(data);
     }
 

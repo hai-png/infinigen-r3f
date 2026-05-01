@@ -9,12 +9,7 @@ import type { Constraint, Problem } from '../../constraints/language/types';
 import type { State } from '../../constraints/evaluator/state';
 import { evaluateNode } from '../../constraints/evaluator/evaluate';
 
-// WebGPU type declarations (for environments without @webgpu/types)
-declare global {
-  interface GPUAdapter {
-    limits: Record<string, number>;
-  }
-}
+// WebGPU type augmentation removed — use the native GPUSupportedLimits type from lib.dom.d.ts
 
 // ============================================================================
 // Types & Interfaces
@@ -24,7 +19,7 @@ export interface GPUContext {
   device: GPUDevice;
   adapter: GPUAdapter;
   queue: GPUQueue;
-  limits: Record<string, number>;
+  limits: GPUSupportedLimits;
 }
 
 export interface GPUConstraintBuffers {

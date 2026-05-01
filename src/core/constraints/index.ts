@@ -98,4 +98,16 @@ export {
   ConstraintParser,
   parseConstraintSource,
   compileConstraint,
+  evaluateProgram,
+  evaluateConstraint,
+  EvalContext,
+  ConstraintViolationError,
+  EvaluationError,
 } from './dsl/index';
+
+// Reasoning domain classes
+export {
+  BoxDomain,
+  SurfaceDomain,
+  RoomDomain,
+} from './reasoning/domain';

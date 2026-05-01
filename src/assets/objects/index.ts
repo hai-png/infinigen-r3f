@@ -107,3 +107,31 @@ export * from './clothes';
 
 // Niche Decoratives (NEW)
 // export * from './niche-decoratives';
+
+// Articulated Objects (Physics-enabled objects with joints)
+// Exclude DoorGenerator, WindowGenerator (from ./architectural) and CabinetGenerator (from ./storage) to avoid duplicate exports
+export {
+  type JointType,
+  type JointInfo,
+  type ArticulatedObjectConfig,
+  type ArticulatedObjectResult,
+  ArticulatedObjectBase,
+  generateMJCF,
+  DrawerGenerator,
+  ToasterGenerator,
+  RefrigeratorGenerator,
+  OvenGenerator,
+  MicrowaveGenerator,
+  DishwasherGenerator,
+  LampGenerator,
+  TrashCanGenerator,
+  BoxGenerator,
+  FaucetGenerator,
+  PepperGrinderGenerator,
+  DoorHandleGenerator,
+  PliersGenerator,
+  CooktopGenerator,
+  SoapDispenserGenerator,
+  createArticulatedObject,
+  getArticulatedObjectNames,
+} from './articulated';

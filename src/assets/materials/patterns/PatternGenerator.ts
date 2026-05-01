@@ -1,7 +1,7 @@
 /**
  * Procedural Pattern Generator - Stripes, checks, dots, geometric, organic
  */
-import { Texture, CanvasTexture, Color } from 'three';
+import { Texture, CanvasTexture, Color, RepeatWrapping } from 'three';
 import { SeededRandom } from '../../../core/util/MathUtils';
 
 export interface PatternParams {
@@ -21,12 +21,12 @@ export class PatternGenerator {
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext('2d');
     if (!ctx) return new CanvasTexture(canvas);
-    
+
     // Apply rotation
     ctx.translate(size / 2, size / 2);
     ctx.rotate(params.rotation);
     ctx.translate(-size / 2, -size / 2);
-    
+
     switch (params.type) {
       case 'stripes':
         this.drawStripes(ctx, size, params, rng);
@@ -44,24 +44,26 @@ export class PatternGenerator {
         this.drawOrganic(ctx, size, params, rng);
         break;
     }
-    
-    return new CanvasTexture(canvas);
+
+    const texture = new CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = RepeatWrapping;
+    return texture;
   }
 
   private drawStripes(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
-    const stripeWidth = 50 * params.scale;
-    for (let x = 0; x < size; x += stripeWidth * 2) {
+    const stripeWidth = Math.max(1, 50 * params.scale);
+    for (let x = -size; x < size * 2; x += stripeWidth * 2) {
       ctx.fillStyle = `#${params.color1.getHexString()}`;
-      ctx.fillRect(x, 0, stripeWidth, size);
+      ctx.fillRect(x, -size, stripeWidth, size * 4);
       ctx.fillStyle = `#${params.color2.getHexString()}`;
-      ctx.fillRect(x + stripeWidth, 0, stripeWidth, size);
+      ctx.fillRect(x + stripeWidth, -size, stripeWidth, size * 4);
     }
   }
 
   private drawCheckers(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
-    const checkerSize = 60 * params.scale;
-    for (let y = 0; y < size; y += checkerSize) {
-      for (let x = 0; x < size; x += checkerSize) {
+    const checkerSize = Math.max(1, 60 * params.scale);
+    for (let y = -size; y < size * 2; y += checkerSize) {
+      for (let x = -size; x < size * 2; x += checkerSize) {
         const isEven = (Math.floor(x / checkerSize) + Math.floor(y / checkerSize)) % 2 === 0;
         ctx.fillStyle = `#${isEven ? params.color1.getHexString() : params.color2.getHexString()}`;
         ctx.fillRect(x, y, checkerSize, checkerSize);
@@ -71,16 +73,16 @@ export class PatternGenerator {
 
   private drawDots(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     ctx.fillStyle = `#${params.color1.getHexString()}`;
-    ctx.fillRect(0, 0, size, size);
-    
-    const dotSpacing = 80 * params.scale;
+    ctx.fillRect(-size, -size, size * 4, size * 4);
+
+    const dotSpacing = Math.max(4, 80 * params.scale);
     const dotRadius = dotSpacing * 0.3;
-    
-    for (let y = 0; y < size; y += dotSpacing) {
-      for (let x = 0; x < size; x += dotSpacing) {
+
+    for (let y = -size; y < size * 2; y += dotSpacing) {
+      for (let x = -size; x < size * 2; x += dotSpacing) {
         const offsetX = (rng.nextFloat() - 0.5) * params.randomness * dotSpacing;
         const offsetY = (rng.nextFloat() - 0.5) * params.randomness * dotSpacing;
-        
+
         ctx.fillStyle = `#${params.color2.getHexString()}`;
         ctx.beginPath();
         ctx.arc(x + offsetX, y + offsetY, dotRadius, 0, Math.PI * 2);
@@ -91,23 +93,33 @@ export class PatternGenerator {
 
   private drawGeometric(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     ctx.fillStyle = `#${params.color1.getHexString()}`;
-    ctx.fillRect(0, 0, size, size);
-    
-    const shapes = 20;
+    ctx.fillRect(-size, -size, size * 4, size * 4);
+
+    const shapes = Math.max(4, Math.floor(20 * params.scale));
     const shapeSize = size / shapes;
-    
-    for (let row = 0; row < shapes; row++) {
-      for (let col = 0; col < shapes; col++) {
-        const x = col * shapeSize;
-        const y = row * shapeSize;
-        
+
+    for (let row = 0; row < shapes * 2; row++) {
+      for (let col = 0; col < shapes * 2; col++) {
+        const x = col * shapeSize - size;
+        const y = row * shapeSize - size;
+
         ctx.fillStyle = `#${(row + col) % 2 === 0 ? params.color1.getHexString() : params.color2.getHexString()}`;
-        
+
         if ((row + col) % 3 === 0) {
+          // Squares
           ctx.fillRect(x + 5, y + 5, shapeSize - 10, shapeSize - 10);
-        } else {
+        } else if ((row + col) % 3 === 1) {
+          // Circles
           ctx.beginPath();
           ctx.arc(x + shapeSize / 2, y + shapeSize / 2, shapeSize * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Triangles
+          ctx.beginPath();
+          ctx.moveTo(x + shapeSize / 2, y + 5);
+          ctx.lineTo(x + shapeSize - 5, y + shapeSize - 5);
+          ctx.lineTo(x + 5, y + shapeSize - 5);
+          ctx.closePath();
           ctx.fill();
         }
       }
@@ -116,15 +128,15 @@ export class PatternGenerator {
 
   private drawOrganic(ctx: CanvasRenderingContext2D, size: number, params: PatternParams, rng: SeededRandom): void {
     ctx.fillStyle = `#${params.color1.getHexString()}`;
-    ctx.fillRect(0, 0, size, size);
-    
-    const blobs = 30;
+    ctx.fillRect(-size, -size, size * 4, size * 4);
+
+    const blobs = Math.max(5, 30 * params.scale);
     for (let i = 0; i < blobs; i++) {
-      const x = rng.nextFloat() * size;
-      const y = rng.nextFloat() * size;
-      const rx = 50 * params.scale * (0.5 + rng.nextFloat());
-      const ry = 50 * params.scale * (0.5 + rng.nextFloat());
-      
+      const x = rng.nextFloat() * size * 2 - size / 2;
+      const y = rng.nextFloat() * size * 2 - size / 2;
+      const rx = Math.max(4, 50 * params.scale * (0.5 + rng.nextFloat()));
+      const ry = Math.max(4, 50 * params.scale * (0.5 + rng.nextFloat()));
+
       ctx.fillStyle = `#${params.color2.getHexString()}`;
       ctx.beginPath();
       ctx.ellipse(x, y, rx, ry, rng.nextFloat() * Math.PI, 0, Math.PI * 2);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { NoiseUtils } from '../utils/NoiseUtils';
+import { SeededRandom } from '../../../../core/util/math/index';
 
 /**
  * Tree species configuration with biological parameters
@@ -127,17 +128,21 @@ export interface TreeInstance {
 }
 
 /**
- * Procedural tree generator with multiple species support
+ * Procedural tree generator with multiple species support.
+ * All geometries wrapped in Mesh(geometry, MeshStandardMaterial).
+ * Uses SeededRandom throughout.
  */
 export class TreeGenerator {
   private noiseUtils: NoiseUtils;
-  private materialCache: Map<string, THREE.Material>;
+  private materialCache: Map<string, THREE.MeshStandardMaterial>;
   private geometryCache: Map<string, THREE.BufferGeometry>;
+  private rng: SeededRandom;
 
-  constructor() {
+  constructor(seed: number = 12345) {
     this.noiseUtils = new NoiseUtils();
     this.materialCache = new Map();
     this.geometryCache = new Map();
+    this.rng = new SeededRandom(seed);
   }
 
   /**
@@ -152,115 +157,122 @@ export class TreeGenerator {
       includeColliders?: boolean;
     } = {}
   ): THREE.Group {
-    const config = typeof species === 'string' 
+    const config = typeof species === 'string'
       ? TreeSpeciesPresets[species] || TreeSpeciesPresets.oak
       : species;
-    
+
     const season = options.season || 'summer';
     const lod = options.lod || 0;
-    
+    const treeRng = new SeededRandom(seed);
+
     const treeGroup = new THREE.Group();
-    
-    // Generate trunk
-    const trunkMesh = this.generateTrunk(config, seed, lod);
-    treeGroup.add(trunkMesh);
-    
+
+    // Generate trunk — track actual height for foliage positioning
+    const trunkResult = this.generateTrunk(config, seed, lod, treeRng);
+    const actualTrunkHeight = trunkResult.height;
+    treeGroup.add(trunkResult.mesh);
+
     // Generate branches
-    const branchesMesh = this.generateBranches(config, seed, lod);
+    const branchesMesh = this.generateBranches(config, seed, lod, treeRng, actualTrunkHeight);
     treeGroup.add(branchesMesh);
-    
-    // Generate foliage/crown
-    const foliageMesh = this.generateFoliage(config, season, seed, lod);
+
+    // Generate foliage/crown — positioned at actual trunk top
+    const foliageMesh = this.generateFoliage(config, season, seed, lod, actualTrunkHeight);
     treeGroup.add(foliageMesh);
-    
+
     // Add snow cap if applicable
     if (config.hasSnowCap && season === 'winter') {
-      const snowMesh = this.generateSnowCap(config, seed, lod);
+      const snowMesh = this.generateSnowCap(config, seed, lod, actualTrunkHeight);
       treeGroup.add(snowMesh);
     }
-    
+
     return treeGroup;
   }
 
   /**
-   * Generate tree trunk with procedural texture
+   * Generate tree trunk with procedural texture.
+   * Returns the mesh and the actual height generated.
    */
   private generateTrunk(
     config: TreeSpeciesConfig,
     seed: number,
-    lod: number
-  ): THREE.Mesh {
-    const height = this.randomInRange(config.trunkHeight.min, config.trunkHeight.max, seed);
-    const radius = this.randomInRange(config.trunkRadius.min, config.trunkRadius.max, seed);
-    
+    lod: number,
+    rng: SeededRandom
+  ): { mesh: THREE.Mesh; height: number } {
+    const height = rng.uniform(config.trunkHeight.min, config.trunkHeight.max);
+    const radius = rng.uniform(config.trunkRadius.min, config.trunkRadius.max);
+
     const segments = Math.max(6, 12 - lod * 2);
-    const geometry = new THREE.CylinderGeometry(radius, radius * 1.2, height, segments);
-    
+    const geometry = new THREE.CylinderGeometry(radius * 0.8, radius * 1.2, height, segments);
+
     // Apply noise displacement for natural trunk shape
     this.applyNoiseDisplacement(geometry, seed, 0.05, 0.3);
-    
+
     const material = this.getBarkMaterial(config.barkColor, config.name, lod);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.y = height / 2;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    
-    return mesh;
+
+    return { mesh, height };
   }
 
   /**
-   * Generate branch system
+   * Generate branch system using SeededRandom
    */
   private generateBranches(
     config: TreeSpeciesConfig,
     seed: number,
-    lod: number
+    lod: number,
+    rng: SeededRandom,
+    trunkHeight: number
   ): THREE.Group {
     const branchesGroup = new THREE.Group();
-    const branchCount = Math.floor(
-      this.randomInRange(config.branchCount.min, config.branchCount.max, seed)
-    );
-    
+    const branchCount = rng.nextInt(config.branchCount.min, config.branchCount.max);
+
     for (let i = 0; i < branchCount; i++) {
-      const branchSeed = seed + i;
-      const angle = this.randomInRange(config.branchAngle.min, config.branchAngle.max, branchSeed);
-      const length = this.randomInRange(1, 3, branchSeed + 1);
-      const radius = this.randomInRange(0.05, 0.15, branchSeed + 2);
-      
-      const branchGeometry = new THREE.CylinderGeometry(radius * 0.8, radius, length, Math.max(4, 8 - lod));
+      const branchSeed = seed + i * 100;
+      const branchRng = new SeededRandom(branchSeed);
+      const angle = rng.uniform(config.branchAngle.min, config.branchAngle.max);
+      const length = rng.uniform(1, 3);
+      const radius = rng.uniform(0.05, 0.15);
+
+      const branchGeometry = new THREE.CylinderGeometry(radius * 0.6, radius, length, Math.max(4, 8 - lod));
       const branchMaterial = this.getBarkMaterial(config.barkColor, `${config.name}_branch`, lod);
       const branchMesh = new THREE.Mesh(branchGeometry, branchMaterial);
-      
-      // Position and rotate branch
-      const startHeight = this.randomInRange(2, config.trunkHeight.max * 0.7, branchSeed + 3);
-      const rotationZ = angle * (Math.random() > 0.5 ? 1 : -1);
-      const rotationY = (branchSeed / 100) % (Math.PI * 2);
-      
+
+      // Position and rotate branch using seeded random
+      const startHeight = rng.uniform(trunkHeight * 0.3, trunkHeight * 0.85);
+      const rotationZ = angle * (branchRng.boolean(0.5) ? 1 : -1);
+      const rotationY = branchRng.uniform(0, Math.PI * 2);
+
       branchMesh.position.set(0, startHeight, 0);
       branchMesh.rotation.z = rotationZ;
       branchMesh.rotation.y = rotationY;
       branchMesh.castShadow = true;
-      
+
       branchesGroup.add(branchMesh);
     }
-    
+
     return branchesGroup;
   }
 
   /**
-   * Generate foliage/crown
+   * Generate foliage/crown positioned at actual trunk top
    */
   private generateFoliage(
     config: TreeSpeciesConfig,
     season: string,
     seed: number,
-    lod: number
+    lod: number,
+    trunkHeight: number
   ): THREE.Mesh {
-    const crownRadius = this.randomInRange(config.crownRadius.min, config.crownRadius.max, seed);
-    const crownHeight = this.randomInRange(config.crownHeight.min, config.crownHeight.max, seed + 1);
-    
+    const foliageRng = new SeededRandom(seed + 5000);
+    const crownRadius = foliageRng.uniform(config.crownRadius.min, config.crownRadius.max);
+    const crownHeight = foliageRng.uniform(config.crownHeight.min, config.crownHeight.max);
+
     let geometry: THREE.BufferGeometry;
-    
+
     switch (config.shapeType) {
       case 'cone':
         geometry = new THREE.ConeGeometry(crownRadius, crownHeight, Math.max(6, 12 - lod));
@@ -277,15 +289,16 @@ export class TreeGenerator {
       default: // irregular
         geometry = this.createIrregularCrown(crownRadius, crownHeight, seed, lod);
     }
-    
+
     const leafColor = this.getSeasonalColor(config, season);
     const material = this.getLeafMaterial(leafColor, config.name, lod);
-    
+
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.y = config.trunkHeight.max * 0.8 + crownHeight / 2;
+    // Position foliage at the top of the actual trunk
+    mesh.position.y = trunkHeight;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    
+
     return mesh;
   }
 
@@ -300,11 +313,14 @@ export class TreeGenerator {
   ): THREE.BufferGeometry {
     const geometry = new THREE.SphereGeometry(baseRadius, Math.max(8, 16 - lod * 2), Math.max(6, 12 - lod));
     this.applyNoiseDisplacement(geometry, seed, 0.1, 0.4);
+    // Scale to match height
+    geometry.scale(1, height / (baseRadius * 2), 1);
     return geometry;
   }
 
   /**
-   * Create palm fronds
+   * Create palm fronds — merge ALL fronds into a single geometry.
+   * Each frond is a wider blade shape for visibility.
    */
   private createPalmFronds(
     radius: number,
@@ -312,19 +328,95 @@ export class TreeGenerator {
     seed: number,
     lod: number
   ): THREE.BufferGeometry {
-    const frondCount = 8;
+    const frondCount = 10;
+    const rng = new SeededRandom(seed);
     const geometries: THREE.BufferGeometry[] = [];
-    
+
     for (let i = 0; i < frondCount; i++) {
-      const frondGeometry = new THREE.BoxGeometry(radius, 0.1, 0.3);
-      const rotationY = (i / frondCount) * Math.PI * 2;
-      frondGeometry.rotateY(rotationY);
-      frondGeometry.rotateX(-0.3);
+      const angle = (i / frondCount) * Math.PI * 2 + rng.uniform(-0.1, 0.1);
+
+      // Create frond as a tapered plane (wider and more visible)
+      const frondLength = radius * 1.2;
+      const frondWidth = 0.5 + rng.uniform(0, 0.3);
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0);
+      shape.lineTo(frondWidth / 2, frondLength * 0.2);
+      shape.lineTo(frondWidth * 0.3, frondLength * 0.6);
+      shape.lineTo(0, frondLength);
+      shape.lineTo(-frondWidth * 0.3, frondLength * 0.6);
+      shape.lineTo(-frondWidth / 2, frondLength * 0.2);
+      shape.closePath();
+
+      const frondGeometry = new THREE.ShapeGeometry(shape, 4);
+
+      // Rotate frond to point outward and droop
+      const droopAngle = -0.4 - rng.uniform(0, 0.3);
+      frondGeometry.rotateX(droopAngle);
+      frondGeometry.rotateY(angle);
+
       geometries.push(frondGeometry);
     }
-    
-    // Merge geometries (simplified - in production use BufferGeometryUtils.mergeBufferGeometries)
-    return geometries[0];
+
+    // Merge ALL frond geometries into a single geometry
+    return this.mergeGeometries(geometries);
+  }
+
+  /**
+   * Merge multiple BufferGeometries into one
+   */
+  private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
+    let totalVertices = 0;
+    let totalIndices = 0;
+    for (const geo of geometries) {
+      totalVertices += geo.attributes.position.count;
+      if (geo.index) {
+        totalIndices += geo.index.count;
+      } else {
+        totalIndices += geo.attributes.position.count;
+      }
+    }
+
+    const mergedPositions = new Float32Array(totalVertices * 3);
+    const mergedNormals = new Float32Array(totalVertices * 3);
+    const mergedIndices: number[] = [];
+    let vertexOffset = 0;
+
+    for (const geo of geometries) {
+      const posAttr = geo.attributes.position;
+      const normAttr = geo.attributes.normal;
+
+      for (let i = 0; i < posAttr.count; i++) {
+        mergedPositions[(vertexOffset + i) * 3] = posAttr.getX(i);
+        mergedPositions[(vertexOffset + i) * 3 + 1] = posAttr.getY(i);
+        mergedPositions[(vertexOffset + i) * 3 + 2] = posAttr.getZ(i);
+
+        if (normAttr) {
+          mergedNormals[(vertexOffset + i) * 3] = normAttr.getX(i);
+          mergedNormals[(vertexOffset + i) * 3 + 1] = normAttr.getY(i);
+          mergedNormals[(vertexOffset + i) * 3 + 2] = normAttr.getZ(i);
+        }
+      }
+
+      if (geo.index) {
+        for (let i = 0; i < geo.index.count; i++) {
+          mergedIndices.push(geo.index.getX(i) + vertexOffset);
+        }
+      } else {
+        for (let i = 0; i < posAttr.count; i++) {
+          mergedIndices.push(vertexOffset + i);
+        }
+      }
+
+      vertexOffset += posAttr.count;
+    }
+
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
+    merged.setIndex(mergedIndices);
+    merged.computeVertexNormals();
+
+    return merged;
   }
 
   /**
@@ -333,30 +425,31 @@ export class TreeGenerator {
   private generateSnowCap(
     config: TreeSpeciesConfig,
     seed: number,
-    lod: number
+    lod: number,
+    trunkHeight: number
   ): THREE.Mesh {
     const crownRadius = config.crownRadius.max * 0.6;
     const geometry = new THREE.SphereGeometry(crownRadius, Math.max(6, 12 - lod), Math.max(4, 8 - lod));
-    
+
     const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 0.9,
       metalness: 0.0,
     });
-    
+
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.y = config.trunkHeight.max * 0.8 + config.crownHeight.max * 0.3;
+    mesh.position.y = trunkHeight + config.crownHeight.max * 0.3;
     mesh.scale.y = 0.3;
-    
+
     return mesh;
   }
 
   /**
    * Get cached bark material
    */
-  private getBarkMaterial(color: THREE.Color, key: string, lod: number): THREE.Material {
+  private getBarkMaterial(color: THREE.Color, key: string, lod: number): THREE.MeshStandardMaterial {
     const cacheKey = `bark_${key}_${lod}`;
-    
+
     if (!this.materialCache.has(cacheKey)) {
       const material = new THREE.MeshStandardMaterial({
         color: color,
@@ -365,16 +458,16 @@ export class TreeGenerator {
       });
       this.materialCache.set(cacheKey, material);
     }
-    
+
     return this.materialCache.get(cacheKey)!;
   }
 
   /**
    * Get cached leaf material
    */
-  private getLeafMaterial(color: THREE.Color, key: string, lod: number): THREE.Material {
+  private getLeafMaterial(color: THREE.Color, key: string, lod: number): THREE.MeshStandardMaterial {
     const cacheKey = `leaf_${key}_${lod}`;
-    
+
     if (!this.materialCache.has(cacheKey)) {
       const material = new THREE.MeshStandardMaterial({
         color: color,
@@ -384,7 +477,7 @@ export class TreeGenerator {
       });
       this.materialCache.set(cacheKey, material);
     }
-    
+
     return this.materialCache.get(cacheKey)!;
   }
 
@@ -409,27 +502,27 @@ export class TreeGenerator {
   ): void {
     const positionAttribute = geometry.attributes.position;
     const vertex = new THREE.Vector3();
-    
+
     for (let i = 0; i < positionAttribute.count; i++) {
       vertex.fromBufferAttribute(positionAttribute, i);
-      
+
       const noiseValue = this.noiseUtils.perlin3D(
         vertex.x * frequency + seed,
         vertex.y * frequency,
         vertex.z * frequency
       );
-      
+
       const displacement = 1 + noiseValue * amplitude;
       vertex.multiplyScalar(displacement);
-      
+
       positionAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
-    
+
     geometry.computeVertexNormals();
   }
 
   /**
-   * Generate forest with multiple trees
+   * Generate forest with multiple trees using SeededRandom
    */
   generateForest(
     count: number,
@@ -444,48 +537,41 @@ export class TreeGenerator {
   ): THREE.Group {
     const forestGroup = new THREE.Group();
     const season = options.season || 'summer';
-    
+    const forestRng = new SeededRandom(seed);
+
     for (let i = 0; i < count; i++) {
       const treeSeed = seed + i;
-      const species = speciesList[Math.floor(Math.random() * speciesList.length)];
-      
+      const species = forestRng.choice(speciesList);
+
       // Check density map if provided
       if (options.densityMap) {
-        const x = (Math.random() - 0.5) * areaSize;
-        const z = (Math.random() - 0.5) * areaSize;
-        const densityIndex = Math.floor(((x / areaSize + 0.5) * 100)) * 100 + 
+        const x = (forestRng.uniform(0, 1) - 0.5) * areaSize;
+        const z = (forestRng.uniform(0, 1) - 0.5) * areaSize;
+        const densityIndex = Math.floor(((x / areaSize + 0.5) * 100)) * 100 +
                             Math.floor(((z / areaSize + 0.5) * 100));
-        
+
         if (densityIndex >= 0 && densityIndex < options.densityMap.length) {
-          if (Math.random() > options.densityMap[densityIndex]) {
+          if (forestRng.next() > options.densityMap[densityIndex]) {
             continue; // Skip based on density
           }
         }
       }
-      
+
       const tree = this.generateTree(species, treeSeed, { season });
-      
-      // Position tree
-      const x = (Math.random() - 0.5) * areaSize;
-      const z = (Math.random() - 0.5) * areaSize;
+
+      // Position tree using seeded random
+      const x = (forestRng.uniform(0, 1) - 0.5) * areaSize;
+      const z = (forestRng.uniform(0, 1) - 0.5) * areaSize;
       tree.position.set(x, 0, z);
-      tree.rotation.y = Math.random() * Math.PI * 2;
-      
+      tree.rotation.y = forestRng.uniform(0, Math.PI * 2);
+
       // Add slight scale variation
-      const scaleVariation = 0.8 + Math.random() * 0.4;
+      const scaleVariation = 0.8 + forestRng.uniform(0, 0.4);
       tree.scale.setScalar(scaleVariation);
-      
+
       forestGroup.add(tree);
     }
-    
-    return forestGroup;
-  }
 
-  /**
-   * Utility: random float in range
-   */
-  private randomInRange(min: number, max: number, seed: number): number {
-    const normalized = (Math.sin(seed * 12.9898) + 1) / 2;
-    return min + normalized * (max - min);
+    return forestGroup;
   }
 }

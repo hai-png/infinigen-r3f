@@ -1,7 +1,8 @@
 /**
  * UnderwaterGenerator - Procedural underwater creature generation
+ * Generates jellyfish, octopus, crab, starfish, whale, dolphin shapes
  */
-import { Group, Mesh, MeshStandardMaterial } from 'three';
+import { Group, Mesh, Material, MeshStandardMaterial } from 'three';
 import { CreatureBase, CreatureParams, CreatureType } from './CreatureBase';
 
 export interface MarineParameters extends CreatureParams {
@@ -37,19 +38,37 @@ export class UnderwaterGenerator extends CreatureBase {
 
     const marine = new Group();
     marine.name = `Marine_${species}`;
-    marine.add(this.generateBody(parameters));
-    if (parameters.hasShell) {
-      marine.add(this.generateShell(parameters));
+
+    switch (species) {
+      case 'jellyfish':
+        this.generateJellyfish(marine, parameters);
+        break;
+      case 'octopus':
+        this.generateOctopus(marine, parameters);
+        break;
+      case 'crab':
+        this.generateCrab(marine, parameters);
+        break;
+      case 'starfish':
+        this.generateStarfish(marine, parameters);
+        break;
+      case 'whale':
+      case 'dolphin':
+        this.generateCetacean(marine, parameters, species);
+        break;
     }
+
     return marine;
   }
 
   generateBodyCore(): Mesh {
-    return this.generateBody(this.getDefaultConfig());
+    const params = this.getDefaultConfig();
+    const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
+    return new Mesh(this.createEllipsoidGeometry(0.15, 0.1, 0.2), mat);
   }
 
   generateHead(): Mesh {
-    return this.generateBody(this.getDefaultConfig());
+    return this.generateBodyCore();
   }
 
   generateLimbs(): Mesh[] {
@@ -60,64 +79,327 @@ export class UnderwaterGenerator extends CreatureBase {
     return [];
   }
 
-  applySkin(materials: any): any[] {
+  applySkin(materials: Material[]): Material[] {
     return materials;
   }
 
   private applySpeciesDefaults(species: MarineSpecies, params: MarineParameters): void {
     switch (species) {
       case 'jellyfish':
-        params.size = 0.3;
-        params.hasShell = false;
-        params.swimMode = 'drift';
-        params.primaryColor = '#FF69B4';
-        params.secondaryColor = '#FFFFFF';
-        break;
+        params.size = 0.3; params.hasShell = false; params.swimMode = 'drift';
+        params.primaryColor = '#FF69B4'; params.secondaryColor = '#FFFFFF'; break;
       case 'crab':
-        params.size = 0.2;
-        params.hasShell = true;
-        params.swimMode = 'propulsion';
-        params.primaryColor = '#FF6347';
-        break;
+        params.size = 0.2; params.hasShell = true; params.swimMode = 'propulsion';
+        params.primaryColor = '#FF6347'; break;
       case 'starfish':
-        params.size = 0.15;
-        params.hasShell = false;
-        params.swimMode = 'drift';
-        params.primaryColor = '#FF8C00';
-        break;
+        params.size = 0.15; params.hasShell = false; params.swimMode = 'drift';
+        params.primaryColor = '#FF8C00'; break;
       case 'octopus':
-        params.size = 0.4;
-        params.hasShell = false;
-        params.swimMode = 'jet';
-        params.primaryColor = '#8B4513';
-        break;
+        params.size = 0.4; params.hasShell = false; params.swimMode = 'jet';
+        params.primaryColor = '#8B4513'; break;
       case 'whale':
-        params.size = 5.0;
-        params.hasShell = false;
-        params.swimMode = 'propulsion';
-        params.depthRange = 'mid';
-        params.primaryColor = '#2F2F2F';
-        params.secondaryColor = '#FFFFFF';
-        break;
+        params.size = 5.0; params.hasShell = false; params.swimMode = 'propulsion';
+        params.depthRange = 'mid'; params.primaryColor = '#2F2F2F'; params.secondaryColor = '#FFFFFF'; break;
       case 'dolphin':
-        params.size = 1.5;
-        params.hasShell = false;
-        params.swimMode = 'propulsion';
-        params.depthRange = 'shallow';
-        params.primaryColor = '#708090';
-        break;
+        params.size = 1.5; params.hasShell = false; params.swimMode = 'propulsion';
+        params.depthRange = 'shallow'; params.primaryColor = '#708090'; break;
     }
   }
 
-  private generateBody(params: MarineParameters): Mesh {
-    const geometry = this.createEllipsoidGeometry(params.size * 0.3, params.size * 0.2, params.size * 0.5);
-    const material = new MeshStandardMaterial({ color: params.primaryColor });
-    return new Mesh(geometry, material);
+  private generateJellyfish(group: Group, params: MarineParameters): void {
+    const s = params.size;
+    const bellMat = new MeshStandardMaterial({
+      color: params.primaryColor,
+      transparent: true,
+      opacity: 0.7,
+      roughness: 0.3,
+      side: 2,
+    });
+
+    // Bell - hemisphere dome
+    const bellGeo = this.createShellGeometry(s * 0.2, s * 0.15);
+    const bell = new Mesh(bellGeo, bellMat);
+    bell.name = 'bell';
+    group.add(bell);
+
+    // Inner bell
+    const innerMat = new MeshStandardMaterial({
+      color: params.secondaryColor,
+      transparent: true,
+      opacity: 0.4,
+      roughness: 0.2,
+      side: 2,
+    });
+    const innerGeo = this.createShellGeometry(s * 0.15, s * 0.1);
+    const inner = new Mesh(innerGeo, innerMat);
+    inner.position.y = -s * 0.01;
+    group.add(inner);
+
+    // Tentacles - 8 dangling tentacles
+    const tentacleMat = new MeshStandardMaterial({
+      color: params.primaryColor,
+      transparent: true,
+      opacity: 0.6,
+      roughness: 0.5,
+    });
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const radius = s * 0.12;
+      const tentacleGroup = new Group();
+      tentacleGroup.name = `tentacle_${i}`;
+
+      // 3 segments per tentacle
+      for (let j = 0; j < 3; j++) {
+        const segLen = s * 0.15;
+        const segRadius = s * 0.02 * (1 - j * 0.25);
+        const segGeo = this.createCylinderGeometry(segRadius, segRadius * 0.7, segLen);
+        const seg = new Mesh(segGeo, tentacleMat);
+        seg.position.y = -s * 0.1 - j * segLen;
+        seg.rotation.x = Math.sin(angle) * 0.1;
+        seg.rotation.z = Math.cos(angle) * 0.1;
+        tentacleGroup.add(seg);
+      }
+
+      tentacleGroup.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      group.add(tentacleGroup);
+    }
+
+    // Oral arms (4 shorter, frilled)
+    const armMat = new MeshStandardMaterial({
+      color: 0xffccdd,
+      transparent: true,
+      opacity: 0.65,
+      roughness: 0.4,
+    });
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const armGeo = this.createCylinderGeometry(s * 0.03, s * 0.015, s * 0.2);
+      const arm = new Mesh(armGeo, armMat);
+      arm.position.set(Math.cos(angle) * s * 0.06, -s * 0.15, Math.sin(angle) * s * 0.06);
+      arm.rotation.x = Math.cos(angle) * 0.15;
+      arm.rotation.z = Math.sin(angle) * 0.15;
+      group.add(arm);
+    }
   }
 
-  private generateShell(params: MarineParameters): Mesh {
-    const geometry = this.createSphereGeometry(params.size * 0.2);
-    const material = new MeshStandardMaterial({ color: params.secondaryColor });
-    return new Mesh(geometry, material);
+  private generateOctopus(group: Group, params: MarineParameters): void {
+    const s = params.size;
+    const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.6 });
+
+    // Mantle (head)
+    const mantleGeo = this.createEllipsoidGeometry(s * 0.15, s * 0.18, s * 0.12);
+    const mantle = new Mesh(mantleGeo, mat);
+    mantle.position.y = s * 0.1;
+    mantle.name = 'mantle';
+    group.add(mantle);
+
+    // Eyes
+    const eyeMat = new MeshStandardMaterial({ color: 0x111111 });
+    const eyeGeo = this.createSphereGeometry(s * 0.04);
+    const leftEye = new Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-s * 0.1, s * 0.05, s * 0.08);
+    group.add(leftEye);
+    const rightEye = new Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(s * 0.1, s * 0.05, s * 0.08);
+    group.add(rightEye);
+
+    // 8 tentacles
+    const tentacleMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.7 });
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const radius = s * 0.1;
+      const tentacleGroup = new Group();
+      tentacleGroup.name = `tentacle_${i}`;
+
+      // 4 segments per tentacle with suction cups
+      for (let j = 0; j < 4; j++) {
+        const segLen = s * 0.12;
+        const segRadius = s * 0.035 * (1 - j * 0.2);
+        const segGeo = this.createCylinderGeometry(segRadius, segRadius * 0.75, segLen);
+        const seg = new Mesh(segGeo, tentacleMat);
+        seg.position.y = -j * segLen;
+        // Curl the tentacle
+        seg.rotation.x = 0.15 + j * 0.1;
+        tentacleGroup.add(seg);
+
+        // Suction cup
+        const cupGeo = this.createCylinderGeometry(segRadius * 0.5, segRadius * 0.6, s * 0.005);
+        const cupMat = new MeshStandardMaterial({ color: 0xddbb99, roughness: 0.3 });
+        const cup = new Mesh(cupGeo, cupMat);
+        cup.position.set(0, -j * segLen, segRadius * 0.5);
+        tentacleGroup.add(cup);
+      }
+
+      tentacleGroup.position.set(Math.cos(angle) * radius, -s * 0.05, Math.sin(angle) * radius);
+      group.add(tentacleGroup);
+    }
+  }
+
+  private generateCrab(group: Group, params: MarineParameters): void {
+    const s = params.size;
+    const shellMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.7 });
+    const legMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.8 });
+
+    // Body shell - flattened dome
+    const bodyGeo = this.createEllipsoidGeometry(s * 0.2, s * 0.06, s * 0.18);
+    const body = new Mesh(bodyGeo, shellMat);
+    body.name = 'body';
+    group.add(body);
+
+    // Top shell dome
+    const shellGeo = this.createShellGeometry(s * 0.18, s * 0.06);
+    const shell = new Mesh(shellGeo, shellMat);
+    shell.position.y = s * 0.02;
+    shell.name = 'shell';
+    group.add(shell);
+
+    // Eyes on stalks
+    const stalkMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
+    const eyeMat = new MeshStandardMaterial({ color: 0x111111 });
+    for (const side of [-1, 1]) {
+      const stalkGeo = this.createCylinderGeometry(s * 0.01, s * 0.01, s * 0.08);
+      const stalk = new Mesh(stalkGeo, stalkMat);
+      stalk.position.set(side * s * 0.08, s * 0.08, s * 0.12);
+      group.add(stalk);
+      const eyeGeo = this.createSphereGeometry(s * 0.02);
+      const eye = new Mesh(eyeGeo, eyeMat);
+      eye.position.set(side * s * 0.08, s * 0.12, s * 0.12);
+      group.add(eye);
+    }
+
+    // Claws
+    for (const side of [-1, 1]) {
+      const clawGroup = new Group();
+      clawGroup.name = side === -1 ? 'leftClaw' : 'rightClaw';
+
+      // Arm
+      const armGeo = this.createCylinderGeometry(s * 0.03, s * 0.025, s * 0.15);
+      const arm = new Mesh(armGeo, legMat);
+      arm.rotation.z = side * -0.8;
+      arm.position.set(side * s * 0.25, s * 0.02, s * 0.1);
+      clawGroup.add(arm);
+
+      // Pincer - two flat pieces
+      const pincerMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
+      const upperGeo = this.createBoxGeometry(s * 0.06, s * 0.015, s * 0.08);
+      const upper = new Mesh(upperGeo, pincerMat);
+      upper.position.set(side * s * 0.35, s * 0.04, s * 0.1);
+      clawGroup.add(upper);
+      const lower = new Mesh(upperGeo, pincerMat);
+      lower.position.set(side * s * 0.35, s * 0.005, s * 0.1);
+      clawGroup.add(lower);
+
+      group.add(clawGroup);
+    }
+
+    // 8 walking legs (4 per side)
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const z = s * 0.1 - i * s * 0.07;
+        const legGroup = new Group();
+        legGroup.name = `leg_${side === -1 ? 'L' : 'R'}${i}`;
+
+        const upperGeo = this.createCylinderGeometry(s * 0.012, s * 0.01, s * 0.1);
+        const upper = new Mesh(upperGeo, legMat);
+        upper.rotation.z = side * -0.6;
+        upper.position.set(side * s * 0.15, -s * 0.02, z);
+        legGroup.add(upper);
+
+        const lowerGeo = this.createCylinderGeometry(s * 0.01, s * 0.005, s * 0.1);
+        const lower = new Mesh(lowerGeo, legMat);
+        lower.position.set(side * s * 0.22, -s * 0.08, z);
+        legGroup.add(lower);
+
+        group.add(legGroup);
+      }
+    }
+  }
+
+  private generateStarfish(group: Group, params: MarineParameters): void {
+    const s = params.size;
+    const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.8 });
+
+    // Central disc
+    const discGeo = this.createSphereGeometry(s * 0.06);
+    discGeo.scale(1, 0.4, 1);
+    const disc = new Mesh(discGeo, mat);
+    disc.name = 'disc';
+    group.add(disc);
+
+    // 5 arms
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const armGeo = this.createCylinderGeometry(s * 0.015, s * 0.04, s * 0.18);
+      armGeo.scale(1, 0.4, 1);
+      const arm = new Mesh(armGeo, mat);
+      arm.position.set(Math.cos(angle) * s * 0.1, 0, Math.sin(angle) * s * 0.1);
+      arm.rotation.y = -angle;
+      arm.name = `arm_${i}`;
+      group.add(arm);
+    }
+  }
+
+  private generateCetacean(group: Group, params: MarineParameters, species: string): void {
+    const s = params.size;
+    const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.4 });
+    const bellyMat = new MeshStandardMaterial({ color: params.secondaryColor, roughness: 0.4 });
+
+    // Torpedo body
+    const bodyGeo = this.createEllipsoidGeometry(s * 0.2, s * 0.12, s * 0.4);
+    const body = new Mesh(bodyGeo, mat);
+    body.name = 'body';
+    group.add(body);
+
+    // Belly (lighter underside)
+    const bellyGeo = this.createEllipsoidGeometry(s * 0.18, s * 0.1, s * 0.35);
+    const belly = new Mesh(bellyGeo, bellyMat);
+    belly.position.y = -s * 0.03;
+    group.add(belly);
+
+    // Dorsal fin
+    const dorsalGeo = this.createFinGeometry(s * 0.06, s * 0.1, s * 0.01);
+    const dorsal = new Mesh(dorsalGeo, mat);
+    dorsal.position.set(0, s * 0.12, -s * 0.05);
+    dorsal.name = 'dorsalFin';
+    group.add(dorsal);
+
+    // Tail flukes
+    for (const side of [-1, 1]) {
+      const flukeGeo = this.createFinGeometry(s * 0.15, s * 0.08, s * 0.01);
+      const fluke = new Mesh(flukeGeo, mat);
+      fluke.position.set(0, side * s * 0.04, -s * 0.4);
+      fluke.rotation.x = side * 0.3;
+      fluke.name = side === -1 ? 'leftFluke' : 'rightFluke';
+      group.add(fluke);
+    }
+
+    // Pectoral fins
+    for (const side of [-1, 1]) {
+      const finGeo = this.createFinGeometry(s * 0.08, s * 0.05, s * 0.005);
+      const fin = new Mesh(finGeo, mat);
+      fin.position.set(side * s * 0.18, -s * 0.04, s * 0.1);
+      fin.rotation.z = side * 0.7;
+      fin.name = side === -1 ? 'leftFin' : 'rightFin';
+      group.add(fin);
+    }
+
+    // Eyes
+    const eyeMat = new MeshStandardMaterial({ color: 0x111111 });
+    const eyeGeo = this.createSphereGeometry(s * 0.015);
+    const leftEye = new Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-s * 0.16, s * 0.03, s * 0.3);
+    group.add(leftEye);
+    const rightEye = new Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(s * 0.16, s * 0.03, s * 0.3);
+    group.add(rightEye);
+
+    // Beak/mouth
+    if (species === 'dolphin') {
+      const beakGeo = this.createConeGeometry(s * 0.03, s * 0.12, 8);
+      const beak = new Mesh(beakGeo, mat);
+      beak.rotation.x = -Math.PI / 2;
+      beak.position.set(0, -s * 0.02, s * 0.45);
+      group.add(beak);
+    }
   }
 }

@@ -1,45 +1,31 @@
-import * as THREE from 'three';
 /**
  * StaircaseGenerator - Procedural staircase generation
- * 
- * Generates various staircase types: straight, L-shaped, U-shaped, spiral, curved
- * with configurable treads, risers, stringers, and landing platforms.
- * 
- * @category Architectural
- * @subcategory Vertical Circulation
+ * FIX: All elements are Mesh objects with proper MeshStandardMaterial
+ * Added: railing with balusters
  */
-
-import { Group, Mesh, BoxGeometry, CylinderGeometry, ExtrudeGeometry, Vector3, Color } from 'three';
+import * as THREE from 'three';
+import { Group, Mesh, BoxGeometry, CylinderGeometry, ExtrudeGeometry, MeshStandardMaterial } from 'three';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
-import { SeededRandom } from '../../../core/util/math/index';
 
 export interface StaircaseParams extends BaseGeneratorConfig {
-  // Geometry
   totalHeight: number;
   totalRun: number;
   width: number;
-  
-  // Configuration
   numSteps: number;
   stairType: 'straight' | 'L' | 'U' | 'spiral' | 'curved';
   hasLanding: boolean;
-  landingPosition?: number; // 0-1 normalized position
-  
-  // Components
+  landingPosition?: number;
   hasStringers: boolean;
   stringerType: 'closed' | 'open' | 'mono';
   hasRisers: boolean;
   treadThickness: number;
   riserThickness: number;
-  
-  // Style
   style: 'modern' | 'traditional' | 'industrial' | 'rustic' | 'minimalist';
-  
-  // Materials
   treadMaterial: string;
   riserMaterial: string;
   stringerMaterial: string;
-  railingAttachment: boolean;
+  hasRailing: boolean;
+  railingHeight: number;
 }
 
 const DEFAULT_PARAMS: StaircaseParams = {
@@ -58,7 +44,8 @@ const DEFAULT_PARAMS: StaircaseParams = {
   treadMaterial: 'wood',
   riserMaterial: 'wood',
   stringerMaterial: 'wood',
-  railingAttachment: true,
+  hasRailing: true,
+  railingHeight: 0.9,
 };
 
 export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
@@ -73,68 +60,70 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
   generate(params: Partial<StaircaseParams> = {}): Group {
     const finalParams = this.validateAndMerge(params);
     const group = new Group();
-    
+
     const {
-      totalHeight,
-      totalRun,
-      width,
-      numSteps,
-      stairType,
-      hasLanding,
-      landingPosition = 0.5,
-      hasStringers,
-      stringerType,
-      hasRisers,
-      treadThickness,
-      riserThickness,
-      style,
-      treadMaterial,
-      riserMaterial,
-      stringerMaterial,
-      railingAttachment,
+      totalHeight, totalRun, width, numSteps, stairType,
+      hasRisers, treadThickness, riserThickness,
+      hasStringers, stringerType, hasRailing, railingHeight,
     } = finalParams;
 
     const rise = totalHeight / numSteps;
     const run = totalRun / numSteps;
+    const treadMat = this.getMaterial(finalParams.treadMaterial);
+    const riserMat = this.getMaterial(finalParams.riserMaterial);
+    const stringerMat = this.getMaterial(finalParams.stringerMaterial);
 
-    // Generate based on type
     switch (stairType) {
       case 'straight':
-        this.generateStraightStairs(group, numSteps, rise, run, width, treadThickness, riserThickness, hasRisers, hasStringers, stringerType);
+        this.generateStraightStairs(group, numSteps, rise, run, width, treadThickness, riserThickness, hasRisers, hasStringers, stringerType, treadMat, riserMat, stringerMat);
         break;
       case 'L':
-        this.generateLStairs(group, numSteps, rise, run, width, treadThickness, riserThickness, hasRisers, hasStringers, stringerType, landingPosition);
+        this.generateLStairs(group, numSteps, rise, run, width, treadThickness, riserThickness, hasRisers, treadMat, riserMat);
         break;
       case 'U':
-        this.generateUStairs(group, numSteps, rise, run, width, treadThickness, riserThickness, hasRisers, hasStringers, stringerType, landingPosition);
+        this.generateUStairs(group, numSteps, rise, run, width, treadThickness, riserThickness, hasRisers, treadMat, riserMat);
         break;
       case 'spiral':
-        this.generateSpiralStairs(group, numSteps, rise, width, treadThickness, stringerType);
+        this.generateSpiralStairs(group, numSteps, rise, width, treadThickness, treadMat);
         break;
       case 'curved':
-        this.generateCurvedStairs(group, numSteps, rise, run, width, treadThickness, riserThickness);
+        this.generateCurvedStairs(group, numSteps, rise, run, width, treadThickness, treadMat);
         break;
     }
 
-    // Add railing attachment points
-    if (railingAttachment) {
-      this.addRailingAttachments(group, stairType, totalRun, width, totalHeight);
+    // Add railing
+    if (hasRailing) {
+      this.addRailing(group, stairType, totalRun, width, totalHeight, railingHeight, numSteps, rise, run);
     }
 
     return group;
   }
 
+  private getMaterial(materialType: string): MeshStandardMaterial {
+    const configs: Record<string, { color: number; roughness: number; metalness: number }> = {
+      wood: { color: 0x8b6914, roughness: 0.65, metalness: 0.0 },
+      oak: { color: 0x8b6914, roughness: 0.6, metalness: 0.0 },
+      steel: { color: 0x888888, roughness: 0.3, metalness: 0.8 },
+      metal: { color: 0x666666, roughness: 0.4, metalness: 0.7 },
+      glass: { color: 0x88ccff, roughness: 0.1, metalness: 0.1 },
+      concrete: { color: 0x999999, roughness: 0.9, metalness: 0.0 },
+      reclaimed_wood: { color: 0x6b4423, roughness: 0.85, metalness: 0.0 },
+    };
+    const config = configs[materialType] || configs.wood;
+    return new MeshStandardMaterial({
+      color: config.color,
+      roughness: config.roughness,
+      metalness: config.metalness,
+      transparent: materialType === 'glass',
+      opacity: materialType === 'glass' ? 0.3 : 1.0,
+    });
+  }
+
   private generateStraightStairs(
-    group: Group,
-    numSteps: number,
-    rise: number,
-    run: number,
-    width: number,
-    treadThickness: number,
-    riserThickness: number,
-    hasRisers: boolean,
-    hasStringers: boolean,
-    stringerType: string
+    group: Group, numSteps: number, rise: number, run: number, width: number,
+    treadThickness: number, riserThickness: number, hasRisers: boolean,
+    hasStringers: boolean, stringerType: string,
+    treadMat: MeshStandardMaterial, riserMat: MeshStandardMaterial, stringerMat: MeshStandardMaterial
   ): void {
     for (let i = 0; i < numSteps; i++) {
       const y = i * rise;
@@ -142,222 +131,139 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
 
       // Tread
       const treadGeom = new BoxGeometry(run + 0.02, treadThickness, width);
-      const tread = new Mesh(treadGeom);
+      const tread = new Mesh(treadGeom, treadMat);
       tread.position.set(x + run / 2, y + treadThickness / 2, 0);
       tread.castShadow = true;
       tread.receiveShadow = true;
+      tread.name = `tread_${i}`;
       group.add(tread);
 
       // Riser
       if (hasRisers && i < numSteps - 1) {
-        const riserGeom = new BoxGeometry(run, riserThickness, width);
-        const riser = new Mesh(riserGeom);
-        riser.position.set(x + run / 2, y + treadThickness + riserThickness / 2, 0);
+        const riserGeom = new BoxGeometry(riserThickness, rise, width);
+        const riser = new Mesh(riserGeom, riserMat);
+        riser.position.set(x + run / 2, y + treadThickness + rise / 2, 0);
         riser.castShadow = true;
-        riser.receiveShadow = true;
+        riser.name = `riser_${i}`;
         group.add(riser);
       }
     }
 
     // Stringers
     if (hasStringers) {
-      this.addStraightStringers(group, numSteps, rise, run, width, stringerType);
-    }
-  }
+      const totalRise = numSteps * rise;
+      const totalRunLen = numSteps * run;
+      const stringerLength = Math.sqrt(totalRise * totalRise + totalRunLen * totalRunLen);
+      const angle = Math.atan2(totalRise, totalRunLen);
 
-  private addStraightStringers(
-    group: Group,
-    numSteps: number,
-    rise: number,
-    run: number,
-    width: number,
-    stringerType: string
-  ): void {
-    const totalRise = numSteps * rise;
-    const totalRun = numSteps * run;
-    const stringerLength = Math.sqrt(totalRise * totalRise + totalRun * totalRun);
-    const angle = Math.atan2(totalRise, totalRun);
-
-    if (stringerType === 'closed') {
-      // Solid side panels
-      const stringerGeom = new BoxGeometry(totalRun, 0.03, width + 0.1);
-      const leftStringer = new Mesh(stringerGeom);
-      leftStringer.position.set(totalRun / 2, totalRise / 2, -width / 2 - 0.05);
-      leftStringer.rotation.z = -angle;
-      group.add(leftStringer);
-
-      const rightStringer = new Mesh(stringerGeom);
-      rightStringer.position.set(totalRun / 2, totalRise / 2, width / 2 + 0.05);
-      rightStringer.rotation.z = -angle;
-      group.add(rightStringer);
-    } else if (stringerType === 'open') {
-      // Cut stringers following step profile
-      const shape = new THREE.Shape();
-      shape.moveTo(0, 0);
-      for (let i = 0; i < numSteps; i++) {
-        shape.lineTo((i + 1) * run, i * rise);
-        shape.lineTo((i + 1) * run, (i + 1) * rise);
+      if (stringerType === 'closed') {
+        for (const zSide of [-1, 1]) {
+          const stringerGeom = new BoxGeometry(totalRunLen, 0.03, width + 0.1);
+          const stringer = new Mesh(stringerGeom, stringerMat);
+          stringer.position.set(totalRunLen / 2, totalRise / 2, zSide * (width / 2 + 0.05));
+          stringer.rotation.z = -angle;
+          stringer.name = `stringer_${zSide === -1 ? 'left' : 'right'}`;
+          group.add(stringer);
+        }
+      } else if (stringerType === 'mono') {
+        const stringerGeom = new BoxGeometry(totalRunLen, 0.15, 0.1);
+        const stringer = new Mesh(stringerGeom, stringerMat);
+        stringer.position.set(totalRunLen / 2, totalRise / 2, 0);
+        stringer.rotation.z = -angle;
+        stringer.name = 'mono_stringer';
+        group.add(stringer);
       }
-      shape.lineTo(0, totalRise);
-      shape.lineTo(0, 0);
-
-      const extrudeSettings = { depth: 0.03, bevelEnabled: false };
-      const geom = new ExtrudeGeometry(shape, extrudeSettings);
-      
-      const leftStringer = new Mesh(geom);
-      leftStringer.position.set(0, 0, -width / 2 - 0.05);
-      group.add(leftStringer);
-
-      const rightStringer = new Mesh(geom);
-      rightStringer.position.set(0, 0, width / 2 + 0.05);
-      group.add(rightStringer);
-    } else if (stringerType === 'mono') {
-      // Central mono stringer
-      const stringerGeom = new BoxGeometry(totalRun, 0.15, 0.1);
-      const stringer = new Mesh(stringerGeom);
-      stringer.position.set(totalRun / 2, totalRise / 2, 0);
-      stringer.rotation.z = -angle;
-      group.add(stringer);
     }
   }
 
   private generateLStairs(
-    group: Group,
-    numSteps: number,
-    rise: number,
-    run: number,
-    width: number,
-    treadThickness: number,
-    riserThickness: number,
-    hasRisers: boolean,
-    hasStringers: boolean,
-    stringerType: string,
-    landingPosition: number
+    group: Group, numSteps: number, rise: number, run: number, width: number,
+    treadThickness: number, riserThickness: number, hasRisers: boolean,
+    treadMat: MeshStandardMaterial, riserMat: MeshStandardMaterial
   ): void {
-    const firstFlightSteps = Math.floor(numSteps * landingPosition);
-    const secondFlightSteps = numSteps - firstFlightSteps;
+    const firstFlightSteps = Math.floor(numSteps / 2);
     const landingSize = width;
 
     // First flight
     for (let i = 0; i < firstFlightSteps; i++) {
       const y = i * rise;
       const x = i * run;
-
-      const treadGeom = new BoxGeometry(run + 0.02, treadThickness, width);
-      const tread = new Mesh(treadGeom);
+      const tread = new Mesh(new BoxGeometry(run + 0.02, treadThickness, width), treadMat);
       tread.position.set(x + run / 2, y + treadThickness / 2, 0);
       tread.castShadow = true;
       group.add(tread);
-
-      if (hasRisers && i < firstFlightSteps - 1) {
-        const riserGeom = new BoxGeometry(run, riserThickness, width);
-        const riser = new Mesh(riserGeom);
-        riser.position.set(x + run / 2, y + treadThickness + riserThickness / 2, 0);
-        group.add(riser);
-      }
     }
 
     // Landing
     const landingY = firstFlightSteps * rise;
     const landingX = firstFlightSteps * run;
-    const landingGeom = new BoxGeometry(landingSize, treadThickness, landingSize);
-    const landing = new Mesh(landingGeom);
+    const landing = new Mesh(new BoxGeometry(landingSize, treadThickness, landingSize), treadMat);
     landing.position.set(landingX + landingSize / 2, landingY + treadThickness / 2, 0);
     landing.castShadow = true;
+    landing.name = 'landing';
     group.add(landing);
 
-    // Second flight (90 degree turn)
+    // Second flight
+    const secondFlightSteps = numSteps - firstFlightSteps;
     for (let i = 0; i < secondFlightSteps; i++) {
       const y = landingY + (i + 1) * rise;
-      const x = landingX + landingSize + i * run;
-
-      const treadGeom = new BoxGeometry(run + 0.02, treadThickness, width);
-      const tread = new Mesh(treadGeom);
-      tread.position.set(x + run / 2, y + treadThickness / 2, landingSize / 2 - width / 2);
+      const tread = new Mesh(new BoxGeometry(run + 0.02, treadThickness, width), treadMat);
+      tread.position.set(landingX + landingSize / 2, y + treadThickness / 2, landingSize / 2 - width / 2 + i * run);
       tread.rotation.y = -Math.PI / 2;
       tread.castShadow = true;
       group.add(tread);
-
-      if (hasRisers && i < secondFlightSteps - 1) {
-        const riserGeom = new BoxGeometry(run, riserThickness, width);
-        const riser = new Mesh(riserGeom);
-        riser.position.set(x + run / 2, y + treadThickness + riserThickness / 2, landingSize / 2 - width / 2);
-        riser.rotation.y = -Math.PI / 2;
-        group.add(riser);
-      }
     }
   }
 
   private generateUStairs(
-    group: Group,
-    numSteps: number,
-    rise: number,
-    run: number,
-    width: number,
-    treadThickness: number,
-    riserThickness: number,
-    hasRisers: boolean,
-    hasStringers: boolean,
-    stringerType: string,
-    landingPosition: number
+    group: Group, numSteps: number, rise: number, run: number, width: number,
+    treadThickness: number, riserThickness: number, hasRisers: boolean,
+    treadMat: MeshStandardMaterial, riserMat: MeshStandardMaterial
   ): void {
     const firstFlightSteps = Math.floor(numSteps / 2);
-    const secondFlightSteps = numSteps - firstFlightSteps;
     const landingWidth = width * 2;
 
     // First flight
     for (let i = 0; i < firstFlightSteps; i++) {
-      const y = i * rise;
-      const x = i * run;
-
-      const treadGeom = new BoxGeometry(run + 0.02, treadThickness, width);
-      const tread = new Mesh(treadGeom);
-      tread.position.set(x + run / 2, y + treadThickness / 2, -width / 2);
+      const tread = new Mesh(new BoxGeometry(run + 0.02, treadThickness, width), treadMat);
+      tread.position.set(i * run + run / 2, i * rise + treadThickness / 2, -width / 2);
       tread.castShadow = true;
       group.add(tread);
     }
 
     // Landing
     const landingY = firstFlightSteps * rise;
-    const landingX = firstFlightSteps * run;
-    const landingGeom = new BoxGeometry(landingWidth, treadThickness, width);
-    const landing = new Mesh(landingGeom);
-    landing.position.set(landingX + landingWidth / 2, landingY + treadThickness / 2, 0);
+    const landing = new Mesh(new BoxGeometry(landingWidth, treadThickness, width), treadMat);
+    landing.position.set(firstFlightSteps * run + landingWidth / 2, landingY + treadThickness / 2, 0);
     landing.castShadow = true;
+    landing.name = 'landing';
     group.add(landing);
 
-    // Second flight (return direction)
+    // Second flight
+    const secondFlightSteps = numSteps - firstFlightSteps;
     for (let i = 0; i < secondFlightSteps; i++) {
-      const y = landingY + (i + 1) * rise;
-      const x = landingX + landingWidth - i * run;
-
-      const treadGeom = new BoxGeometry(run + 0.02, treadThickness, width);
-      const tread = new Mesh(treadGeom);
-      tread.position.set(x - run / 2, y + treadThickness / 2, width / 2);
+      const tread = new Mesh(new BoxGeometry(run + 0.02, treadThickness, width), treadMat);
+      tread.position.set(firstFlightSteps * run + landingWidth - i * run - run / 2, landingY + (i + 1) * rise + treadThickness / 2, width / 2);
       tread.castShadow = true;
       group.add(tread);
     }
   }
 
   private generateSpiralStairs(
-    group: Group,
-    numSteps: number,
-    rise: number,
-    diameter: number,
-    treadThickness: number,
-    stringerType: string
+    group: Group, numSteps: number, rise: number, diameter: number,
+    treadThickness: number, treadMat: MeshStandardMaterial
   ): void {
     const radius = diameter / 2;
-    const totalAngle = Math.PI * 1.5; // 270 degrees
+    const totalAngle = Math.PI * 1.5;
     const angleStep = totalAngle / numSteps;
 
     // Central pole
-    if (stringerType !== 'mono') {
-      const poleGeom = new CylinderGeometry(0.05, 0.05, numSteps * rise, 16);
-      const pole = new Mesh(poleGeom);
-      pole.position.set(0, numSteps * rise / 2, 0);
-      group.add(pole);
-    }
+    const poleMat = this.getMaterial('steel');
+    const poleGeom = new CylinderGeometry(0.05, 0.05, numSteps * rise, 16);
+    const pole = new Mesh(poleGeom, poleMat);
+    pole.position.set(0, numSteps * rise / 2, 0);
+    pole.name = 'centralPole';
+    group.add(pole);
 
     // Treads
     for (let i = 0; i < numSteps; i++) {
@@ -373,36 +279,29 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
 
       const extrudeSettings = { depth: treadThickness, bevelEnabled: false };
       const geom = new ExtrudeGeometry(shape, extrudeSettings);
-      const tread = new Mesh(geom);
+      const tread = new Mesh(geom, treadMat);
       tread.position.set(0, y, 0);
       tread.rotation.x = -Math.PI / 2;
       tread.castShadow = true;
+      tread.name = `tread_${i}`;
       group.add(tread);
     }
   }
 
   private generateCurvedStairs(
-    group: Group,
-    numSteps: number,
-    rise: number,
-    run: number,
-    width: number,
-    treadThickness: number,
-    riserThickness: number
+    group: Group, numSteps: number, rise: number, run: number, width: number,
+    treadThickness: number, treadMat: MeshStandardMaterial
   ): void {
-    const totalAngle = Math.PI / 2; // 90 degree curve
+    const totalAngle = Math.PI / 2;
     const angleStep = totalAngle / numSteps;
     const radius = (run * numSteps) / totalAngle;
 
     for (let i = 0; i < numSteps; i++) {
       const angle = i * angleStep;
       const y = i * rise;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+      const innerRadius = radius - width;
 
       const shape = new THREE.Shape();
-      const innerRadius = radius - width;
-      
       shape.moveTo(Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius);
       shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
       shape.lineTo(Math.cos(angle + angleStep) * radius, Math.sin(angle + angleStep) * radius);
@@ -411,7 +310,7 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
 
       const extrudeSettings = { depth: treadThickness, bevelEnabled: false };
       const geom = new ExtrudeGeometry(shape, extrudeSettings);
-      const tread = new Mesh(geom);
+      const tread = new Mesh(geom, treadMat);
       tread.position.set(0, y, 0);
       tread.rotation.x = -Math.PI / 2;
       tread.castShadow = true;
@@ -419,78 +318,56 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
     }
   }
 
-  private addRailingAttachments(
-    group: Group,
-    stairType: string,
-    totalRun: number,
-    width: number,
-    totalHeight: number
+  private addRailing(
+    group: Group, stairType: string, totalRun: number, width: number,
+    totalHeight: number, railingHeight: number, numSteps: number,
+    rise: number, run: number
   ): void {
-    // Add marker objects for railing attachment points
-    const markerGeom = new THREE.SphereGeometry(0.02);
-    
-    // Start point
-    const startMarker = new Mesh(markerGeom);
-    startMarker.position.set(0.05, 0.05, -width / 2);
-    startMarker.userData = { type: 'railing_start' };
-    group.add(startMarker);
+    const railMat = this.getMaterial('steel');
+    const balusterMat = this.getMaterial('steel');
 
-    // End point
-    let endX, endY, endZ;
     if (stairType === 'straight') {
-      endX = totalRun - 0.05;
-      endY = totalHeight - 0.05;
-      endZ = -width / 2;
-    } else {
-      endX = totalRun;
-      endY = totalHeight;
-      endZ = 0;
+      // Balusters at each step
+      for (let i = 0; i <= numSteps; i++) {
+        const y = i * rise;
+        const x = i * run;
+        const balusterGeo = new CylinderGeometry(0.015, 0.015, railingHeight, 8);
+        const baluster = new Mesh(balusterGeo, balusterMat);
+        baluster.position.set(x, y + railingHeight / 2, -width / 2);
+        group.add(baluster);
+      }
+
+      // Top handrail
+      const railLength = Math.sqrt(totalRun * totalRun + totalHeight * totalHeight);
+      const railAngle = Math.atan2(totalHeight, totalRun);
+      const railGeo = new CylinderGeometry(0.025, 0.025, railLength, 8);
+      const rail = new Mesh(railGeo, railMat);
+      rail.position.set(totalRun / 2, totalHeight / 2 + railingHeight, -width / 2);
+      rail.rotation.z = Math.PI / 2 - railAngle;
+      rail.name = 'handrail';
+      group.add(rail);
+
+      // Other side
+      for (let i = 0; i <= numSteps; i++) {
+        const balusterGeo = new CylinderGeometry(0.015, 0.015, railingHeight, 8);
+        const baluster = new Mesh(balusterGeo, balusterMat);
+        baluster.position.set(i * run, i * rise + railingHeight / 2, width / 2);
+        group.add(baluster);
+      }
+      const rail2 = new Mesh(new CylinderGeometry(0.025, 0.025, railLength, 8), railMat);
+      rail2.position.set(totalRun / 2, totalHeight / 2 + railingHeight, width / 2);
+      rail2.rotation.z = Math.PI / 2 - railAngle;
+      group.add(rail2);
     }
-    
-    const endMarker = new Mesh(markerGeom);
-    endMarker.position.set(endX, endY, endZ);
-    endMarker.userData = { type: 'railing_end' };
-    group.add(endMarker);
   }
 
   getStylePresets(): Record<string, Partial<StaircaseParams>> {
     return {
-      modern: {
-        style: 'modern',
-        stringerType: 'mono',
-        hasRisers: false,
-        treadMaterial: 'glass',
-        stringerMaterial: 'steel',
-      },
-      traditional: {
-        style: 'traditional',
-        stringerType: 'closed',
-        hasRisers: true,
-        treadMaterial: 'oak',
-        riserMaterial: 'oak',
-        stringerMaterial: 'oak',
-      },
-      industrial: {
-        style: 'industrial',
-        stringerType: 'open',
-        hasRisers: false,
-        treadMaterial: 'metal',
-        stringerMaterial: 'steel',
-      },
-      rustic: {
-        style: 'rustic',
-        stringerType: 'closed',
-        hasRisers: true,
-        treadMaterial: 'reclaimed_wood',
-        stringerMaterial: 'reclaimed_wood',
-      },
-      minimalist: {
-        style: 'minimalist',
-        stringerType: 'mono',
-        hasRisers: false,
-        treadThickness: 0.03,
-        treadMaterial: 'concrete',
-      },
+      modern: { style: 'modern', stringerType: 'mono', hasRisers: false, treadMaterial: 'glass', stringerMaterial: 'steel' },
+      traditional: { style: 'traditional', stringerType: 'closed', hasRisers: true, treadMaterial: 'oak', riserMaterial: 'oak', stringerMaterial: 'oak' },
+      industrial: { style: 'industrial', stringerType: 'open', hasRisers: false, treadMaterial: 'metal', stringerMaterial: 'steel' },
+      rustic: { style: 'rustic', stringerType: 'closed', hasRisers: true, treadMaterial: 'reclaimed_wood', stringerMaterial: 'reclaimed_wood' },
+      minimalist: { style: 'minimalist', stringerType: 'mono', hasRisers: false, treadThickness: 0.03, treadMaterial: 'concrete' },
     };
   }
 }

@@ -1425,19 +1425,50 @@ export function parseConstraintSource(source: string): Program {
 
 /**
  * Compile constraint source to executable function
+ *
+ * Parses the source into an AST, then evaluates it using the DSL evaluator.
+ * If the program contains a `constraint` declaration, the returned function
+ * invokes that constraint's body with the supplied arguments.
+ * Otherwise the entire program is evaluated and the final result is returned.
  */
 export function compileConstraint(
   source: string,
   context: Record<string, any> = {}
 ): (...args: any[]) => any {
   const ast = parseConstraintSource(source);
-  
-  // TODO: Implement code generator and evaluator
-  // This will be connected to the constraint solver system
-  
-  return function evaluate(...args: any[]): any {
-    // Placeholder implementation
-    console.log('Constraint evaluation not yet implemented');
-    return true;
+
+  // Import evaluator – using require() for synchronous loading.
+  // This avoids circular-dependency issues at module-load time because
+  // the evaluator module is only loaded when compileConstraint() is
+  // actually called, not when ConstraintDSL.ts is first imported.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { evaluateProgram, evaluateConstraint, EvalContext } = require('./evaluator') as typeof import('./evaluator');
+
+  // Find top-level constraint declarations
+  const constraintDecls = ast.body.filter(
+    (n): n is ConstraintDeclaration => n.type === ASTNodeType.CONSTRAINT_DECLARATION
+  );
+
+  if (constraintDecls.length > 0) {
+    // Compile the first constraint declaration into a callable
+    const compiled = evaluateConstraint(constraintDecls[0], context);
+
+    // If there are multiple constraints, register the rest in context
+    if (constraintDecls.length > 1) {
+      const ctx = new EvalContext(context);
+      for (let i = 1; i < constraintDecls.length; i++) {
+        evaluateConstraint(constraintDecls[i], context);
+      }
+    }
+
+    return compiled;
+  }
+
+  // No constraint declarations – evaluate the whole program
+  return function compiledProgram(...args: any[]): any {
+    // Merge any positional args into context as arg0, arg1, …
+    const mergedContext: Record<string, any> = { ...context };
+    args.forEach((a, i) => { mergedContext[`arg${i}`] = a; });
+    return evaluateProgram(ast, mergedContext);
   };
 }
