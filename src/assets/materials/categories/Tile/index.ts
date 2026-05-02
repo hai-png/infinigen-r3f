@@ -12,3 +12,36 @@ export type { CeramicTileMaterialConfig as CeramicTileParams, CeramicTileMateria
 
 export { TileGenerator } from './TileGenerator';
 export type { TileParams } from './TileGenerator';
+
+// Tile Pattern Library — 9 procedural tile patterns
+export {
+  generateBasketWeave,
+  generateBrick,
+  generateChevron,
+  generateDiamond,
+  generateHerringbone,
+  generateHexagon,
+  generateShell,
+  generateSpanishBound,
+  generateStar,
+  generateTriangle,
+  createTileMaterial,
+  createTileMaterialFromPreset,
+  BASKETWEAVE_PRESETS,
+  BRICK_PRESETS,
+  CHEVRON_PRESETS,
+  DIAMOND_PRESETS,
+  HERRINGBONE_PRESETS,
+  HEXAGON_PRESETS,
+  SHELL_PRESETS,
+  SPANISHBOUND_PRESETS,
+  STAR_PRESETS,
+  TRIANGLE_PRESETS,
+  ALL_TILE_PRESETS,
+} from './TilePatternLibrary';
+
+export type {
+  TilePatternOptions,
+  TilePatternPreset,
+  TilePatternType,
+} from './TilePatternLibrary';

@@ -45,7 +45,9 @@ export type MaterialCategory =
   | 'plastic'
   | 'glass'
   | 'nature'
-  | 'creature';
+  | 'creature'
+  | 'fluid'
+  | 'tile';
 
 export interface PresetVariation {
   age: number;       // 0 = new, 1 = very old
@@ -745,13 +747,13 @@ const PRESETS: MaterialPreset[] = [
   },
 
   // ───────────────────────────────────────
-  // CREATURE (5)
+  // CREATURE (19)
   // ───────────────────────────────────────
   {
     id: 'snake_scale',
     name: 'Snake Scale',
     category: 'creature',
-    description: 'Smooth, overlapping snake scales',
+    description: 'Smooth, overlapping snake scales with iridescence',
     params: {
       baseColor: c(0.3, 0.35, 0.2), roughness: 0.4, metallic: 0.1,
       aoStrength: 0.5, heightScale: 0.01, normalStrength: 1.0,
@@ -810,6 +812,774 @@ const PRESETS: MaterialPreset[] = [
       noiseScale: 10.0, noiseDetail: 4, distortion: 0.15, warpStrength: 0.2,
     },
     physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.2 },
+  },
+  {
+    id: 'tiger',
+    name: 'Tiger',
+    category: 'creature',
+    description: 'Orange-black tiger stripe pattern',
+    params: {
+      baseColor: c(0.85, 0.55, 0.15), roughness: 0.75, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.01, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 5, distortion: 0.4, warpStrength: 0.5,
+    },
+    physicalOverrides: { sheen: 0.1, sheenRoughness: 0.8, sheenColor: c(0.9, 0.6, 0.2) },
+  },
+  {
+    id: 'fish_body',
+    name: 'Fish Body',
+    category: 'creature',
+    description: 'Iridescent fish body with lateral line',
+    params: {
+      baseColor: c(0.2, 0.3, 0.15), roughness: 0.25, metallic: 0.15,
+      aoStrength: 0.4, heightScale: 0.008, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 10.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.1,
+    },
+    physicalOverrides: { clearcoat: 0.6, clearcoatRoughness: 0.1 },
+  },
+  {
+    id: 'fish_eye',
+    name: 'Fish Eye',
+    category: 'creature',
+    description: 'Spherical lens with iris and pupil',
+    params: {
+      baseColor: c(0.6, 0.5, 0.2), roughness: 0.05, metallic: 0.0,
+      aoStrength: 0.1, heightScale: 0.001, normalStrength: 0.1,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 2, distortion: 0.02, warpStrength: 0.03,
+    },
+    physicalOverrides: { clearcoat: 0.95, clearcoatRoughness: 0.02 },
+  },
+  {
+    id: 'reptile',
+    name: 'Reptile',
+    category: 'creature',
+    description: 'Brown circle/geometric reptile pattern',
+    params: {
+      baseColor: c(0.45, 0.3, 0.15), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.6, heightScale: 0.012, normalStrength: 1.0,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { clearcoat: 0.2, clearcoatRoughness: 0.3 },
+  },
+  {
+    id: 'eyeball',
+    name: 'Eyeball',
+    category: 'creature',
+    description: 'Wet glossy eye with iris and pupil',
+    params: {
+      baseColor: c(0.9, 0.88, 0.82), roughness: 0.03, metallic: 0.0,
+      aoStrength: 0.1, heightScale: 0.001, normalStrength: 0.1,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 2, distortion: 0.02, warpStrength: 0.03,
+    },
+    physicalOverrides: { clearcoat: 1.0, clearcoatRoughness: 0.01 },
+  },
+  {
+    id: 'horn',
+    name: 'Horn',
+    category: 'creature',
+    description: 'Keratin horn with growth rings',
+    params: {
+      baseColor: c(0.38, 0.24, 0.12), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.008, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 4, distortion: 0.15, warpStrength: 0.2,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.15 },
+  },
+  {
+    id: 'bone',
+    name: 'Bone',
+    category: 'creature',
+    description: 'Off-white porous bone surface',
+    params: {
+      baseColor: c(0.85, 0.82, 0.75), roughness: 0.45, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.01, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 10.0, noiseDetail: 4, distortion: 0.15, warpStrength: 0.2,
+    },
+  },
+  {
+    id: 'tongue',
+    name: 'Tongue',
+    category: 'creature',
+    description: 'Pink/red wet muscle tissue',
+    params: {
+      baseColor: c(0.8, 0.06, 0.044), roughness: 0.35, metallic: 0.0,
+      aoStrength: 0.2, heightScale: 0.005, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 4, distortion: 0.1, warpStrength: 0.15,
+    },
+    physicalOverrides: { clearcoat: 0.5, clearcoatRoughness: 0.1 },
+  },
+  {
+    id: 'giraffe',
+    name: 'Giraffe',
+    category: 'creature',
+    description: 'Brown patches on tan background',
+    params: {
+      baseColor: c(0.93, 0.75, 0.45), roughness: 0.8, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.008, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.2, warpStrength: 0.3,
+    },
+  },
+  {
+    id: 'two_color_spots',
+    name: 'Two-Color Spots',
+    category: 'creature',
+    description: 'Two-color spotted Voronoi pattern',
+    params: {
+      baseColor: c(0.95, 0.93, 0.88), roughness: 0.75, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.008, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 4, distortion: 0.3, warpStrength: 0.4,
+    },
+  },
+  {
+    id: 'beak',
+    name: 'Beak',
+    category: 'creature',
+    description: 'Hard keratin beak material',
+    params: {
+      baseColor: c(0.4, 0.3, 0.15), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.005, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 3, distortion: 0.1, warpStrength: 0.15,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.15 },
+  },
+  {
+    id: 'nose',
+    name: 'Nose',
+    category: 'creature',
+    description: 'Soft wet nose material',
+    params: {
+      baseColor: c(0.15, 0.1, 0.1), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.2, heightScale: 0.005, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.1,
+    },
+    physicalOverrides: { clearcoat: 0.8, clearcoatRoughness: 0.05 },
+  },
+
+  // ───────────────────────────────────────
+  // FLUID (6)
+  // ───────────────────────────────────────
+  {
+    id: 'river_water',
+    name: 'River Water',
+    category: 'fluid',
+    description: 'Freshwater with green tint, shallower depth scattering, sediment',
+    params: {
+      baseColor: c(0.03, 0.27, 0.67), roughness: 0.0, metallic: 0.0,
+      aoStrength: 0.1, heightScale: 0.002, normalStrength: 0.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 11.6, noiseDetail: 6, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { transmission: 0.85, ior: 1.33, thickness: 2.0, transparent: true, opacity: 0.92, side: THREE.DoubleSide },
+  },
+  {
+    id: 'waterfall',
+    name: 'Waterfall',
+    category: 'fluid',
+    description: 'White/foamy transparent water with mist spray appearance',
+    params: {
+      baseColor: c(0.69, 0.94, 1.0), roughness: 0.0, metallic: 0.26,
+      aoStrength: 0.1, heightScale: 0.001, normalStrength: 0.2,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.3, noiseDetail: 8, distortion: 0.3, warpStrength: 0.4,
+    },
+    physicalOverrides: { transmission: 0.82, ior: 1.333, thickness: 1.0, clearcoat: 0.3, clearcoatRoughness: 0.0, transparent: true, opacity: 0.9, side: THREE.DoubleSide },
+  },
+  {
+    id: 'whitewater',
+    name: 'Whitewater',
+    category: 'fluid',
+    description: 'Bubble-laden turbulent water, high opacity white',
+    params: {
+      baseColor: c(1.0, 1.0, 1.0), roughness: 0.15, metallic: 0.0,
+      aoStrength: 0.1, heightScale: 0.001, normalStrength: 0.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 10.0, noiseDetail: 5, distortion: 0.3, warpStrength: 0.4,
+    },
+    physicalOverrides: { transmission: 0.5, ior: 1.1, thickness: 0.5, clearcoat: 1.0, clearcoatRoughness: 0.0, sheen: 0.3, sheenRoughness: 0.5, sheenColor: c(0.71, 0.61, 0.80), transparent: true, opacity: 0.95, side: THREE.DoubleSide },
+  },
+  {
+    id: 'smoke',
+    name: 'Smoke',
+    category: 'fluid',
+    description: 'Volumetric density shader, gray/black gradient',
+    params: {
+      baseColor: c(0.38, 0.38, 0.38), roughness: 1.0, metallic: 0.0,
+      aoStrength: 0.0, heightScale: 0.001, normalStrength: 0.1,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.0, noiseDetail: 6, distortion: 0.5, warpStrength: 0.6,
+    },
+    physicalOverrides: { transparent: true, opacity: 0.6, side: THREE.DoubleSide },
+  },
+  {
+    id: 'atmosphere_haze',
+    name: 'Atmosphere Haze',
+    category: 'fluid',
+    description: 'Volume scatter for aerial perspective, light blue',
+    params: {
+      baseColor: c(0.65, 0.75, 0.88), roughness: 1.0, metallic: 0.0,
+      aoStrength: 0.0, heightScale: 0.001, normalStrength: 0.1,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.0, noiseDetail: 3, distortion: 0.1, warpStrength: 0.1,
+    },
+    physicalOverrides: { transparent: true, opacity: 0.15, side: THREE.DoubleSide },
+  },
+  {
+    id: 'blackbody',
+    name: 'Blackbody',
+    category: 'fluid',
+    description: 'Emissive gas for fire/lava glow, temperature-based color',
+    params: {
+      baseColor: c(0.36, 0.36, 0.36), roughness: 1.0, metallic: 0.0,
+      aoStrength: 0.0, heightScale: 0.001, normalStrength: 0.1,
+      emissionColor: c(1.0, 0.6, 0.1), emissionStrength: 0.7,
+      noiseScale: 3.0, noiseDetail: 5, distortion: 0.4, warpStrength: 0.5,
+    },
+    physicalOverrides: { transparent: true, opacity: 0.9, side: THREE.DoubleSide },
+  },
+
+  // ───────────────────────────────────────
+  // TILE PATTERNS (36)
+  // ───────────────────────────────────────
+  // BasketWeave
+  {
+    id: 'cream_basketweave',
+    name: 'Cream Basketweave',
+    category: 'tile',
+    description: 'Cream ceramic basketweave tile',
+    params: {
+      baseColor: c(0.96, 0.94, 0.91), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.003, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.08,
+    },
+  },
+  {
+    id: 'gray_basketweave',
+    name: 'Gray Basketweave',
+    category: 'tile',
+    description: 'Gray stone basketweave tile',
+    params: {
+      baseColor: c(0.69, 0.69, 0.66), roughness: 0.45, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.005, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 4, distortion: 0.08, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'terracotta_basketweave',
+    name: 'Terracotta Basketweave',
+    category: 'tile',
+    description: 'Warm terracotta basketweave tile',
+    params: {
+      baseColor: c(0.77, 0.38, 0.23), roughness: 0.6, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.008, normalStrength: 1.0,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 4, distortion: 0.1, warpStrength: 0.15,
+    },
+  },
+  {
+    id: 'dark_basketweave',
+    name: 'Dark Basketweave',
+    category: 'tile',
+    description: 'Dark slate basketweave tile',
+    params: {
+      baseColor: c(0.23, 0.23, 0.22), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.004, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.08,
+    },
+  },
+  // Brick
+  {
+    id: 'red_brick',
+    name: 'Red Brick',
+    category: 'tile',
+    description: 'Classic red brick pattern with mortar',
+    params: {
+      baseColor: c(0.55, 0.23, 0.17), roughness: 0.75, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.008, normalStrength: 1.2,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+  },
+  {
+    id: 'white_subway',
+    name: 'White Subway',
+    category: 'tile',
+    description: 'Clean white subway brick tile',
+    params: {
+      baseColor: c(0.94, 0.93, 0.89), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.002, normalStrength: 0.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 2, distortion: 0.02, warpStrength: 0.03,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.1 },
+  },
+  {
+    id: 'brown_brick',
+    name: 'Brown Brick',
+    category: 'tile',
+    description: 'Weathered brown brick',
+    params: {
+      baseColor: c(0.48, 0.36, 0.23), roughness: 0.8, metallic: 0.0,
+      aoStrength: 0.6, heightScale: 0.01, normalStrength: 1.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.0, noiseDetail: 5, distortion: 0.25, warpStrength: 0.35,
+    },
+  },
+  {
+    id: 'blue_brick',
+    name: 'Blue Brick',
+    category: 'tile',
+    description: 'Glazed blue brick tile',
+    params: {
+      baseColor: c(0.29, 0.42, 0.54), roughness: 0.35, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.003, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.08,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'aged_brick',
+    name: 'Aged Brick',
+    category: 'tile',
+    description: 'Old, weathered brick with mortar wear',
+    params: {
+      baseColor: c(0.48, 0.29, 0.23), roughness: 0.85, metallic: 0.0,
+      aoStrength: 0.7, heightScale: 0.012, normalStrength: 1.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.0, noiseDetail: 6, distortion: 0.3, warpStrength: 0.4,
+    },
+  },
+  // Chevron
+  {
+    id: 'wood_chevron',
+    name: 'Wood Chevron',
+    category: 'tile',
+    description: 'Wooden chevron parquet flooring',
+    params: {
+      baseColor: c(0.54, 0.42, 0.26), roughness: 0.6, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.006, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 5, distortion: 0.15, warpStrength: 0.2,
+    },
+  },
+  {
+    id: 'white_chevron',
+    name: 'White Chevron',
+    category: 'tile',
+    description: 'White ceramic chevron tile',
+    params: {
+      baseColor: c(0.95, 0.93, 0.89), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.002, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 7.0, noiseDetail: 2, distortion: 0.03, warpStrength: 0.05,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.1 },
+  },
+  {
+    id: 'gray_chevron',
+    name: 'Gray Chevron',
+    category: 'tile',
+    description: 'Gray stone chevron tile',
+    params: {
+      baseColor: c(0.54, 0.54, 0.53), roughness: 0.45, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.005, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 4, distortion: 0.08, warpStrength: 0.12,
+    },
+  },
+  {
+    id: 'marble_chevron',
+    name: 'Marble Chevron',
+    category: 'tile',
+    description: 'Polished marble chevron tile',
+    params: {
+      baseColor: c(0.91, 0.88, 0.83), roughness: 0.2, metallic: 0.0,
+      aoStrength: 0.2, heightScale: 0.003, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.0, noiseDetail: 5, distortion: 0.3, warpStrength: 0.4,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.08 },
+  },
+  // Diamond
+  {
+    id: 'white_diamond',
+    name: 'White Diamond',
+    category: 'tile',
+    description: 'White diamond-shaped tile',
+    params: {
+      baseColor: c(0.94, 0.93, 0.88), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.002, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'black_diamond',
+    name: 'Black Diamond',
+    category: 'tile',
+    description: 'Black diamond-shaped tile',
+    params: {
+      baseColor: c(0.17, 0.17, 0.16), roughness: 0.4, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.003, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+  },
+  {
+    id: 'terracotta_diamond',
+    name: 'Terracotta Diamond',
+    category: 'tile',
+    description: 'Terracotta diamond tile',
+    params: {
+      baseColor: c(0.72, 0.35, 0.19), roughness: 0.65, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.008, normalStrength: 1.0,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 4, distortion: 0.1, warpStrength: 0.15,
+    },
+  },
+  {
+    id: 'blue_diamond',
+    name: 'Blue Diamond',
+    category: 'tile',
+    description: 'Blue glazed diamond tile',
+    params: {
+      baseColor: c(0.29, 0.44, 0.57), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.25, heightScale: 0.002, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.06 },
+  },
+  // Herringbone
+  {
+    id: 'gray_herringbone',
+    name: 'Gray Herringbone',
+    category: 'tile',
+    description: 'Gray stone herringbone tile',
+    params: {
+      baseColor: c(0.66, 0.66, 0.63), roughness: 0.4, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.004, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 4, distortion: 0.08, warpStrength: 0.12,
+    },
+  },
+  {
+    id: 'wood_herringbone',
+    name: 'Wood Herringbone',
+    category: 'tile',
+    description: 'Wooden herringbone parquet',
+    params: {
+      baseColor: c(0.54, 0.41, 0.25), roughness: 0.55, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.006, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 5, distortion: 0.15, warpStrength: 0.2,
+    },
+  },
+  {
+    id: 'white_herringbone',
+    name: 'White Herringbone',
+    category: 'tile',
+    description: 'White ceramic herringbone tile',
+    params: {
+      baseColor: c(0.94, 0.93, 0.89), roughness: 0.2, metallic: 0.0,
+      aoStrength: 0.2, heightScale: 0.002, normalStrength: 0.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 7.0, noiseDetail: 2, distortion: 0.02, warpStrength: 0.03,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.05 },
+  },
+  {
+    id: 'dark_herringbone',
+    name: 'Dark Herringbone',
+    category: 'tile',
+    description: 'Dark slate herringbone tile',
+    params: {
+      baseColor: c(0.23, 0.23, 0.22), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.004, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'marble_herringbone',
+    name: 'Marble Herringbone',
+    category: 'tile',
+    description: 'Polished marble herringbone tile',
+    params: {
+      baseColor: c(0.91, 0.88, 0.85), roughness: 0.15, metallic: 0.0,
+      aoStrength: 0.2, heightScale: 0.003, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.0, noiseDetail: 5, distortion: 0.25, warpStrength: 0.35,
+    },
+    physicalOverrides: { clearcoat: 0.5, clearcoatRoughness: 0.05 },
+  },
+  // Hexagon
+  {
+    id: 'white_hexagon',
+    name: 'White Hexagon',
+    category: 'tile',
+    description: 'White honeycomb hexagonal tile',
+    params: {
+      baseColor: c(0.94, 0.93, 0.89), roughness: 0.2, metallic: 0.0,
+      aoStrength: 0.25, heightScale: 0.002, normalStrength: 0.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 7.0, noiseDetail: 2, distortion: 0.02, warpStrength: 0.03,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'honey_hexagon',
+    name: 'Honey Hexagon',
+    category: 'tile',
+    description: 'Warm honey-colored hexagonal tile',
+    params: {
+      baseColor: c(0.83, 0.63, 0.19), roughness: 0.35, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.004, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'green_hexagon',
+    name: 'Green Hexagon',
+    category: 'tile',
+    description: 'Muted green hexagonal tile',
+    params: {
+      baseColor: c(0.35, 0.54, 0.35), roughness: 0.4, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.005, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 4, distortion: 0.08, warpStrength: 0.12,
+    },
+  },
+  {
+    id: 'black_white_hexagon',
+    name: 'Black & White Hexagon',
+    category: 'tile',
+    description: 'Classic black and white hexagonal tile',
+    params: {
+      baseColor: c(0.94, 0.94, 0.94), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.003, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+  },
+  // Shell
+  {
+    id: 'cream_shell',
+    name: 'Cream Shell',
+    category: 'tile',
+    description: 'Cream scallop shell tile',
+    params: {
+      baseColor: c(0.94, 0.91, 0.85), roughness: 0.35, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.005, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'pink_shell',
+    name: 'Pink Shell',
+    category: 'tile',
+    description: 'Pink scallop shell tile',
+    params: {
+      baseColor: c(0.91, 0.69, 0.63), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.35, heightScale: 0.004, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.08,
+    },
+    physicalOverrides: { clearcoat: 0.2, clearcoatRoughness: 0.1 },
+  },
+  {
+    id: 'aqua_shell',
+    name: 'Aqua Shell',
+    category: 'tile',
+    description: 'Aqua/turquoise shell tile',
+    params: {
+      baseColor: c(0.53, 0.78, 0.75), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.003, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'gold_shell',
+    name: 'Gold Shell',
+    category: 'tile',
+    description: 'Gold/amber shell tile',
+    params: {
+      baseColor: c(0.83, 0.66, 0.28), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.35, heightScale: 0.004, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.08,
+    },
+  },
+  // SpanishBound
+  {
+    id: 'terracotta_spanish',
+    name: 'Terracotta Spanish Bond',
+    category: 'tile',
+    description: 'Terracotta Spanish bond tile pattern',
+    params: {
+      baseColor: c(0.72, 0.31, 0.19), roughness: 0.65, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.008, normalStrength: 1.0,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 4, distortion: 0.1, warpStrength: 0.15,
+    },
+  },
+  {
+    id: 'stone_spanish',
+    name: 'Stone Spanish Bond',
+    category: 'tile',
+    description: 'Stone Spanish bond tile pattern',
+    params: {
+      baseColor: c(0.69, 0.66, 0.6), roughness: 0.55, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.006, normalStrength: 0.9,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 4, distortion: 0.1, warpStrength: 0.15,
+    },
+  },
+  {
+    id: 'white_spanish',
+    name: 'White Spanish Bond',
+    category: 'tile',
+    description: 'White ceramic Spanish bond tile',
+    params: {
+      baseColor: c(0.94, 0.93, 0.89), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.002, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'dark_spanish',
+    name: 'Dark Spanish Bond',
+    category: 'tile',
+    description: 'Dark stone Spanish bond tile',
+    params: {
+      baseColor: c(0.29, 0.29, 0.28), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.005, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  // Star
+  {
+    id: 'moroccan_star',
+    name: 'Moroccan Star',
+    category: 'tile',
+    description: 'Moroccan-style star tile pattern',
+    params: {
+      baseColor: c(0.94, 0.91, 0.82), roughness: 0.35, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.005, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'blue_star',
+    name: 'Blue Star',
+    category: 'tile',
+    description: 'Blue and white star tile',
+    params: {
+      baseColor: c(0.94, 0.94, 0.94), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.003, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'terracotta_star',
+    name: 'Terracotta Star',
+    category: 'tile',
+    description: 'Terracotta star tile with light fills',
+    params: {
+      baseColor: c(0.78, 0.35, 0.19), roughness: 0.55, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.006, normalStrength: 0.9,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 4, distortion: 0.08, warpStrength: 0.12,
+    },
+  },
+  {
+    id: 'gold_star',
+    name: 'Gold Star',
+    category: 'tile',
+    description: 'Gold star tile with dark background',
+    params: {
+      baseColor: c(0.83, 0.66, 0.28), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.35, heightScale: 0.004, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.05, warpStrength: 0.08,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.06 },
+  },
+  // Triangle
+  {
+    id: 'white_triangle',
+    name: 'White Triangle',
+    category: 'tile',
+    description: 'White triangular tile tessellation',
+    params: {
+      baseColor: c(0.94, 0.93, 0.89), roughness: 0.25, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.002, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.08 },
+  },
+  {
+    id: 'color_triangle',
+    name: 'Color Triangle',
+    category: 'tile',
+    description: 'Teal and gold triangle tile tessellation',
+    params: {
+      baseColor: c(0.35, 0.6, 0.54), roughness: 0.35, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.004, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'dark_triangle',
+    name: 'Dark Triangle',
+    category: 'tile',
+    description: 'Dark triangle tile tessellation',
+    params: {
+      baseColor: c(0.29, 0.29, 0.28), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.004, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 3, distortion: 0.06, warpStrength: 0.1,
+    },
+  },
+  {
+    id: 'pastel_triangle',
+    name: 'Pastel Triangle',
+    category: 'tile',
+    description: 'Pastel pink and blue triangle tile',
+    params: {
+      baseColor: c(0.91, 0.72, 0.66), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.003, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 3, distortion: 0.04, warpStrength: 0.06,
+    },
   },
 ];
 

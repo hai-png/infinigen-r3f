@@ -137,9 +137,51 @@ export {
   getPreset,
   getPresetsByCategory,
   getPresetIds,
+  // Re-exports from ExpandedScenePresets
+  ALL_EXPANDED_PRESETS,
+  EXPANDED_PRESET_MAP,
+  getExpandedPreset,
+  getExpandedPresetsByCategory,
+  getExpandedPresetIds,
+  getNatureConfigForPreset,
+  getRoomTypeForPreset,
 } from './ScenePresets';
 
 export type {
   PresetCategory,
   ScenePreset,
+  ExtendedPresetCategory,
 } from './ScenePresets';
+
+// Expanded scene presets
+export {
+  CANYON,
+  CLIFF,
+  COAST,
+  KELP_FOREST,
+  MOUNTAIN,
+  PLAIN,
+  RIVER,
+  SNOWY_MOUNTAIN,
+  UNDERWATER,
+  BEDROOM_PRESET,
+  KITCHEN_PRESET,
+  BATHROOM_PRESET,
+  OFFICE_PRESET,
+  DINING_ROOM_PRESET,
+  LIVING_ROOM_ENHANCED,
+  STUDIO_PRESET,
+  GARAGE_PRESET,
+  LIBRARY_PRESET,
+  ATTIC_PRESET,
+  BASEMENT_PRESET,
+  WAREHOUSE_PRESET,
+  STEREO_TRAINING,
+  MULTIVIEW_STEREO,
+  NOISY_VIDEO,
+  ASSET_DEMO,
+  BENCHMARK,
+  EXPANDED_NATURE_PRESETS,
+  EXPANDED_INDOOR_PRESETS,
+  EXPANDED_PERFORMANCE_PRESETS,
+} from './ExpandedScenePresets';

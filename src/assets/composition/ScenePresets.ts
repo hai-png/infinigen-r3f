@@ -3,8 +3,11 @@
  *
  * Preset scene configurations for quick generation:
  * - Nature presets: Alpine Meadow, Tropical Beach, Dense Forest, Desert Canyon, Arctic Tundra, Coral Reef
+ *   + Expanded: Canyon, Cliff, Coast, KelpForest, Mountain, Plain, River, SnowyMountain, Underwater
  * - Indoor preset: Living Room
+ *   + Expanded: Bedroom, Kitchen, Bathroom, Office, DiningRoom, LivingRoom(Enhanced), Studio, Garage, Library, Attic, Basement, Warehouse
  * - Special: Cave
+ *   + Expanded: StereoTraining, MultiviewStereo, NoisyVideo, AssetDemo, Benchmark
  *
  * Each preset defines: terrain params, biome, vegetation density, weather, lighting, creatures
  */
@@ -12,6 +15,16 @@
 import { Vector3 } from 'three';
 import type { NatureSceneConfig, Season, WeatherType } from './NatureSceneComposer';
 import type { RoomType } from './IndoorSceneComposer';
+import {
+  ALL_EXPANDED_PRESETS,
+  EXPANDED_PRESET_MAP,
+  getExpandedPreset,
+  getExpandedPresetsByCategory,
+  getExpandedPresetIds,
+  getNatureConfigForPreset,
+  getRoomTypeForPreset,
+  type ExtendedPresetCategory,
+} from './ExpandedScenePresets';
 
 // ---------------------------------------------------------------------------
 // Preset types
@@ -556,6 +569,7 @@ export const ALL_PRESETS: ScenePreset[] = [
   CORAL_REEF,
   LIVING_ROOM_PRESET,
   CAVE_PRESET,
+  ...ALL_EXPANDED_PRESETS,
 ];
 
 export const PRESET_MAP: Record<string, ScenePreset> = Object.fromEntries(
@@ -563,22 +577,50 @@ export const PRESET_MAP: Record<string, ScenePreset> = Object.fromEntries(
 );
 
 /**
- * Get a preset by ID
+ * Get a preset by ID (searches both original and expanded presets)
  */
 export function getPreset(id: string): ScenePreset | undefined {
-  return PRESET_MAP[id];
+  return PRESET_MAP[id] ?? getExpandedPreset(id);
 }
 
 /**
- * Get presets by category
+ * Get presets by category (supports extended categories including 'performance')
  */
-export function getPresetsByCategory(category: PresetCategory): ScenePreset[] {
-  return ALL_PRESETS.filter(p => p.category === category);
+export function getPresetsByCategory(category: PresetCategory | ExtendedPresetCategory): ScenePreset[] {
+  // For standard categories, combine original + expanded
+  if (category === 'nature' || category === 'indoor' || category === 'special') {
+    const original = ALL_PRESETS.filter(p => p.category === category);
+    const expanded = getExpandedPresetsByCategory(category as ExtendedPresetCategory);
+    // Deduplicate by id (prefer expanded versions)
+    const seen = new Set<string>();
+    const combined: ScenePreset[] = [];
+    for (const p of [...expanded, ...original]) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        combined.push(p);
+      }
+    }
+    return combined;
+  }
+  // For performance category, only expanded presets apply
+  return getExpandedPresetsByCategory(category as ExtendedPresetCategory);
 }
 
 /**
- * Get all preset IDs
+ * Get all preset IDs (including expanded)
  */
 export function getPresetIds(): string[] {
   return ALL_PRESETS.map(p => p.id);
 }
+
+// Re-export expanded preset utilities
+export {
+  ALL_EXPANDED_PRESETS,
+  EXPANDED_PRESET_MAP,
+  getExpandedPreset,
+  getExpandedPresetsByCategory,
+  getExpandedPresetIds,
+  getNatureConfigForPreset,
+  getRoomTypeForPreset,
+  type ExtendedPresetCategory,
+} from './ExpandedScenePresets';

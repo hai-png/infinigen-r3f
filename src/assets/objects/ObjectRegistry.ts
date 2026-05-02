@@ -2,7 +2,9 @@
  * Object Registry - Central registration system for all object generators
  */
 
-import { Group } from 'three';
+import { CactusGenerator, CACTUS_VARIANTS } from './vegetation/cactus';
+import { DeformedTreeGenerator, DEFORMED_TREE_VARIANTS } from './vegetation/trees/deformed-index';
+import { FruitGenerator, FruitBowlGenerator, FRUIT_TYPES } from './food';
 
 export interface RegisteredObject {
   name: string;
@@ -58,3 +60,77 @@ export class ObjectRegistry {
 }
 
 export const registry = ObjectRegistry.getInstance();
+
+// ============================================================================
+// Auto-register cactus generators
+// ============================================================================
+
+// Register the main CactusGenerator under the 'vegetation/cactus' category
+ObjectRegistry.register(
+  'CactusGenerator',
+  'vegetation/cactus',
+  CactusGenerator,
+  ['cactus', 'vegetation', 'procedural', 'desert'],
+);
+
+// Register each variant as a named entry for convenient lookup
+for (const variant of CACTUS_VARIANTS) {
+  ObjectRegistry.register(
+    `Cactus_${variant}`,
+    'vegetation/cactus',
+    { generator: CactusGenerator, variant },
+    ['cactus', 'vegetation', 'procedural', 'desert', variant.toLowerCase()],
+  );
+}
+
+// ============================================================================
+// Auto-register deformed tree generators
+// ============================================================================
+
+// Register the main DeformedTreeGenerator under the 'vegetation/deformed-tree' category
+ObjectRegistry.register(
+  'DeformedTreeGenerator',
+  'vegetation/deformed-tree',
+  DeformedTreeGenerator,
+  ['tree', 'vegetation', 'procedural', 'deformed', 'forest'],
+);
+
+// Register each variant as a named entry for convenient lookup
+for (const variant of DEFORMED_TREE_VARIANTS) {
+  ObjectRegistry.register(
+    `DeformedTree_${variant}`,
+    'vegetation/deformed-tree',
+    { generator: DeformedTreeGenerator, variant },
+    ['tree', 'vegetation', 'procedural', 'deformed', 'forest', variant.toLowerCase()],
+  );
+}
+
+// ============================================================================
+// Auto-register fruit generators
+// ============================================================================
+
+// Register the main FruitGenerator under the 'food/fruit' category
+ObjectRegistry.register(
+  'FruitGenerator',
+  'food/fruit',
+  FruitGenerator,
+  ['fruit', 'food', 'procedural', 'nature'],
+);
+
+// Register each fruit type as a named entry for convenient lookup
+for (const fruitType of FRUIT_TYPES) {
+  ObjectRegistry.register(
+    `Fruit_${fruitType}`,
+    'food/fruit',
+    { generator: FruitGenerator, variant: fruitType },
+    ['fruit', 'food', 'procedural', 'nature', fruitType.toLowerCase()],
+  );
+}
+
+// Register the FruitBowlGenerator under the 'food/fruit-bowl' category
+ObjectRegistry.register(
+  'FruitBowlGenerator',
+  'food/fruit-bowl',
+  FruitBowlGenerator,
+  ['fruit', 'food', 'procedural', 'bowl', 'decor'],
+);
