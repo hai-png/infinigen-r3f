@@ -59,3 +59,7 @@ export type { DecalParams, DecalPlacement } from './decals/DecalSystem';
 // Node-material bridge: node system → category generators
 export { NodeMaterialGenerator, generateNodeMaterial, generateMaterial } from './node-materials';
 export type { MaterialCategory, NodeMaterialParams, NodeMaterialResult } from './node-materials';
+
+// Unified material pipeline: preset library + node graph bridges + texture baker
+export { MaterialPipeline } from './MaterialPipeline';
+export type { TextureMaps } from './MaterialPipeline';

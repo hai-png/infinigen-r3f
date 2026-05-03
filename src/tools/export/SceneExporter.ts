@@ -1,15 +1,22 @@
 /**
- * SceneExporter — Multi-format scene export pipeline
+ * SceneExporter — Unified multi-format scene export pipeline
  *
- * Supports:
- * - GLB/GLTF export via THREE.GLTFExporter (embedded textures, mesh simplification)
- * - OBJ export with vertex colors, UVs, and MTL references
- * - USD export via Python bridge (HybridBridge) with GLB fallback
- * - Export scope: full scene, selected objects only, terrain only
+ * Consolidates the previous SceneExporter (GLB/GLTF/OBJ/USD) and
+ * ExportToolkit (OBJ/PLY/STL/JSON) into a single entry point.
+ *
+ * Supported formats (actually work):
+ *   - GLB / GLTF  — via THREE.GLTFExporter (embedded textures, mesh simplification)
+ *   - OBJ         — with vertex colors, UVs, normals, and MTL references
+ *   - PLY         — ASCII point-cloud export with vertex positions
+ *   - STL         — ASCII stereo-lithography export (triangles only)
+ *   - JSON        — Three.js scene.toJSON() serialization
+ *
+ * Bridge-only formats (require Python backend — clear error if unavailable):
+ *   - FBX         — requires Python bridge
+ *   - USD         — requires Python bridge (GLB fallback if bridge connected)
  */
 
 import * as THREE from 'three';
-import { createCanvas } from '@/assets/utils/CanvasUtils';
 import { HybridBridge } from '@/integration/bridge/hybrid-bridge';
 import type { MeshSimplifier } from './MeshSimplifier';
 
@@ -17,7 +24,7 @@ import type { MeshSimplifier } from './MeshSimplifier';
 // Types
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = 'glb' | 'gltf' | 'obj' | 'usd';
+export type ExportFormat = 'glb' | 'gltf' | 'obj' | 'ply' | 'stl' | 'json' | 'fbx' | 'usd';
 
 export type ExportScope = 'full' | 'selected' | 'terrain';
 
@@ -40,6 +47,8 @@ export interface SceneExportOptions {
   maxTextureSize?: number;
   /** Embed textures in GLTF */
   embedTextures?: boolean;
+  /** Progress callback */
+  onProgress?: (progress: number, message: string) => void;
 }
 
 export interface SceneExportResult {
@@ -59,6 +68,16 @@ export interface SceneExportResult {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Formats that produce real output entirely within JavaScript */
+const NATIVE_FORMATS: readonly ExportFormat[] = ['glb', 'gltf', 'obj', 'ply', 'stl', 'json'];
+
+/** Formats that need an external Python bridge and cannot work standalone */
+const BRIDGE_FORMATS: readonly ExportFormat[] = ['fbx', 'usd'];
+
+// ---------------------------------------------------------------------------
 // SceneExporter class
 // ---------------------------------------------------------------------------
 
@@ -71,12 +90,38 @@ export class SceneExporter {
     this.simplifier = simplifier ?? null;
   }
 
+  // -----------------------------------------------------------------------
+  // Public API
+  // -----------------------------------------------------------------------
+
+  /**
+   * Return the list of export formats that actually produce output.
+   * Bridge-only formats (FBX, USD) are NOT included unless the Python
+   * bridge is connected.
+   */
+  getSupportedFormats(): ExportFormat[] {
+    const formats = [...NATIVE_FORMATS];
+    if (HybridBridge.isConnected()) {
+      formats.push(...BRIDGE_FORMATS);
+    }
+    return formats;
+  }
+
+  /**
+   * Check whether a specific format is supported.
+   */
+  isFormatSupported(format: ExportFormat): boolean {
+    if (NATIVE_FORMATS.includes(format)) return true;
+    if (BRIDGE_FORMATS.includes(format)) return HybridBridge.isConnected();
+    return false;
+  }
+
   /**
    * Export a Three.js scene in the requested format
    */
   async exportScene(
     scene: THREE.Scene,
-    options: Partial<SceneExportOptions> = {}
+    options: Partial<SceneExportOptions> = {},
   ): Promise<SceneExportResult> {
     const opts: SceneExportOptions = {
       format: 'glb',
@@ -96,7 +141,28 @@ export class SceneExporter {
     const errors: string[] = [];
 
     try {
+      // Step 0: Check format support
+      if (!this.isFormatSupported(opts.format)) {
+        if (opts.format === 'fbx') {
+          return this.makeErrorResult(
+            'FBX export requires Python bridge — connect the Python backend or use GLB/OBJ instead.',
+            startTime, warnings, errors,
+          );
+        }
+        if (opts.format === 'usd') {
+          return this.makeErrorResult(
+            'USD export requires Python bridge — connect the Python backend or use GLB/OBJ instead.',
+            startTime, warnings, errors,
+          );
+        }
+        return this.makeErrorResult(
+          `Unsupported format: ${opts.format}`,
+          startTime, warnings, errors,
+        );
+      }
+
       // Step 1: Extract objects based on scope
+      this.reportProgress(opts, 0.1, 'Preparing scene for export...');
       const exportScene = this.prepareExportScene(scene, opts, warnings);
 
       // Step 2: Optionally simplify meshes
@@ -108,6 +174,7 @@ export class SceneExporter {
       const stats = this.gatherStats(exportScene, startTime);
 
       // Step 4: Export in requested format
+      this.reportProgress(opts, 0.2, `Exporting to ${opts.format.toUpperCase()}...`);
       let result: SceneExportResult;
 
       switch (opts.format) {
@@ -118,44 +185,43 @@ export class SceneExporter {
         case 'obj':
           result = this.exportOBJ(exportScene, opts, stats, warnings, errors);
           break;
+        case 'ply':
+          result = this.exportPLY(exportScene, opts, stats, warnings, errors);
+          break;
+        case 'stl':
+          result = this.exportSTL(exportScene, opts, stats, warnings, errors);
+          break;
+        case 'json':
+          result = this.exportThreeJSON(exportScene, opts, stats, warnings, errors);
+          break;
+        case 'fbx':
+          // Should have been caught above, but just in case bridge connected
+          return this.makeErrorResult(
+            'FBX export requires Python bridge',
+            startTime, warnings, errors,
+          );
         case 'usd':
           result = await this.exportUSD(exportScene, opts, stats, warnings, errors);
           break;
         default:
-          errors.push(`Unsupported format: ${opts.format}`);
-          result = {
-            success: false,
-            data: null,
-            filename: '',
-            mimeType: '',
-            warnings,
-            errors,
-            stats,
-          };
+          return this.makeErrorResult(
+            `Unsupported format: ${opts.format}`,
+            startTime, warnings, errors,
+          );
       }
 
+      this.reportProgress(opts, 1.0, 'Export completed');
       return result;
     } catch (err) {
-      return {
-        success: false,
-        data: null,
-        filename: '',
-        mimeType: '',
-        warnings,
-        errors: [err instanceof Error ? err.message : String(err)],
-        stats: {
-          objectCount: 0,
-          materialCount: 0,
-          textureCount: 0,
-          triangleCount: 0,
-          durationMs: performance.now() - startTime,
-        },
-      };
+      return this.makeErrorResult(
+        err instanceof Error ? err.message : String(err),
+        startTime, warnings, errors,
+      );
     }
   }
 
   // -----------------------------------------------------------------------
-  // GLB/GLTF Export
+  // GLB / GLTF Export
   // -----------------------------------------------------------------------
 
   private async exportGLTF(
@@ -163,7 +229,7 @@ export class SceneExporter {
     opts: SceneExportOptions,
     stats: SceneExportResult['stats'],
     warnings: string[],
-    errors: string[]
+    errors: string[],
   ): Promise<SceneExportResult> {
     try {
       const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter');
@@ -207,15 +273,7 @@ export class SceneExporter {
       };
     } catch (err) {
       errors.push(`GLTF export failed: ${err instanceof Error ? err.message : String(err)}`);
-      return {
-        success: false,
-        data: null,
-        filename: '',
-        mimeType: '',
-        warnings,
-        errors,
-        stats,
-      };
+      return { success: false, data: null, filename: '', mimeType: '', warnings, errors, stats };
     }
   }
 
@@ -228,7 +286,7 @@ export class SceneExporter {
     opts: SceneExportOptions,
     stats: SceneExportResult['stats'],
     warnings: string[],
-    errors: string[]
+    errors: string[],
   ): SceneExportResult {
     try {
       const objLines: string[] = [];
@@ -342,8 +400,6 @@ export class SceneExporter {
 
       const objContent = objLines.join('\n');
       const mtlContent = mtlLines.join('\n');
-
-      // Combine OBJ + MTL into a single result (OBJ references external MTL)
       const combined = objContent + '\n\n# --- MTL ---\n' + mtlContent;
 
       return {
@@ -357,20 +413,150 @@ export class SceneExporter {
       };
     } catch (err) {
       errors.push(`OBJ export failed: ${err instanceof Error ? err.message : String(err)}`);
-      return {
-        success: false,
-        data: null,
-        filename: '',
-        mimeType: '',
-        warnings,
-        errors,
-        stats,
-      };
+      return { success: false, data: null, filename: '', mimeType: '', warnings, errors, stats };
     }
   }
 
   // -----------------------------------------------------------------------
-  // USD Export (via Python bridge, fallback to GLB)
+  // PLY Export (from ExportToolkit)
+  // -----------------------------------------------------------------------
+
+  private exportPLY(
+    scene: THREE.Scene,
+    _opts: SceneExportOptions,
+    stats: SceneExportResult['stats'],
+    warnings: string[],
+    errors: string[],
+  ): SceneExportResult {
+    try {
+      let plyContent = 'ply\nformat ascii 1.0\ncomment Exported by Infinigen-R3F\n';
+      const points: Array<{ x: number; y: number; z: number }> = [];
+
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const positions = child.geometry.attributes.position;
+          if (!positions) return;
+          const posArray = positions.array as Float32Array;
+          for (let i = 0; i < posArray.length; i += 3) {
+            points.push({ x: posArray[i], y: posArray[i + 1], z: posArray[i + 2] });
+          }
+        }
+      });
+
+      plyContent += `element vertex ${points.length}\nproperty float x\nproperty float y\nproperty float z\nend_header\n`;
+      for (const point of points) {
+        plyContent += `${point.x} ${point.y} ${point.z}\n`;
+      }
+
+      return {
+        success: true,
+        data: plyContent,
+        filename: 'scene.ply',
+        mimeType: 'text/plain',
+        warnings,
+        errors,
+        stats,
+      };
+    } catch (err) {
+      errors.push(`PLY export failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, data: null, filename: '', mimeType: '', warnings, errors, stats };
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // STL Export (from ExportToolkit)
+  // -----------------------------------------------------------------------
+
+  private exportSTL(
+    scene: THREE.Scene,
+    _opts: SceneExportOptions,
+    stats: SceneExportResult['stats'],
+    warnings: string[],
+    errors: string[],
+  ): SceneExportResult {
+    try {
+      let stlContent = 'solid InfinigenExport\n';
+      warnings.push('STL does not support materials or colors');
+
+      scene.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const positions = child.geometry.attributes.position;
+        if (!positions) return;
+        const posArray = positions.array as Float32Array;
+        const indexArray = child.geometry.index?.array;
+
+        if (indexArray) {
+          for (let i = 0; i < indexArray.length; i += 3) {
+            const i1 = indexArray[i] * 3;
+            const i2 = indexArray[i + 1] * 3;
+            const i3 = indexArray[i + 2] * 3;
+            stlContent += `  facet normal 0 0 0\n    outer loop\n`;
+            stlContent += `      vertex ${posArray[i1]} ${posArray[i1 + 1]} ${posArray[i1 + 2]}\n`;
+            stlContent += `      vertex ${posArray[i2]} ${posArray[i2 + 1]} ${posArray[i2 + 2]}\n`;
+            stlContent += `      vertex ${posArray[i3]} ${posArray[i3 + 1]} ${posArray[i3 + 2]}\n`;
+            stlContent += `    endloop\n  endfacet\n`;
+          }
+        } else {
+          // Non-indexed: every 3 vertices form a triangle
+          for (let i = 0; i < posArray.length; i += 9) {
+            stlContent += `  facet normal 0 0 0\n    outer loop\n`;
+            stlContent += `      vertex ${posArray[i]} ${posArray[i + 1]} ${posArray[i + 2]}\n`;
+            stlContent += `      vertex ${posArray[i + 3]} ${posArray[i + 4]} ${posArray[i + 5]}\n`;
+            stlContent += `      vertex ${posArray[i + 6]} ${posArray[i + 7]} ${posArray[i + 8]}\n`;
+            stlContent += `    endloop\n  endfacet\n`;
+          }
+        }
+      });
+
+      stlContent += 'endsolid InfinigenExport\n';
+
+      return {
+        success: true,
+        data: stlContent,
+        filename: 'scene.stl',
+        mimeType: 'model/stl',
+        warnings,
+        errors,
+        stats,
+      };
+    } catch (err) {
+      errors.push(`STL export failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, data: null, filename: '', mimeType: '', warnings, errors, stats };
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Three.js JSON Export (from ExportToolkit)
+  // -----------------------------------------------------------------------
+
+  private exportThreeJSON(
+    scene: THREE.Scene,
+    _opts: SceneExportOptions,
+    stats: SceneExportResult['stats'],
+    warnings: string[],
+    errors: string[],
+  ): SceneExportResult {
+    try {
+      const json = scene.toJSON();
+      const content = JSON.stringify(json, null, 2);
+
+      return {
+        success: true,
+        data: content,
+        filename: 'scene.json',
+        mimeType: 'application/json',
+        warnings,
+        errors,
+        stats,
+      };
+    } catch (err) {
+      errors.push(`JSON export failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, data: null, filename: '', mimeType: '', warnings, errors, stats };
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // USD Export (via Python bridge, GLB fallback)
   // -----------------------------------------------------------------------
 
   private async exportUSD(
@@ -378,33 +564,29 @@ export class SceneExporter {
     opts: SceneExportOptions,
     stats: SceneExportResult['stats'],
     warnings: string[],
-    errors: string[]
+    errors: string[],
   ): Promise<SceneExportResult> {
-    // Try Python bridge for USD conversion
-    if (HybridBridge.isConnected()) {
-      try {
-        // First export as GLB, then send to Python for USD conversion
-        const glbResult = await this.exportGLTF(scene, { ...opts, binary: true }, stats, warnings, errors);
-        if (glbResult.success && glbResult.data instanceof ArrayBuffer) {
-          const bridgeResult = await this.bridge.transferGeometry(glbResult.data);
-          if (bridgeResult.received) {
-            warnings.push('USD export sent to Python backend for conversion');
-            return {
-              success: true,
-              data: glbResult.data,
-              filename: 'scene.usda',
-              mimeType: 'model/usd',
-              warnings,
-              errors,
-              stats,
-            };
-          }
+    // Only reachable if bridge is connected (checked in exportScene)
+    try {
+      // First export as GLB, then send to Python for USD conversion
+      const glbResult = await this.exportGLTF(scene, { ...opts, binary: true }, stats, warnings, errors);
+      if (glbResult.success && glbResult.data instanceof ArrayBuffer) {
+        const bridgeResult = await this.bridge.transferGeometry(glbResult.data);
+        if (bridgeResult.received) {
+          warnings.push('USD export sent to Python backend for conversion');
+          return {
+            success: true,
+            data: glbResult.data,
+            filename: 'scene.usda',
+            mimeType: 'model/usd',
+            warnings,
+            errors,
+            stats,
+          };
         }
-      } catch {
-        warnings.push('Python bridge USD conversion failed, falling back to GLB');
       }
-    } else {
-      warnings.push('Python bridge unavailable for USD export, falling back to GLB');
+    } catch {
+      warnings.push('Python bridge USD conversion failed, falling back to GLB');
     }
 
     // Fallback to GLB
@@ -419,10 +601,40 @@ export class SceneExporter {
   // Helpers
   // -----------------------------------------------------------------------
 
+  private makeErrorResult(
+    message: string,
+    startTime: number,
+    warnings: string[],
+    errors: string[],
+  ): SceneExportResult {
+    errors.push(message);
+    return {
+      success: false,
+      data: null,
+      filename: '',
+      mimeType: '',
+      warnings,
+      errors,
+      stats: {
+        objectCount: 0,
+        materialCount: 0,
+        textureCount: 0,
+        triangleCount: 0,
+        durationMs: performance.now() - startTime,
+      },
+    };
+  }
+
+  private reportProgress(opts: SceneExportOptions, progress: number, message: string): void {
+    if (opts.onProgress) {
+      opts.onProgress(progress, message);
+    }
+  }
+
   private prepareExportScene(
     sourceScene: THREE.Scene,
     opts: SceneExportOptions,
-    warnings: string[]
+    warnings: string[],
   ): THREE.Scene {
     const exportScene = new THREE.Scene();
     exportScene.name = sourceScene.name || 'ExportScene';
@@ -607,12 +819,16 @@ export class SceneExporter {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Convenience functions
+// ---------------------------------------------------------------------------
+
 /**
  * Convenience function: export scene to downloadable blob
  */
 export async function exportSceneToBlob(
   scene: THREE.Scene,
-  options: Partial<SceneExportOptions> = {}
+  options: Partial<SceneExportOptions> = {},
 ): Promise<Blob | null> {
   const exporter = new SceneExporter();
   const result = await exporter.exportScene(scene, options);
@@ -623,4 +839,12 @@ export async function exportSceneToBlob(
     return new Blob([result.data], { type: result.mimeType });
   }
   return new Blob([result.data], { type: result.mimeType });
+}
+
+/**
+ * Get the list of supported export formats.
+ * Standalone convenience function that doesn't require a SceneExporter instance.
+ */
+export function getSupportedFormats(): ExportFormat[] {
+  return new SceneExporter().getSupportedFormats();
 }

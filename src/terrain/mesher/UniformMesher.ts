@@ -1,20 +1,40 @@
 /**
  * Infinigen R3F Port - Uniform Mesher
- * Regular grid-based meshing with automatic subdivision
- * 
+ * Regular grid-based meshing using proper marching cubes isosurface extraction.
+ *
+ * Delegates to `extractIsosurface()` from sdf-operations.ts instead of
+ * maintaining a broken inline marching-cubes implementation.
+ *
  * Based on original: infinigen/terrain/mesher/uniform_mesher.py
  */
 
 import { Vector3, BufferGeometry, Float32BufferAttribute, Box3 } from 'three';
 import { SDFKernel } from '../sdf/SDFOperations';
+import { SignedDistanceField, extractIsosurface } from '../sdf/sdf-operations';
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
 
 export interface UniformMesherConfig {
-  subdivisions: [number, number, number]; // -1 means automatic
+  /** Grid subdivision counts per axis; -1 means automatic from voxel size */
+  subdivisions: [number, number, number];
+  /** Multiplier that refines the coarse voxel size for finer sampling */
   upscale: number;
+  /** When true, adds boundary skirts and a bottom cap for a watertight volume */
   enclosed: boolean;
+  /** Kept for API compatibility; no longer used (extractIsosurface does its own interpolation) */
   bisectionIters: number;
+  /** Log grid dimensions and voxel size */
   verbose: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// UniformMesher
+// ---------------------------------------------------------------------------
+
+/** Default depth (world units) below the grid minimum Y for enclosure skirts */
+const ENCLOSURE_SKIRT_DEPTH = 5;
 
 export class UniformMesher {
   private config: UniformMesherConfig;
@@ -23,29 +43,28 @@ export class UniformMesher {
   private yN: number;
   private zN: number;
   private voxelSize: number;
-  
+
   constructor(
     bounds: [number, number, number, number, number, number],
     config: Partial<UniformMesherConfig> = {}
   ) {
     this.bounds = bounds;
-    
+
     this.config = {
-      subdivisions: [64, -1, -1], // -1 means automatic based on voxel size
+      subdivisions: [64, -1, -1],
       upscale: 3,
       enclosed: false,
       bisectionIters: 10,
       verbose: false,
       ...config,
     };
-    
-    // Calculate grid dimensions
+
+    // Calculate grid dimensions (same logic as before)
     const [xMin, xMax, yMin, yMax, zMin, zMax] = bounds;
     const xSize = xMax - xMin;
     const ySize = yMax - yMin;
     const zSize = zMax - zMin;
-    
-    // Determine coarse voxel size from specified subdivision
+
     let coarseVoxelSize: number;
     if (this.config.subdivisions[0] !== -1) {
       coarseVoxelSize = xSize / this.config.subdivisions[0];
@@ -54,546 +73,284 @@ export class UniformMesher {
     } else {
       coarseVoxelSize = zSize / this.config.subdivisions[2];
     }
-    
-    // Calculate grid dimensions
-    this.xN = this.config.subdivisions[0] !== -1 
-      ? this.config.subdivisions[0] 
-      : Math.floor(xSize / coarseVoxelSize);
-    this.yN = this.config.subdivisions[1] !== -1 
-      ? this.config.subdivisions[1] 
-      : Math.floor(ySize / coarseVoxelSize);
-    this.zN = this.config.subdivisions[2] !== -1 
-      ? this.config.subdivisions[2] 
-      : Math.floor(zSize / coarseVoxelSize);
-    
+
+    this.xN =
+      this.config.subdivisions[0] !== -1
+        ? this.config.subdivisions[0]
+        : Math.floor(xSize / coarseVoxelSize);
+    this.yN =
+      this.config.subdivisions[1] !== -1
+        ? this.config.subdivisions[1]
+        : Math.floor(ySize / coarseVoxelSize);
+    this.zN =
+      this.config.subdivisions[2] !== -1
+        ? this.config.subdivisions[2]
+        : Math.floor(zSize / coarseVoxelSize);
+
     this.voxelSize = coarseVoxelSize / this.config.upscale;
-    
+
     if (this.config.verbose) {
       console.log(`UniformMesher: Grid ${this.xN}x${this.yN}x${this.zN}`);
       console.log(`UniformMesher: Voxel size ${this.voxelSize.toFixed(4)}`);
     }
   }
-  
+
+  // -----------------------------------------------------------------------
+  // Public API
+  // -----------------------------------------------------------------------
+
   /**
-   * Generate mesh from SDF kernels using uniform grid sampling
+   * Generate mesh from SDF kernels using uniform grid sampling and
+   * proper marching-cubes isosurface extraction.
    */
   public generateMesh(kernels: SDFKernel[]): BufferGeometry {
-    const vertices: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
-    
     const [xMin, xMax, yMin, yMax, zMin, zMax] = this.bounds;
-    const dx = (xMax - xMin) / this.xN;
-    const dy = (yMax - yMin) / this.yN;
-    const dz = (zMax - zMin) / this.zN;
-    
+
+    const bbox = new Box3(
+      new Vector3(xMin, yMin, zMin),
+      new Vector3(xMax, yMax, zMax)
+    );
+
+    // Create the SDF with our voxel size as resolution.
+    // SignedDistanceField computes gridSize = floor(size / resolution),
+    // producing approximately (xN+1, yN+1, zN+1) grid points.
+    const sdf = new SignedDistanceField({
+      resolution: this.voxelSize,
+      bounds: bbox,
+      maxDistance: 1000,
+    });
+
     if (this.config.verbose) {
-      console.log(`Sampling SDF on ${this.xN}x${this.yN}x${this.zN} grid`);
-    }
-    
-    // Sample SDF values on uniform grid
-    const sdfGrid = this.sampleSDFGrid(kernels, xMin, yMin, zMin, dx, dy, dz);
-    
-    // Run marching cubes
-    const marchingCubesResult = this.runMarchingCubes(sdfGrid, dx, dy, dz);
-    
-    // Convert to Three.js geometry
-    for (const vertex of marchingCubesResult.vertices) {
-      vertices.push(vertex.x, vertex.y, vertex.z);
-    }
-    
-    for (const normal of marchingCubesResult.normals) {
-      normals.push(normal.x, normal.y, normal.z);
-    }
-    
-    for (let i = 0; i < marchingCubesResult.indices.length; i += 3) {
-      indices.push(
-        marchingCubesResult.indices[i],
-        marchingCubesResult.indices[i + 2],
-        marchingCubesResult.indices[i + 1]
+      console.log(
+        `Sampling SDF on ${sdf.gridSize[0]}x${sdf.gridSize[1]}x${sdf.gridSize[2]} grid ` +
+        `(voxelSize=${this.voxelSize.toFixed(4)})`
       );
     }
-    
-    // Generate UVs based on world position
-    for (let i = 0; i < vertices.length; i += 3) {
-      const x = (vertices[i] - xMin) / (xMax - xMin);
-      const z = (vertices[i + 2] - zMin) / (zMax - zMin);
-      uvs.push(x, z);
+
+    // Evaluate all SDF kernels at each grid point (union = minimum)
+    for (let gz = 0; gz < sdf.gridSize[2]; gz++) {
+      for (let gy = 0; gy < sdf.gridSize[1]; gy++) {
+        for (let gx = 0; gx < sdf.gridSize[0]; gx++) {
+          const pos = sdf.getPosition(gx, gy, gz);
+          let minSDF = Infinity;
+          for (const kernel of kernels) {
+            minSDF = Math.min(minSDF, kernel.evaluate(pos));
+          }
+          sdf.setValueAtGrid(gx, gy, gz, minSDF);
+        }
+      }
     }
-    
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
-    geometry.setIndex(indices);
-    
-    geometry.computeBoundingSphere();
-    geometry.computeBoundingBox();
-    
+
+    // Extract isosurface at threshold 0 using proper marching cubes
+    const geometry = extractIsosurface(sdf, 0);
+
     if (this.config.enclosed) {
       this.encloseMesh(geometry);
     }
-    
+
     return geometry;
   }
-  
+
+  // -----------------------------------------------------------------------
+  // Enclosure
+  // -----------------------------------------------------------------------
+
   /**
-   * Sample SDF values on uniform grid
-   */
-  private sampleSDFGrid(
-    kernels: SDFKernel[],
-    xMin: number,
-    yMin: number,
-    zMin: number,
-    dx: number,
-    dy: number,
-    dz: number
-  ): Float32Array {
-    const gridSize = (this.xN + 1) * (this.yN + 1) * (this.zN + 1);
-    const grid = new Float32Array(gridSize);
-    
-    let idx = 0;
-    for (let z = 0; z <= this.zN; z++) {
-      for (let y = 0; y <= this.yN; y++) {
-        for (let x = 0; x <= this.xN; x++) {
-          const worldX = xMin + x * dx;
-          const worldY = yMin + y * dy;
-          const worldZ = zMin + z * dz;
-          
-          // Evaluate all SDF kernels and take minimum
-          let minSDF = Infinity;
-          for (const kernel of kernels) {
-            const sdf = kernel.evaluate(new Vector3(worldX, worldY, worldZ));
-            minSDF = Math.min(minSDF, sdf);
-          }
-          
-          grid[idx++] = minSDF;
-        }
-      }
-    }
-    
-    return grid;
-  }
-  
-  /**
-   * Run marching cubes on SDF grid
-   */
-  private runMarchingCubes(
-    grid: Float32Array,
-    dx: number,
-    dy: number,
-    dz: number
-  ): { vertices: Vector3[]; normals: Vector3[]; indices: number[] } {
-    const vertices: Vector3[] = [];
-    const normals: Vector3[] = [];
-    const indices: number[] = [];
-    
-    const isolevel = 0;
-    
-    for (let z = 0; z < this.zN; z++) {
-      for (let y = 0; y < this.yN; y++) {
-        for (let x = 0; x < this.xN; x++) {
-          const baseIdx = z * (this.xN + 1) * (this.yN + 1) + y * (this.xN + 1) + x;
-          
-          // Get cube corner values
-          const v000 = grid[baseIdx];
-          const v100 = grid[baseIdx + 1];
-          const v010 = grid[baseIdx + (this.xN + 1)];
-          const v110 = grid[baseIdx + (this.xN + 1) + 1];
-          const v001 = grid[baseIdx + (this.xN + 1) * (this.yN + 1)];
-          const v101 = grid[baseIdx + (this.xN + 1) * (this.yN + 1) + 1];
-          const v011 = grid[baseIdx + (this.xN + 1) * (this.yN + 1) + (this.xN + 1)];
-          const v111 = grid[baseIdx + (this.xN + 1) * (this.yN + 1) + (this.xN + 1) + 1];
-          
-          // Check if cube crosses isolevel
-          const cubeIndex = this.calculateCubeIndex(v000, v100, v010, v110, v001, v101, v011, v111, isolevel);
-          
-          if (cubeIndex !== 0 && cubeIndex !== 255) {
-            // Cube intersects surface - refine with bisection
-            if (this.config.bisectionIters > 0) {
-              this.refineWithBisection(
-                vertices, normals, indices,
-                x, y, z, dx, dy, dz,
-                v000, v100, v010, v110, v001, v101, v011, v111,
-                cubeIndex,
-                isolevel
-              );
-            } else {
-              this.processIntersectingCube(
-                vertices, normals, indices,
-                x, y, z, dx, dy, dz,
-                v000, v100, v010, v110, v001, v101, v011, v111,
-                cubeIndex,
-                isolevel
-              );
-            }
-          }
-        }
-      }
-    }
-    
-    return { vertices, normals, indices };
-  }
-  
-  /**
-   * Refine surface intersection using bisection
-   */
-  private refineWithBisection(
-    vertices: Vector3[],
-    normals: Vector3[],
-    indices: number[],
-    x: number,
-    y: number,
-    z: number,
-    dx: number,
-    dy: number,
-    dz: number,
-    v000: number, v100: number, v010: number, v110: number,
-    v001: number, v101: number, v011: number, v111: number,
-    cubeIndex: number,
-    isolevel: number
-  ): void {
-    // Perform bisection iterations for more accurate surface positioning
-    // This improves mesh quality at the cost of additional SDF evaluations
-    
-    const edgeTable = [
-      0x000, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
-      0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
-      0x190, 0x099, 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
-      0x99c, 0x895, 0xb9f, 0xa96, 0xd9a, 0xc93, 0xf99, 0xe90,
-      0x230, 0x339, 0x033, 0x13a, 0x636, 0x73f, 0x435, 0x53c,
-      0xa3c, 0xb35, 0x83f, 0x936, 0xe3a, 0xf33, 0xc39, 0xd30,
-      0x3a0, 0x2a9, 0x1a3, 0x0aa, 0x7a6, 0x6af, 0x5a5, 0x4ac,
-      0xbac, 0xaa5, 0x9af, 0x8a6, 0xfaa, 0xea3, 0xda9, 0xca0,
-      0x460, 0x569, 0x663, 0x76a, 0x066, 0x16f, 0x265, 0x36c,
-      0xc6c, 0xd65, 0xe6f, 0xf66, 0x86a, 0x963, 0xa69, 0xb60,
-      0x5f0, 0x4f9, 0x7f3, 0x6fa, 0x1f6, 0x0ff, 0x3f5, 0x2fc,
-      0xdfc, 0xcf5, 0xfff, 0xef6, 0x9fa, 0x8f3, 0xbf9, 0xaf0,
-      0x650, 0x759, 0x453, 0x55a, 0x256, 0x35f, 0x055, 0x15c,
-      0xe5c, 0xf55, 0xc5f, 0xd56, 0xa5a, 0xb53, 0x859, 0x950,
-      0x7c0, 0x6c9, 0x5c3, 0x4ca, 0x3c6, 0x2cf, 0x1c5, 0x0cc,
-      0xfcc, 0xec5, 0xdcf, 0xcc6, 0xbca, 0xac3, 0x9c9, 0x8c0
-    ];
-    
-    // Simplified implementation - in production would use full lookup tables
-    this.processIntersectingCube(
-      vertices, normals, indices,
-      x, y, z, dx, dy, dz,
-      v000, v100, v010, v110, v001, v101, v011, v111,
-      cubeIndex,
-      isolevel
-    );
-  }
-  
-  /**
-   * Process intersecting cube and generate triangles
-   */
-  private processIntersectingCube(
-    vertices: Vector3[],
-    normals: Vector3[],
-    indices: number[],
-    x: number,
-    y: number,
-    z: number,
-    dx: number,
-    dy: number,
-    dz: number,
-    v000: number, v100: number, v010: number, v110: number,
-    v001: number, v101: number, v011: number, v111: number,
-    cubeIndex: number,
-    isolevel: number
-  ): void {
-    // Marching cubes triangle generation
-    const triTable = [
-      [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [1, 8, 3, 9, 8, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [9, 2, 10, 0, 2, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [2, 8, 3, 2, 10, 8, 10, 9, 8, -1, -1, -1, -1, -1, -1, -1],
-      [3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, -1, -1, -1, -1, -1, -1, -1],
-      [3, 10, 1, 11, 10, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, -1, -1, -1, -1, -1, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, -1, -1, -1, -1, -1, -1, -1],
-      [9, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [4, 3, 0, 7, 3, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 1, 9, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [1, 9, 4, 1, 4, 7, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1],
-      [1, 2, 10, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [4, 7, 8, 0, 8, 3, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1],
-      [9, 2, 10, 0, 2, 9, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1],
-      [2, 9, 4, 2, 4, 7, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1],
-      [3, 11, 2, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 4, 7, 8, -1, -1, -1, -1],
-      [3, 10, 1, 11, 10, 3, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 4, 7, 8, -1, -1, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 4, 7, 8, -1, -1, -1, -1],
-      [9, 8, 10, 10, 8, 11, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1],
-      [4, 9, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [4, 9, 5, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [4, 0, 1, 4, 5, 0, 5, 9, 0, -1, -1, -1, -1, -1, -1, -1],
-      [5, 9, 4, 1, 9, 5, 8, 1, 9, 8, 3, 1, -1, -1, -1, -1],
-      [4, 9, 5, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1],
-      [5, 2, 10, 5, 0, 2, 0, 4, 2, 4, 9, 2, -1, -1, -1, -1],
-      [5, 2, 10, 5, 4, 2, 4, 3, 2, 8, 3, 4, -1, -1, -1, -1],
-      [3, 11, 2, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 4, 9, 5, -1, -1, -1, -1],
-      [3, 10, 1, 11, 10, 3, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 4, 9, 5, -1, -1, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 4, 9, 5, -1, -1, -1, -1],
-      [9, 8, 10, 10, 8, 11, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1],
-      [5, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [5, 4, 7, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [5, 0, 1, 5, 4, 0, 4, 7, 0, -1, -1, -1, -1, -1, -1, -1],
-      [5, 1, 4, 1, 9, 4, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1],
-      [5, 4, 7, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [5, 2, 10, 5, 0, 2, 0, 4, 2, 4, 7, 2, -1, -1, -1, -1],
-      [5, 2, 10, 5, 4, 2, 4, 3, 2, 8, 3, 4, -1, -1, -1, -1],
-      [3, 11, 2, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 5, 4, 7, -1, -1, -1, -1],
-      [3, 10, 1, 11, 10, 3, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 5, 4, 7, -1, -1, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 5, 4, 7, -1, -1, -1, -1],
-      [9, 8, 10, 10, 8, 11, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [5, 8, 4, 5, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [5, 0, 1, 5, 4, 0, 4, 3, 0, -1, -1, -1, -1, -1, -1, -1],
-      [5, 7, 8, 5, 0, 7, 0, 1, 7, -1, -1, -1, -1, -1, -1, -1],
-      [5, 1, 4, 1, 9, 4, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1],
-      [5, 8, 4, 5, 7, 8, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [5, 2, 10, 5, 0, 2, 0, 4, 2, 4, 7, 2, -1, -1, -1, -1],
-      [5, 2, 10, 5, 4, 2, 4, 3, 2, 8, 3, 4, -1, -1, -1, -1],
-      [3, 11, 2, 5, 8, 4, 5, 7, 8, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 5, 8, 4, 5, 7, 8, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 5, 8, 4, 5, 7, 8, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 5, 8, 4, 5, 7, 8, -1, -1],
-      [3, 10, 1, 11, 10, 3, 5, 8, 4, 5, 7, 8, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 5, 8, 4, 5, 7, 8, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 5, 8, 4, 5, 7, 8, -1, -1],
-      [9, 8, 10, 10, 8, 11, 5, 8, 4, 5, 7, 8, -1, -1, -1, -1],
-      [5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [5, 0, 1, 5, 4, 0, 4, 3, 0, 7, 8, 4, -1, -1, -1, -1],
-      [5, 0, 1, 5, 4, 0, 4, 7, 0, -1, -1, -1, -1, -1, -1, -1],
-      [5, 1, 4, 1, 9, 4, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1],
-      [5, 9, 4, 7, 8, 4, 5, 4, 7, 1, 2, 10, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 5, 4, 7, -1, -1, -1, -1, -1, -1, -1],
-      [5, 2, 10, 5, 0, 2, 0, 4, 2, 4, 7, 2, -1, -1, -1, -1],
-      [5, 2, 10, 5, 4, 2, 4, 3, 2, 8, 3, 4, -1, -1, -1, -1],
-      [3, 11, 2, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [1, 9, 0, 2, 3, 11, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [3, 10, 1, 11, 10, 3, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [9, 8, 10, 10, 8, 11, 5, 9, 4, 7, 8, 4, 5, 4, 7, -1, -1],
-      [7, 8, 4, 7, 6, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [7, 0, 1, 7, 6, 0, 6, 8, 0, -1, -1, -1, -1, -1, -1, -1],
-      [7, 6, 8, 7, 0, 6, 0, 1, 6, -1, -1, -1, -1, -1, -1, -1],
-      [7, 1, 6, 1, 9, 6, 6, 8, 9, -1, -1, -1, -1, -1, -1, -1],
-      [7, 8, 4, 7, 6, 8, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 7, 6, 8, -1, -1, -1, -1, -1, -1, -1],
-      [7, 6, 8, 7, 0, 6, 0, 1, 6, 1, 2, 10, -1, -1, -1, -1],
-      [7, 1, 6, 1, 9, 6, 6, 8, 9, 1, 2, 10, -1, -1, -1, -1],
-      [7, 8, 4, 7, 6, 8, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 7, 6, 8, -1, -1, -1, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 7, 6, 8, -1, -1, -1, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 7, 6, 8, -1, -1, -1, -1],
-      [3, 10, 1, 11, 10, 3, 7, 8, 4, 7, 6, 8, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 7, 8, 4, 7, 6, 8, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 7, 8, 4, 7, 6, 8, -1, -1],
-      [9, 8, 10, 10, 8, 11, 7, 8, 4, 7, 6, 8, -1, -1, -1, -1],
-      [5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1, -1, -1, -1, -1, -1],
-      [5, 0, 1, 5, 4, 0, 4, 3, 0, 6, 8, 4, -1, -1, -1, -1],
-      [5, 0, 1, 5, 4, 0, 4, 7, 0, 6, 8, 4, -1, -1, -1, -1],
-      [5, 1, 4, 1, 9, 4, 7, 4, 3, 6, 8, 4, -1, -1, -1, -1],
-      [5, 8, 4, 5, 7, 8, 6, 8, 4, 1, 2, 10, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [5, 2, 10, 5, 0, 2, 0, 4, 2, 4, 7, 2, 6, 8, 4, -1, -1],
-      [5, 2, 10, 5, 4, 2, 4, 3, 2, 8, 3, 4, 6, 8, 4, -1, -1],
-      [3, 11, 2, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [1, 9, 0, 2, 3, 11, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [3, 10, 1, 11, 10, 3, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [9, 8, 10, 10, 8, 11, 5, 8, 4, 5, 7, 8, 6, 8, 4, -1, -1],
-      [6, 9, 5, 6, 5, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [6, 9, 5, 6, 5, 7, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, -1, -1, -1, -1, -1, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, -1, -1, -1, -1, -1, -1, -1],
-      [6, 9, 5, 6, 5, 7, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 6, 9, 5, 6, 5, 7, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 1, 2, 10, -1, -1, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 1, 2, 10, -1, -1, -1, -1],
-      [6, 9, 5, 6, 5, 7, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 6, 9, 5, 6, 5, 7, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 6, 9, 5, 6, 5, 7, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 6, 9, 5, 6, 5, 7, -1, -1],
-      [3, 10, 1, 11, 10, 3, 6, 9, 5, 6, 5, 7, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 6, 9, 5, 6, 5, 7, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 6, 9, 5, 6, 5, 7, -1, -1],
-      [9, 8, 10, 10, 8, 11, 6, 9, 5, 6, 5, 7, -1, -1, -1, -1],
-      [6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1, -1, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 4, 3, 0, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 4, 7, 0, -1, -1, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 4, 3, 8, -1, -1, -1, -1],
-      [6, 5, 7, 6, 9, 5, 9, 4, 5, 1, 2, 10, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 4, 7, 0, 1, 2, 10, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 4, 3, 8, 1, 2, 10, -1, -1],
-      [6, 5, 7, 6, 9, 5, 9, 4, 5, 3, 11, 2, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [1, 9, 0, 2, 3, 11, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [3, 10, 1, 11, 10, 3, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [9, 8, 10, 10, 8, 11, 6, 5, 7, 6, 9, 5, 9, 4, 5, -1, -1],
-      [6, 7, 8, 6, 5, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 7, 8, 6, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 7, 8, 6, -1, -1, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 7, 8, 6, -1, -1, -1, -1],
-      [6, 7, 8, 6, 5, 7, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 6, 7, 8, 6, 5, 7, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 7, 8, 6, 1, 2, 10, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 7, 8, 6, 1, 2, 10, -1, -1],
-      [6, 7, 8, 6, 5, 7, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 6, 7, 8, 6, 5, 7, -1, -1, -1, -1],
-      [1, 9, 0, 2, 3, 11, 6, 7, 8, 6, 5, 7, -1, -1, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 6, 7, 8, 6, 5, 7, -1, -1],
-      [3, 10, 1, 11, 10, 3, 6, 7, 8, 6, 5, 7, -1, -1, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 6, 7, 8, 6, 5, 7, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 6, 7, 8, 6, 5, 7, -1, -1],
-      [9, 8, 10, 10, 8, 11, 6, 7, 8, 6, 5, 7, -1, -1, -1, -1],
-      [7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1, -1, -1, -1, -1, -1],
-      [7, 0, 1, 7, 6, 0, 6, 9, 0, 4, 3, 0, -1, -1, -1, -1],
-      [7, 0, 1, 7, 6, 0, 6, 9, 0, 4, 7, 0, -1, -1, -1, -1],
-      [7, 1, 6, 1, 9, 6, 6, 8, 9, 4, 3, 8, -1, -1, -1, -1],
-      [7, 6, 9, 7, 5, 6, 7, 4, 5, 1, 2, 10, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [7, 0, 1, 7, 6, 0, 6, 9, 0, 4, 7, 0, 1, 2, 10, -1, -1],
-      [7, 1, 6, 1, 9, 6, 6, 8, 9, 4, 3, 8, 1, 2, 10, -1, -1],
-      [7, 6, 9, 7, 5, 6, 7, 4, 5, 3, 11, 2, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [1, 9, 0, 2, 3, 11, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [3, 10, 1, 11, 10, 3, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [9, 8, 10, 10, 8, 11, 7, 6, 9, 7, 5, 6, 7, 4, 5, -1, -1],
-      [6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1, -1, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 8, 4, 5, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 8, 4, 5, -1, -1, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 8, 4, 5, -1, -1, -1, -1],
-      [6, 9, 5, 6, 5, 7, 8, 4, 5, 1, 2, 10, -1, -1, -1, -1],
-      [0, 8, 3, 1, 2, 10, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 8, 4, 5, 1, 2, 10, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 8, 4, 5, 1, 2, 10, -1, -1],
-      [6, 9, 5, 6, 5, 7, 8, 4, 5, 3, 11, 2, -1, -1, -1, -1],
-      [0, 11, 2, 8, 11, 0, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [1, 9, 0, 2, 3, 11, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [3, 10, 1, 11, 10, 3, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [9, 8, 10, 10, 8, 11, 6, 9, 5, 6, 5, 7, 8, 4, 5, -1, -1],
-      [6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 4, 3, 0, 8, 4, 7, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 4, 7, 0, 8, 4, 7, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 4, 3, 8, 8, 4, 7, -1, -1],
-      [6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, 1, 2, 10, -1, -1],
-      [0, 8, 3, 1, 2, 10, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [6, 0, 1, 6, 9, 0, 9, 5, 0, 4, 7, 0, 8, 4, 7, 1, 2, 10, -1, -1],
-      [6, 1, 9, 1, 8, 9, 9, 5, 8, 4, 3, 8, 8, 4, 7, 1, 2, 10, -1, -1],
-      [6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, 3, 11, 2, -1, -1],
-      [0, 11, 2, 8, 11, 0, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [1, 9, 0, 2, 3, 11, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [1, 11, 2, 1, 9, 11, 9, 8, 11, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [3, 10, 1, 11, 10, 3, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [0, 10, 1, 0, 8, 10, 8, 11, 10, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [3, 9, 0, 3, 11, 9, 11, 10, 9, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-      [9, 8, 10, 10, 8, 11, 6, 5, 7, 6, 9, 5, 9, 4, 5, 8, 4, 7, -1, -1],
-    ];
-    
-    // Placeholder implementation
-    const cx = x * dx + dx / 2;
-    const cy = y * dy + dy / 2;
-    const cz = z * dz + dz / 2;
-    
-    const startVertex = vertices.length;
-    vertices.push(
-      new Vector3(cx, cy, cz),
-      new Vector3(cx + dx, cy, cz),
-      new Vector3(cx + dx, cy + dy, cz),
-      new Vector3(cx, cy + dy, cz)
-    );
-    
-    const normal = new Vector3(0, 0, 1);
-    normals.push(normal, normal, normal, normal);
-    
-    indices.push(
-      startVertex, startVertex + 1, startVertex + 2,
-      startVertex, startVertex + 2, startVertex + 3
-    );
-  }
-  
-  /**
-   * Enclose mesh to create watertight volume
+   * Add boundary skirts and a bottom cap to make the mesh watertight.
+   *
+   * Algorithm:
+   * 1. Find all triangle edges that lie on a grid boundary plane
+   *    (xMin, xMax, zMin, zMax) where both endpoints are on the same plane.
+   * 2. For each such boundary edge, extrude a skirt quad straight down
+   *    to a fixed depth below the grid minimum Y.
+   * 3. Add a flat rectangular bottom cap at that depth.
+   * 4. Recompute vertex normals so skirt normals are correct.
    */
   private encloseMesh(geometry: BufferGeometry): void {
-    // Add bottom cap and side walls to make mesh watertight
-    const positions = geometry.getAttribute('position');
-    const vertices: number[] = [];
-    
-    // Find boundary vertices
-    const minY = Math.min(...Array.from({ length: positions.count }, (_, i) => positions.getY(i)));
-    
-    // Add bottom vertices
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
-      const z = positions.getZ(i);
-      
-      if (Math.abs(y - minY) < 0.001) {
-        vertices.push(x, minY - 1, z);
+    const posAttr = geometry.getAttribute('position');
+    if (!posAttr || posAttr.count === 0) return;
+
+    const [xMin, xMax, yMin, , zMin, zMax] = this.bounds;
+    const eps = this.voxelSize * 0.5;
+    const bottomY = yMin - ENCLOSURE_SKIRT_DEPTH;
+
+    // ---------- helpers ----------
+    /** Check whether a position is on a grid boundary plane. */
+    const isOnBoundaryPlane = (x: number, z: number): boolean =>
+      Math.abs(x - xMin) < eps ||
+      Math.abs(x - xMax) < eps ||
+      Math.abs(z - zMin) < eps ||
+      Math.abs(z - zMax) < eps;
+
+    /** Check whether two vertices lie on the *same* boundary plane. */
+    const onSameBoundaryPlane = (
+      ax: number, az: number,
+      bx: number, bz: number
+    ): boolean =>
+      (Math.abs(ax - xMin) < eps && Math.abs(bx - xMin) < eps) ||
+      (Math.abs(ax - xMax) < eps && Math.abs(bx - xMax) < eps) ||
+      (Math.abs(az - zMin) < eps && Math.abs(bz - zMin) < eps) ||
+      (Math.abs(az - zMax) < eps && Math.abs(bz - zMax) < eps);
+
+    /** Position-based deduplication key for an edge (order-independent). */
+    const edgeKey = (
+      ax: number, ay: number, az: number,
+      bx: number, by: number, bz: number
+    ): string => {
+      const a = `${ax.toFixed(3)},${ay.toFixed(3)},${az.toFixed(3)}`;
+      const b = `${bx.toFixed(3)},${by.toFixed(3)},${bz.toFixed(3)}`;
+      return a < b ? `${a}|${b}` : `${b}|${a}`;
+    };
+
+    // ---------- gather boundary edges ----------
+    const skirtPositions: number[] = [];
+    const skirtNormals: number[] = [];
+    const skirtUVs: number[] = [];
+    const skirtIndices: number[] = [];
+    const processedEdges = new Set<string>();
+
+    // extractIsosurface returns non-indexed geometry, so triangles are
+    // every 3 consecutive vertices.  We also handle indexed geometry.
+    const indexBuf = geometry.index;
+    const triCount = indexBuf
+      ? indexBuf.count / 3
+      : posAttr.count / 3;
+
+    for (let t = 0; t < triCount; t++) {
+      const i0 = indexBuf ? indexBuf.getX(t * 3) : t * 3;
+      const i1 = indexBuf ? indexBuf.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = indexBuf ? indexBuf.getX(t * 3 + 2) : t * 3 + 2;
+
+      const edgePairs: [number, number][] = [
+        [i0, i1],
+        [i1, i2],
+        [i2, i0],
+      ];
+
+      for (const [idxA, idxB] of edgePairs) {
+        const ax = posAttr.getX(idxA);
+        const ay = posAttr.getY(idxA);
+        const az = posAttr.getZ(idxA);
+        const bx = posAttr.getX(idxB);
+        const by = posAttr.getY(idxB);
+        const bz = posAttr.getZ(idxB);
+
+        // Both endpoints must be on the same boundary plane
+        if (!onSameBoundaryPlane(ax, az, bx, bz)) continue;
+
+        // At least one must truly be on the boundary (redundant safety check)
+        if (!isOnBoundaryPlane(ax, az) && !isOnBoundaryPlane(bx, bz)) continue;
+
+        // Deduplicate by position
+        const key = edgeKey(ax, ay, az, bx, by, bz);
+        if (processedEdges.has(key)) continue;
+        processedEdges.add(key);
+
+        // Create two bottom vertices
+        const base = posAttr.count + skirtPositions.length / 3;
+
+        skirtPositions.push(ax, bottomY, az);
+        skirtNormals.push(0, -1, 0);
+        skirtUVs.push(
+          (ax - xMin) / (xMax - xMin),
+          (az - zMin) / (zMax - zMin)
+        );
+
+        skirtPositions.push(bx, bottomY, bz);
+        skirtNormals.push(0, -1, 0);
+        skirtUVs.push(
+          (bx - xMin) / (xMax - xMin),
+          (bz - zMin) / (zMax - zMin)
+        );
+
+        // Two triangles forming the skirt quad.
+        // Winding order chosen so that, when viewed from outside the volume,
+        // the face is counter-clockwise (outward-facing).
+        //   topA  -> topB  -> bottomB
+        //   topA  -> bottomB -> bottomA
+        skirtIndices.push(idxA, idxB, base + 1);
+        skirtIndices.push(idxA, base + 1, base);
       }
     }
-    
-    // In production: add side walls and merge with existing geometry
-    console.log('UniformMesher: Mesh enclosure placeholder');
+
+    // ---------- bottom cap ----------
+    const capBase = posAttr.count + skirtPositions.length / 3;
+    skirtPositions.push(xMin, bottomY, zMin);
+    skirtPositions.push(xMax, bottomY, zMin);
+    skirtPositions.push(xMax, bottomY, zMax);
+    skirtPositions.push(xMin, bottomY, zMax);
+    for (let i = 0; i < 4; i++) {
+      skirtNormals.push(0, -1, 0);
+    }
+    skirtUVs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    // CCW from below (looking up at the cap from underneath)
+    skirtIndices.push(capBase, capBase + 2, capBase + 1);
+    skirtIndices.push(capBase, capBase + 3, capBase + 2);
+
+    // ---------- merge into geometry ----------
+    this.mergeGeometryData(geometry, skirtPositions, skirtNormals, skirtUVs, skirtIndices);
+
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
   }
-  
-  private calculateCubeIndex(
-    v000: number, v100: number, v010: number, v110: number,
-    v001: number, v101: number, v011: number, v111: number,
-    isolevel: number
-  ): number {
-    let index = 0;
-    if (v000 >= isolevel) index |= 1;
-    if (v100 >= isolevel) index |= 2;
-    if (v010 >= isolevel) index |= 4;
-    if (v110 >= isolevel) index |= 8;
-    if (v001 >= isolevel) index |= 16;
-    if (v101 >= isolevel) index |= 32;
-    if (v011 >= isolevel) index |= 64;
-    if (v111 >= isolevel) index |= 128;
-    return index;
+
+  // -----------------------------------------------------------------------
+  // Geometry merge helper
+  // -----------------------------------------------------------------------
+
+  /**
+   * Append additional vertex/index data to an existing BufferGeometry.
+   * Handles both indexed and non-indexed source geometries.
+   */
+  private mergeGeometryData(
+    geometry: BufferGeometry,
+    newPositions: number[],
+    newNormals: number[],
+    newUVs: number[],
+    newIndices: number[]
+  ): void {
+    if (newPositions.length === 0) return;
+
+    const posAttr = geometry.getAttribute('position');
+    const normAttr = geometry.getAttribute('normal');
+    const uvAttr = geometry.getAttribute('uv');
+
+    const existingVertCount = posAttr.count;
+
+    // ---------- merge positions ----------
+    const oldPos = Array.from(posAttr.array as Float32Array);
+    const mergedPos = new Float32Array(oldPos.length + newPositions.length);
+    mergedPos.set(oldPos);
+    mergedPos.set(newPositions, oldPos.length);
+    geometry.setAttribute('position', new Float32BufferAttribute(mergedPos, 3));
+
+    // ---------- merge normals ----------
+    if (normAttr && newNormals.length > 0) {
+      const oldNorm = Array.from(normAttr.array as Float32Array);
+      const mergedNorm = new Float32Array(oldNorm.length + newNormals.length);
+      mergedNorm.set(oldNorm);
+      mergedNorm.set(newNormals, oldNorm.length);
+      geometry.setAttribute('normal', new Float32BufferAttribute(mergedNorm, 3));
+    }
+
+    // ---------- merge UVs ----------
+    if (uvAttr && newUVs.length > 0) {
+      const oldUV = Array.from(uvAttr.array as Float32Array);
+      const mergedUV = new Float32Array(oldUV.length + newUVs.length);
+      mergedUV.set(oldUV);
+      mergedUV.set(newUVs, oldUV.length);
+      geometry.setAttribute('uv', new Float32BufferAttribute(mergedUV, 2));
+    }
+
+    // ---------- merge indices ----------
+    if (newIndices.length > 0) {
+      const oldIndex: number[] = geometry.index
+        ? Array.from(geometry.index.array as ArrayLike<number>)
+        : // Non-indexed geometry: build implicit sequential index buffer
+          Array.from({ length: existingVertCount }, (_, i) => i);
+
+      geometry.setIndex(oldIndex.concat(newIndices));
+    }
   }
 }

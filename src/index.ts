@@ -19,16 +19,23 @@
  * - ZERO: from core/constraints (ScalarConstant) is primary; math/vector has Vector3 ZERO
  */
 
-// Core Engine Systems (primary for: Node, Tag, VariableBinding, Expression)
+// Core Engine Systems (primary for: Node, Tag, VariableBinding, Expression, createIndoorLighting)
+// createIndoorLighting from core/rendering takes precedence over the one from assets/objects/architectural
 export * from './core';
 
 // Asset Library (primary for: ThreePointLightingConfig)
 // Note: ScatterConfig from ./assets/scatters conflicts with ./core/placement
 // The assets/procedural module now aliases it as AssetScatterConfig
+// Note: createIndoorLighting from architectural conflicts with core/rendering — we handle it here
 export * from './assets/procedural/index';
 export * from './assets/materials/index';
 export * from './assets/shaders/index';
-export * from './assets/lighting/index';
+export {
+  SkyLightingSystem,
+  type SkyLightingConfig,
+  ThreePointLightingSystem,
+  type ThreePointLightingConfig,
+} from './assets/lighting/index';
 
 // Terrain Generation (primary for: BiomeType, TerrainConfig, LODConfig)
 export * from './terrain';
@@ -166,7 +173,7 @@ export {
 } from './tools';
 
 // Re-export ExportFormat from tools as the primary one
-export type { ExportFormat } from './tools';
+export type { ExportFormat, SceneExportFormat } from './tools';
 
 // GPL Module (placeholder)
 export * from './infinigen_gpl';

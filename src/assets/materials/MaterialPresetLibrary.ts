@@ -45,6 +45,7 @@ export type MaterialCategory =
   | 'plastic'
   | 'glass'
   | 'nature'
+  | 'plant'
   | 'creature'
   | 'fluid'
   | 'tile';
@@ -213,7 +214,7 @@ const PRESETS: MaterialPreset[] = [
   },
 
   // ───────────────────────────────────────
-  // WOOD (8)
+  // WOOD (15)
   // ───────────────────────────────────────
   {
     id: 'oak',
@@ -312,6 +313,95 @@ const PRESETS: MaterialPreset[] = [
       emissionColor: null, emissionStrength: 0,
       noiseScale: 4.0, noiseDetail: 7, distortion: 0.4, warpStrength: 0.5,
     },
+  },
+  {
+    id: 'wood_tile',
+    name: 'Wood Tile',
+    category: 'wood',
+    description: 'Tiled wood floor pattern',
+    params: {
+      baseColor: c(0.55, 0.38, 0.2), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.005, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.5, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.15 },
+  },
+  {
+    id: 'composite_wood_tile',
+    name: 'Composite Wood Tile',
+    category: 'wood',
+    description: 'Composite/pressed wood look',
+    params: {
+      baseColor: c(0.58, 0.42, 0.25), roughness: 0.75, metallic: 0.0,
+      aoStrength: 0.35, heightScale: 0.008, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.0, noiseDetail: 4, distortion: 0.15, warpStrength: 0.2,
+    },
+  },
+  {
+    id: 'crossed_wood_tile',
+    name: 'Crossed Wood Tile',
+    category: 'wood',
+    description: 'Cross-patterned wood tile',
+    params: {
+      baseColor: c(0.5, 0.35, 0.18), roughness: 0.55, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.006, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.5, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { clearcoat: 0.2, clearcoatRoughness: 0.2 },
+  },
+  {
+    id: 'shelf_shaders',
+    name: 'Shelf Wood',
+    category: 'wood',
+    description: 'Wood shelf material, clean with medium roughness',
+    params: {
+      baseColor: c(0.52, 0.36, 0.2), roughness: 0.55, metallic: 0.0,
+      aoStrength: 0.25, heightScale: 0.005, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.0, noiseDetail: 5, distortion: 0.15, warpStrength: 0.2,
+    },
+  },
+  {
+    id: 'square_wood_tile',
+    name: 'Square Wood Tile',
+    category: 'wood',
+    description: 'Square wood tile pattern',
+    params: {
+      baseColor: c(0.48, 0.33, 0.17), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.005, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.5, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { clearcoat: 0.25, clearcoatRoughness: 0.15 },
+  },
+  {
+    id: 'staggered_wood_tile',
+    name: 'Staggered Wood Tile',
+    category: 'wood',
+    description: 'Staggered/brick-patterned wood tile',
+    params: {
+      baseColor: c(0.45, 0.3, 0.15), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.005, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.0, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { clearcoat: 0.3, clearcoatRoughness: 0.12 },
+  },
+  {
+    id: 'table_wood',
+    name: 'Table Wood',
+    category: 'wood',
+    description: 'Polished table wood, low roughness with slight reflection',
+    params: {
+      baseColor: c(0.42, 0.28, 0.14), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.2, heightScale: 0.004, normalStrength: 0.35,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 2.5, noiseDetail: 5, distortion: 0.15, warpStrength: 0.2,
+    },
+    physicalOverrides: { clearcoat: 0.5, clearcoatRoughness: 0.08 },
   },
 
   // ───────────────────────────────────────
@@ -743,6 +833,111 @@ const PRESETS: MaterialPreset[] = [
       aoStrength: 0.7, heightScale: 0.03, normalStrength: 1.5,
       emissionColor: null, emissionStrength: 0,
       noiseScale: 6.0, noiseDetail: 6, distortion: 0.3, warpStrength: 0.4,
+    },
+  },
+
+  // ───────────────────────────────────────
+  // PLANT (8)
+  // ───────────────────────────────────────
+  {
+    id: 'simple_greenery',
+    name: 'Simple Greenery',
+    category: 'plant',
+    description: 'Basic green foliage',
+    params: {
+      baseColor: c(0.18, 0.4, 0.1), roughness: 0.7, metallic: 0.0,
+      aoStrength: 0.4, heightScale: 0.01, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 5, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { sheen: 0.1, sheenRoughness: 0.8, sheenColor: c(0.25, 0.5, 0.15) },
+  },
+  {
+    id: 'simple_whitish',
+    name: 'Simple Whitish',
+    category: 'plant',
+    description: 'White/pale flowers',
+    params: {
+      baseColor: c(0.9, 0.88, 0.82), roughness: 0.6, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.005, normalStrength: 0.4,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 4, distortion: 0.15, warpStrength: 0.2,
+    },
+    physicalOverrides: { sheen: 0.15, sheenRoughness: 0.7, sheenColor: c(0.95, 0.93, 0.9) },
+  },
+  {
+    id: 'simple_brownish',
+    name: 'Simple Brownish',
+    category: 'plant',
+    description: 'Dried brown foliage',
+    params: {
+      baseColor: c(0.5, 0.35, 0.15), roughness: 0.9, metallic: 0.0,
+      aoStrength: 0.5, heightScale: 0.015, normalStrength: 1.0,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 5.0, noiseDetail: 5, distortion: 0.3, warpStrength: 0.4,
+    },
+  },
+  {
+    id: 'succulent',
+    name: 'Succulent',
+    category: 'plant',
+    description: 'Thick fleshy leaves with waxy, low roughness surface',
+    params: {
+      baseColor: c(0.25, 0.48, 0.18), roughness: 0.3, metallic: 0.0,
+      aoStrength: 0.25, heightScale: 0.008, normalStrength: 0.6,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 4.0, noiseDetail: 4, distortion: 0.15, warpStrength: 0.2,
+    },
+    physicalOverrides: { clearcoat: 0.4, clearcoatRoughness: 0.15 },
+  },
+  {
+    id: 'spider_plant',
+    name: 'Spider Plant',
+    category: 'plant',
+    description: 'Long thin striped leaves',
+    params: {
+      baseColor: c(0.2, 0.45, 0.12), roughness: 0.65, metallic: 0.0,
+      aoStrength: 0.35, heightScale: 0.008, normalStrength: 0.7,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 8.0, noiseDetail: 5, distortion: 0.3, warpStrength: 0.4,
+    },
+  },
+  {
+    id: 'snake_plant',
+    name: 'Snake Plant',
+    category: 'plant',
+    description: 'Tall stiff leaves, dark green with yellow edges',
+    params: {
+      baseColor: c(0.12, 0.3, 0.08), roughness: 0.5, metallic: 0.0,
+      aoStrength: 0.3, heightScale: 0.006, normalStrength: 0.5,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 6.0, noiseDetail: 4, distortion: 0.2, warpStrength: 0.3,
+    },
+    physicalOverrides: { clearcoat: 0.2, clearcoatRoughness: 0.2 },
+  },
+  {
+    id: 'grass_blade',
+    name: 'Grass Blade',
+    category: 'plant',
+    description: 'Thin green blade, high roughness with slight sheen',
+    params: {
+      baseColor: c(0.22, 0.48, 0.1), roughness: 0.8, metallic: 0.0,
+      aoStrength: 0.35, heightScale: 0.01, normalStrength: 0.8,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 7.0, noiseDetail: 5, distortion: 0.25, warpStrength: 0.35,
+    },
+    physicalOverrides: { sheen: 0.15, sheenRoughness: 0.7, sheenColor: c(0.3, 0.55, 0.18) },
+  },
+  {
+    id: 'plant_bark_birch',
+    name: 'Plant Birch Bark',
+    category: 'plant',
+    description: 'White papery bark with peeling texture',
+    params: {
+      baseColor: c(0.85, 0.82, 0.74), roughness: 0.85, metallic: 0.0,
+      aoStrength: 0.55, heightScale: 0.025, normalStrength: 1.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.5, noiseDetail: 6, distortion: 0.35, warpStrength: 0.5,
     },
   },
 
@@ -1752,7 +1947,7 @@ export class MaterialPresetLibrary {
    * Get all category names
    */
   getCategories(): MaterialCategory[] {
-    return ['terrain', 'wood', 'metal', 'ceramic', 'fabric', 'plastic', 'glass', 'nature', 'creature'];
+    return ['terrain', 'wood', 'metal', 'ceramic', 'fabric', 'plastic', 'glass', 'nature', 'plant', 'creature', 'fluid', 'tile'];
   }
 
   /**

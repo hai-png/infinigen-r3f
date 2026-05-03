@@ -82,6 +82,26 @@ export {
   newAttrData,
 } from './AttributeIO';
 
+// NodeGraphMaterialBridge - Converts BSDF output to MeshPhysicalMaterial
+export {
+  NodeGraphMaterialBridge,
+} from './NodeGraphMaterialBridge';
+
+export type {
+  BSDFOutput,
+  NodeEvaluationOutput,
+} from './NodeGraphMaterialBridge';
+
+// NodeGraphTextureBridge - Converts texture node output to Three.js Texture
+export {
+  NodeGraphTextureBridge,
+} from './NodeGraphTextureBridge';
+
+export type {
+  TextureNodeType,
+  TextureNodeOutput,
+} from './NodeGraphTextureBridge';
+
 // SurfaceIntegration - Surface/material integration
 export {
   add_geomod,

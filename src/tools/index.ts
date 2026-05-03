@@ -3,14 +3,17 @@
  *
  * Development and debugging tools for Infinigen.
  * Based on Infinigen's tools/ module.
+ *
+ * Export system is now consolidated: SceneExporter is the single entry point.
+ * ExportToolkit remains as a backward-compatibility shim that delegates to SceneExporter.
  */
 
 import { ExportToolkit, createExportToolkit } from './ExportToolkit';
 
-// Export toolkit for scene and asset export
+// Backward-compatibility shim (delegates to SceneExporter)
 export { ExportToolkit, createExportToolkit } from './ExportToolkit';
 export type {
-  ExportFormat,
+  ExportFormat as ExportToolkitFormat,
   ExportOptions,
   ExportResult,
   ExportTransform,
@@ -18,10 +21,11 @@ export type {
   TextureExportSettings,
 } from './ExportToolkit';
 
-// Phase 4.3 — Advanced export pipeline
+// Consolidated export pipeline — the canonical API
 export {
   SceneExporter,
   exportSceneToBlob,
+  getSupportedFormats,
   TextureBaker,
   SimulationExporter,
   MeshSimplifier,
@@ -29,6 +33,7 @@ export {
 } from './export';
 
 export type {
+  ExportFormat,
   ExportFormat as SceneExportFormat,
   ExportScope,
   SceneExportOptions,
@@ -45,7 +50,7 @@ export type {
 } from './export';
 
 // Version info
-export const TOOLS_VERSION = '0.3.0';
+export const TOOLS_VERSION = '0.4.0';
 
 export default {
   ExportToolkit,

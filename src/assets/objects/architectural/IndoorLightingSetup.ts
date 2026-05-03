@@ -609,7 +609,12 @@ async function createTrackLight(
  * @param config - Indoor lighting configuration
  * @returns Object with references to all created lights and a dispose function
  */
-export async function createIndoorLighting(
+/**
+ * Architectural-specific indoor lighting setup.
+ * Use core/rendering's createIndoorLighting as the primary API.
+ * This is kept for standalone architectural lighting use cases.
+ */
+export async function createArchitecturalIndoorLighting(
   scene: THREE.Scene,
   config: Partial<IndoorLightingConfig> = {}
 ): Promise<{
@@ -689,4 +694,4 @@ export async function createIndoorLighting(
   };
 }
 
-export default createIndoorLighting;
+export default createArchitecturalIndoorLighting;

@@ -13,6 +13,7 @@ import {
   createFurConfig,
   ShellTextureFurConfig,
 } from '../../materials/categories/Fur/ShellTextureFur';
+import type { PatternType } from './skin/CreatureSkinSystem';
 
 /** Configuration for shell-texture fur on mammals */
 export interface FurConfig {
@@ -462,20 +463,66 @@ export class MammalGenerator extends CreatureBase {
     return ears;
   }
 
+  /**
+   * Create a fur material with procedural textures via CreatureSkinSystem.
+   *
+   * Fix (w1-6): Instead of only adjusting roughness, this now delegates to
+   * CreatureSkinSystem which generates real fur pattern textures (stripes,
+   * spots, etc.) and bump maps for visible fur strand detail.
+   * Falls back to a simple roughness-only material if the skin system fails.
+   */
   private createFurMaterial(color: string, length: number, pattern: string): MeshStandardMaterial {
-    // Simulate fur with roughness/bump; length affects roughness
-    const roughness = Math.min(0.5 + length * 5, 1.0);
-    const mat = new MeshStandardMaterial({
-      color,
-      roughness,
-      metalness: 0.0,
-    });
-    // Pattern would affect color in a real shader; for now adjust slightly
-    if (pattern === 'striped') {
-      mat.color.multiplyScalar(0.9);
-    } else if (pattern === 'spotted') {
-      mat.color.offsetHSL(0.02, 0, 0.05);
+    const skinPattern = this.mapFurPattern(pattern);
+    const primaryColor = new Color(color);
+    // Derive a slightly different secondary color for pattern contrast
+    const secondaryColor = primaryColor.clone().offsetHSL(0, -0.05, -0.12);
+    // Accent for rosettes / detail
+    const accentColor = primaryColor.clone().offsetHSL(0.02, 0, -0.2);
+
+    try {
+      const skinConfig = this.skinSystem.createSkinConfig('quadruped', {
+        skinType: 'fur',
+        pattern: skinPattern,
+        primaryColor,
+        secondaryColor,
+        accentColor,
+        furLength: length,
+        furDensity: Math.min(0.6 + length * 5, 0.95),
+        roughness: Math.min(0.5 + length * 5, 1.0),
+        bumpStrength: Math.min(0.3 + length * 3, 0.8),
+        patternScale: 8,
+        patternContrast: 0.5,
+        textureResolution: 256,
+      });
+
+      return this.skinSystem.generateMaterial(skinConfig);
+    } catch {
+      // Fallback: roughness-only material (previous behavior)
+      const roughness = Math.min(0.5 + length * 5, 1.0);
+      const mat = new MeshStandardMaterial({
+        color,
+        roughness,
+        metalness: 0.0,
+      });
+      if (pattern === 'striped') {
+        mat.color.multiplyScalar(0.9);
+      } else if (pattern === 'spotted') {
+        mat.color.offsetHSL(0.02, 0, 0.05);
+      }
+      return mat;
     }
-    return mat;
+  }
+
+  /**
+   * Map MammalGenerator pattern names to CreatureSkinSystem PatternType values.
+   */
+  private mapFurPattern(pattern: string): PatternType {
+    switch (pattern) {
+      case 'striped': return 'stripes';
+      case 'spotted': return 'spots';
+      case 'gradient': return 'gradient';
+      case 'solid':
+      default: return 'solid';
+    }
   }
 }

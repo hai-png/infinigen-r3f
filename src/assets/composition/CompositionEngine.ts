@@ -436,10 +436,10 @@ export class CompositionEngine {
     context: CompositionContext,
     variables: Record<string, any>
   ): { nodeId: string; position?: Vector3; rotation?: Quaternion; scale?: Vector3 } | null {
-    // Substitute variables in position, rotation, scale
-    const position = this.substituteVector3(obj.position, variables);
-    const rotation = obj.rotation; // Quaternion doesn't typically use variables
-    const scale = this.substituteVector3(obj.scale, variables);
+    // Substitute variables in position and scale (rotation rarely uses variables)
+    const position = this.substituteVector3(obj.position, variables, 'position', obj.id);
+    const rotation = obj.rotation;
+    const scale = this.substituteVector3(obj.scale, variables, 'scale', obj.id);
 
     return {
       nodeId: obj.id,
@@ -450,11 +450,88 @@ export class CompositionEngine {
   }
 
   /**
-   * Substitute variables in a Vector3
+   * Substitute variables in a Vector3.
+   *
+   * Fix (w1-11): Supports variable overrides and expression evaluation.
+   * Looks up per-component overrides using naming conventions in priority order:
+   *   1. `{objectId}_{prefix}_{axis}` (most specific)
+   *   2. `{prefix}_{axis}`
+   *   3. `{axis}`
+   *
+   * String values containing `${varName}` are evaluated as mathematical expressions.
+   *
+   * @example substituteVector3(v, { width: 4, position_x: "${width}/2" }, 'position', 'chair')
+   *          → Vector3 where x = 2
    */
-  private substituteVector3(vector: Vector3, variables: Record<string, any>): Vector3 {
-    // Simple implementation - in production, parse expressions like "${varName}"
-    return vector.clone();
+  private substituteVector3(
+    vector: Vector3,
+    variables: Record<string, any>,
+    prefix: string = '',
+    objectId: string = '',
+  ): Vector3 {
+    const result = vector.clone();
+
+    for (const axis of ['x', 'y', 'z'] as const) {
+      // Build lookup keys in priority order
+      const lookupKeys = [
+        objectId && prefix ? `${objectId}_${prefix}_${axis}` : '',
+        prefix ? `${prefix}_${axis}` : '',
+        axis,
+      ].filter(Boolean);
+
+      for (const key of lookupKeys) {
+        if (key in variables) {
+          const val = variables[key];
+          if (typeof val === 'number') {
+            result[axis] = val;
+            break;
+          } else if (typeof val === 'string') {
+            result[axis] = this.evaluateExpression(val, variables);
+            break;
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Evaluate a string expression containing `${varName}` references.
+   * Replaces all variable references and evaluates the result as a math expression.
+   *
+   * @example evaluateExpression("${width}/2", { width: 4 }) → 2
+   * @example evaluateExpression("${depth} * 2 + 1", { depth: 3 }) → 7
+   */
+  private evaluateExpression(expr: string, variables: Record<string, any>): number {
+    try {
+      // Replace ${varName} patterns with their values
+      let resolved = expr.replace(/\$\{(\w+)\}/g, (_match: string, varName: string) => {
+        const val = variables[varName];
+        if (val === undefined) return '0';
+        if (typeof val === 'number') return String(val);
+        if (typeof val === 'string') {
+          // Recursively resolve nested variable references
+          return String(this.evaluateExpression(val, variables));
+        }
+        return '0';
+      });
+
+      // Sanitize: only allow safe math characters
+      if (!/^[\d\s+\-*/().%]+$/.test(resolved)) {
+        return 0;
+      }
+
+      // Evaluate the mathematical expression safely
+      const result = new Function(`"use strict"; return (${resolved})`)();
+
+      if (typeof result === 'number' && isFinite(result)) {
+        return result;
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
   }
 
   /**
@@ -528,6 +605,14 @@ export class CompositionEngine {
     return null;
   }
 
+  /**
+   * Check angle constraint between source and target relative to a reference point.
+   *
+   * Fix (w1-11): Computes the angle between the source→reference and target→reference
+   * vectors using Three.js Vector3.angleTo(), then checks against min/max parameters
+   * (in degrees). The reference point is the camera position if available, otherwise
+   * the scene center.
+   */
   private checkAngleConstraint(
     constraint: CompositionConstraint,
     context: CompositionContext
@@ -537,7 +622,47 @@ export class CompositionEngine {
     description: string;
     severity: 'error' | 'warning' | 'info';
   } | null {
-    // Placeholder - implement angle checking logic
+    if (!constraint.source || !constraint.target) return null;
+
+    const sourceObj = context.existingObjects.find(o => o.nodeId === constraint.source);
+    const targetObj = context.existingObjects.find(o => o.nodeId === constraint.target);
+
+    if (!sourceObj || !targetObj) return null;
+
+    // Reference point: camera position if available, otherwise scene center
+    const reference = context.cameraPosition ?? context.center;
+
+    // Compute vectors from reference to source and target
+    const toSource = sourceObj.center.clone().sub(reference);
+    const toTarget = targetObj.center.clone().sub(reference);
+
+    // Handle degenerate zero-length vectors
+    if (toSource.lengthSq() === 0 || toTarget.lengthSq() === 0) return null;
+
+    // Compute angle between the two direction vectors
+    const angleRad = toSource.angleTo(toTarget);
+    const angleDeg = angleRad * (180 / Math.PI);
+
+    const { min, max } = constraint.parameters;
+
+    if (min !== undefined && angleDeg < min) {
+      return {
+        ruleId: '',
+        constraintId: constraint.id,
+        description: `Angle ${angleDeg.toFixed(1)}° between ${constraint.source} and ${constraint.target} is below minimum ${min}°`,
+        severity: constraint.parameters.required ? 'error' : 'warning',
+      };
+    }
+
+    if (max !== undefined && angleDeg > max) {
+      return {
+        ruleId: '',
+        constraintId: constraint.id,
+        description: `Angle ${angleDeg.toFixed(1)}° between ${constraint.source} and ${constraint.target} exceeds maximum ${max}°`,
+        severity: constraint.parameters.required ? 'error' : 'warning',
+      };
+    }
+
     return null;
   }
 
@@ -569,6 +694,16 @@ export class CompositionEngine {
     return null;
   }
 
+  /**
+   * Check visibility constraint: verify that the source object is visible from
+   * the camera (within frustum and not fully occluded).
+   *
+   * Fix (w1-11): Implements a simplified two-stage check:
+   *   1. Frustum check: verify the object is in front of the camera and within
+   *      a configurable field-of-view cone.
+   *   2. Occlusion check: verify no closer object's bounding box fully covers
+   *      the target's angular extent from the camera's perspective.
+   */
   private checkVisibilityConstraint(
     constraint: CompositionConstraint,
     context: CompositionContext
@@ -578,10 +713,100 @@ export class CompositionEngine {
     description: string;
     severity: 'error' | 'warning' | 'info';
   } | null {
-    // Placeholder - implement visibility checking from camera
+    if (!context.cameraPosition) return null; // Cannot check without camera
+
+    const targetId = constraint.source;
+    if (!targetId) return null;
+
+    const targetObj = context.existingObjects.find(o => o.nodeId === targetId);
+    if (!targetObj) return null;
+
+    const camPos = context.cameraPosition;
+    const camDir = (context.forward ?? new Vector3(0, 0, -1)).clone().normalize();
+
+    // Vector from camera to target center
+    const toTarget = targetObj.center.clone().sub(camPos);
+    const targetDist = toTarget.length();
+    if (targetDist === 0) return null;
+
+    const toTargetDir = toTarget.clone().normalize();
+
+    // ── Stage 1: Frustum check ────────────────────────────────────
+    const viewDot = toTargetDir.dot(camDir);
+
+    // Behind camera?
+    if (viewDot < 0) {
+      return {
+        ruleId: '',
+        constraintId: constraint.id,
+        description: `Object ${targetId} is behind the camera`,
+        severity: constraint.parameters.required ? 'error' : 'warning',
+      };
+    }
+
+    // Outside FOV cone? (default 60° half-angle = 120° total FOV)
+    const fovHalfAngle = (constraint.parameters.max ?? 60) * (Math.PI / 180);
+    const angleFromCenter = Math.acos(Math.min(1, viewDot));
+    if (angleFromCenter > fovHalfAngle) {
+      return {
+        ruleId: '',
+        constraintId: constraint.id,
+        description: `Object ${targetId} is outside camera field of view (${(angleFromCenter * 180 / Math.PI).toFixed(1)}° off-axis)`,
+        severity: constraint.parameters.required ? 'error' : 'warning',
+      };
+    }
+
+    // ── Stage 2: Occlusion check ─────────────────────────────────
+    // Estimate target's angular radius from camera
+    const targetSize = targetObj.bounds.getSize(new Vector3());
+    const targetAngularRadius = Math.atan(
+      Math.max(targetSize.x, targetSize.y, targetSize.z) / (2 * targetDist),
+    );
+
+    for (const other of context.existingObjects) {
+      if (other.nodeId === targetId) continue;
+
+      const toOther = other.center.clone().sub(camPos);
+      const otherDist = toOther.length();
+      if (otherDist === 0 || otherDist >= targetDist) continue; // Behind or farther
+
+      const toOtherDir = toOther.clone().normalize();
+
+      // Angular separation between other and target as seen from camera
+      const angularSep = Math.acos(Math.min(1, toOtherDir.dot(toTargetDir)));
+
+      // Estimate other object's angular radius
+      const otherSize = other.bounds.getSize(new Vector3());
+      const otherAngularRadius = Math.atan(
+        Math.max(otherSize.x, otherSize.y, otherSize.z) / (2 * otherDist),
+      );
+
+      // If the other object's angular extent fully covers the target, it's occluded
+      if (angularSep + targetAngularRadius < otherAngularRadius) {
+        return {
+          ruleId: '',
+          constraintId: constraint.id,
+          description: `Object ${targetId} is occluded by ${other.nodeId}`,
+          severity: constraint.parameters.required ? 'error' : 'warning',
+        };
+      }
+    }
+
     return null;
   }
 
+  /**
+   * Check semantic constraints using a hardcoded rule table for common indoor
+   * spatial relationships.
+   *
+   * Fix (w1-11): Implements the following semantic rules:
+   *   - "on_floor":     source bottom should be near ground level
+   *   - "on_ceiling":   source top should be near ceiling
+   *   - "near_wall":    source should be within wall distance of scene boundary
+   *   - "above":        source should be above target
+   *   - "below":        source should be below target
+   *   - "facing_camera": source should face toward camera position
+   */
   private checkSemanticConstraint(
     constraint: CompositionConstraint,
     context: CompositionContext
@@ -591,7 +816,123 @@ export class CompositionEngine {
     description: string;
     severity: 'error' | 'warning' | 'info';
   } | null {
-    // Placeholder - implement semantic checking (e.g., "must face camera")
+    const semanticRule = constraint.parameters.semantic;
+    if (!semanticRule) return null;
+
+    // Primary object being checked
+    const obj = constraint.source
+      ? context.existingObjects.find(o => o.nodeId === constraint.source)
+      : null;
+    if (!obj) return null;
+
+    // Secondary object for relational rules (above/below)
+    const refObj = constraint.target
+      ? context.existingObjects.find(o => o.nodeId === constraint.target)
+      : null;
+
+    const tolerance = constraint.parameters.min ?? 0.1;   // World units tolerance
+    const wallDistance = constraint.parameters.max ?? 0.5; // Max distance from wall
+
+    switch (semanticRule) {
+      // ── on_floor: object bottom should be near ground level ──────
+      case 'on_floor': {
+        const bottomY = obj.bounds.min.y;
+        if (Math.abs(bottomY - context.groundLevel) > tolerance) {
+          return {
+            ruleId: '',
+            constraintId: constraint.id,
+            description: `Object ${constraint.source} bottom Y=${bottomY.toFixed(2)} is not on floor (ground=${context.groundLevel}, tolerance=${tolerance})`,
+            severity: constraint.parameters.required ? 'error' : 'warning',
+          };
+        }
+        break;
+      }
+
+      // ── on_ceiling: object top should be near ceiling ────────────
+      case 'on_ceiling': {
+        const ceilingY = context.bounds.max.y;
+        const topY = obj.bounds.max.y;
+        if (Math.abs(topY - ceilingY) > tolerance) {
+          return {
+            ruleId: '',
+            constraintId: constraint.id,
+            description: `Object ${constraint.source} top Y=${topY.toFixed(2)} is not on ceiling (ceiling=${ceilingY.toFixed(2)}, tolerance=${tolerance})`,
+            severity: constraint.parameters.required ? 'error' : 'warning',
+          };
+        }
+        break;
+      }
+
+      // ── near_wall: object should be within wall distance ─────────
+      case 'near_wall': {
+        const distToMinX = Math.abs(obj.bounds.min.x - context.bounds.min.x);
+        const distToMaxX = Math.abs(obj.bounds.max.x - context.bounds.max.x);
+        const distToMinZ = Math.abs(obj.bounds.min.z - context.bounds.min.z);
+        const distToMaxZ = Math.abs(obj.bounds.max.z - context.bounds.max.z);
+        const minDistToWall = Math.min(distToMinX, distToMaxX, distToMinZ, distToMaxZ);
+
+        if (minDistToWall > wallDistance) {
+          return {
+            ruleId: '',
+            constraintId: constraint.id,
+            description: `Object ${constraint.source} is ${minDistToWall.toFixed(2)} units from nearest wall (max allowed=${wallDistance})`,
+            severity: constraint.parameters.required ? 'error' : 'warning',
+          };
+        }
+        break;
+      }
+
+      // ── above: source should be above target ─────────────────────
+      case 'above': {
+        if (!refObj) return null;
+        if (obj.center.y <= refObj.center.y) {
+          return {
+            ruleId: '',
+            constraintId: constraint.id,
+            description: `Object ${constraint.source} (Y=${obj.center.y.toFixed(2)}) is not above ${constraint.target} (Y=${refObj.center.y.toFixed(2)})`,
+            severity: constraint.parameters.required ? 'error' : 'warning',
+          };
+        }
+        break;
+      }
+
+      // ── below: source should be below target ─────────────────────
+      case 'below': {
+        if (!refObj) return null;
+        if (obj.center.y >= refObj.center.y) {
+          return {
+            ruleId: '',
+            constraintId: constraint.id,
+            description: `Object ${constraint.source} (Y=${obj.center.y.toFixed(2)}) is not below ${constraint.target} (Y=${refObj.center.y.toFixed(2)})`,
+            severity: constraint.parameters.required ? 'error' : 'warning',
+          };
+        }
+        break;
+      }
+
+      // ── facing_camera: object should face toward camera position ──
+      case 'facing_camera': {
+        if (!context.cameraPosition) return null;
+        const toCamera = context.cameraPosition.clone().sub(obj.center).normalize();
+        const forwardDir = (context.forward ?? new Vector3(0, 0, 1)).clone().normalize();
+        const alignment = toCamera.dot(forwardDir);
+
+        if (alignment < 0) {
+          return {
+            ruleId: '',
+            constraintId: constraint.id,
+            description: `Object ${constraint.source} is not facing the camera (alignment=${alignment.toFixed(2)})`,
+            severity: constraint.parameters.required ? 'error' : 'warning',
+          };
+        }
+        break;
+      }
+
+      default:
+        // Unknown semantic rule — no violation reported
+        return null;
+    }
+
     return null;
   }
 

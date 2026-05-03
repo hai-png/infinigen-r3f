@@ -28,11 +28,10 @@ export type { AtmosphereHazeParams, AtmosphereHazePreset } from './AtmosphereHaz
 export { BlackbodyMaterial } from './BlackbodyMaterial';
 export type { BlackbodyParams, BlackbodyPreset } from './BlackbodyMaterial';
 
-// TODO: Implement LavaMaterial - stub exports to prevent TS2307 errors
-export const LavaMaterial = undefined as any;
-export type LavaParams = any;
-export type LavaPreset = any;
-// TODO: Implement SlimeMaterial - stub exports to prevent TS2307 errors
-export const SlimeMaterial = undefined as any;
-export type SlimeParams = any;
-export type SlimePreset = any;
+export { LavaMaterial } from '../../nature/LavaMaterial';
+export type { LavaMaterialConfig as LavaParams } from '../../nature/LavaMaterial';
+export type LavaPreset = 'basaltic' | 'andesitic' | 'rhyolitic' | 'pahoehoe' | 'aa';
+
+export { SlimeMaterial } from '../../nature/SlimeMaterial';
+export type { SlimeMaterialConfig as SlimeParams } from '../../nature/SlimeMaterial';
+export type SlimePreset = 'toxic' | 'magical' | 'acidic' | 'ghostly' | 'lava';

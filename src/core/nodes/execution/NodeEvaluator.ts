@@ -402,6 +402,18 @@ export class NodeEvaluator {
     if (nodeType === 'ShaderNodeTexGradient' || nodeType === 'gradient_texture') {
       return this.executeGradientTexture(inputs);
     }
+    if (nodeType === 'ShaderNodeTexBrick' || nodeType === 'brick_texture') {
+      return this.executeBrickTexture(inputs);
+    }
+    if (nodeType === 'ShaderNodeTexChecker' || nodeType === 'checker_texture') {
+      return this.executeCheckerTexture(inputs);
+    }
+    if (nodeType === 'ShaderNodeTexMagic' || nodeType === 'magic_texture') {
+      return this.executeMagicTexture(inputs);
+    }
+    if (nodeType === 'ShaderNodeTexImage' || nodeType === 'image_texture') {
+      return this.executeImageTexture(inputs);
+    }
 
     // Color nodes
     if (nodeType === 'ShaderNodeMixRGB' || nodeType === 'mix_rgb') {
@@ -409,6 +421,15 @@ export class NodeEvaluator {
     }
     if (nodeType === 'ShaderNodeValToRGB' || nodeType === 'color_ramp') {
       return this.executeColorRamp(inputs);
+    }
+    if (nodeType === 'ShaderNodeHueSaturation' || nodeType === 'hue_saturation') {
+      return this.executeHueSaturationValue(inputs);
+    }
+    if (nodeType === 'ShaderNodeInvert' || nodeType === 'invert') {
+      return this.executeInvert(inputs);
+    }
+    if (nodeType === 'CompositorNodeBrightContrast' || nodeType === 'bright_contrast') {
+      return this.executeBrightContrast(inputs);
     }
 
     // Math nodes
@@ -429,10 +450,30 @@ export class NodeEvaluator {
     if (nodeType === 'ShaderNodeSeparateXYZ' || nodeType === 'separate_xyz') {
       return this.executeSeparateXYZ(inputs);
     }
+    if (nodeType === 'ShaderNodeBump' || nodeType === 'bump') {
+      return this.executeBump(inputs);
+    }
+    if (nodeType === 'ShaderNodeDisplacement' || nodeType === 'displacement') {
+      return this.executeDisplacement(inputs);
+    }
+    if (nodeType === 'ShaderNodeNormalMap' || nodeType === 'normal_map') {
+      return this.executeNormalMap(inputs);
+    }
 
     // Texture coordinate
     if (nodeType === 'ShaderNodeTexCoord' || nodeType === 'texture_coordinate') {
       return this.executeTextureCoordinate(inputs);
+    }
+
+    // Input nodes
+    if (nodeType === 'GeometryNodeObjectInfo' || nodeType === 'object_info') {
+      return this.executeObjectInfo(inputs, node.settings);
+    }
+    if (nodeType === 'ShaderNodeValue' || nodeType === 'value') {
+      return this.executeValue(inputs, node.settings);
+    }
+    if (nodeType === 'ShaderNodeRGB' || nodeType === 'rgb') {
+      return this.executeRGB(inputs, node.settings);
     }
 
     // Output nodes - pass through
@@ -895,6 +936,251 @@ export class NodeEvaluator {
       Camera: { x: 0, y: 0, z: 0 },
       Window: { x: 0, y: 0, z: 0 },
     };
+  }
+
+  // ==========================================================================
+  // P1 Texture Node Execution (Brick, Checker, Magic, Image)
+  // ==========================================================================
+
+  private executeBrickTexture(inputs: Record<string, any>): any {
+    const scale = inputs.Scale ?? inputs.scale ?? 5.0;
+    const mortarSize = inputs.MortarSize ?? inputs.mortarSize ?? 0.02;
+    const mortarSmooth = inputs.MortarSmooth ?? inputs.mortarSmooth ?? 0.1;
+    const bias = inputs.Bias ?? inputs.bias ?? 0.0;
+    const brickWidth = inputs.BrickWidth ?? inputs.brickWidth ?? 0.5;
+    const brickHeight = inputs.BrickHeight ?? inputs.brickHeight ?? 0.25;
+    const vector = inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 };
+    const color1 = this.normalizeColorObj(inputs.Color1 ?? inputs.color1 ?? { r: 0.8, g: 0.28, b: 0.2 });
+    const color2 = this.normalizeColorObj(inputs.Color2 ?? inputs.color2 ?? { r: 0.63, g: 0.3, b: 0.18 });
+    const mortarColor = this.normalizeColorObj(inputs.Mortar ?? inputs.mortar ?? { r: 0.6, g: 0.58, b: 0.55 });
+
+    return {
+      Color: { type: 'brick_texture', scale, mortarSize, mortarSmooth, bias, brickWidth, brickHeight, vector, color1, color2, mortarColor },
+      Fac: { type: 'brick_texture', scale, mortarSize, mortarSmooth, bias, brickWidth, brickHeight, vector },
+    };
+  }
+
+  private executeCheckerTexture(inputs: Record<string, any>): any {
+    const scale = inputs.Scale ?? inputs.scale ?? 5.0;
+    const vector = inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 };
+    const color1 = this.normalizeColorObj(inputs.Color1 ?? inputs.color1 ?? { r: 0.8, g: 0.8, b: 0.8 });
+    const color2 = this.normalizeColorObj(inputs.Color2 ?? inputs.color2 ?? { r: 0.2, g: 0.2, b: 0.2 });
+
+    return {
+      Color: { type: 'checker_texture', scale, vector, color1, color2 },
+      Fac: { type: 'checker_texture', scale, vector },
+    };
+  }
+
+  private executeMagicTexture(inputs: Record<string, any>): any {
+    const scale = inputs.Scale ?? inputs.scale ?? 5.0;
+    const distortion = inputs.Distortion ?? inputs.distortion ?? 2.0;
+    const vector = inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 };
+
+    // Magic texture uses sinusoidal combinations to create psychedelic/distortion patterns
+    const v = this.normalizeVector(vector);
+    const x = v.x * scale;
+    const y = v.y * scale;
+    const z = v.z * scale;
+    const dist = distortion;
+
+    const r = (Math.sin(x + Math.sin(y + dist * Math.sin(z))) + 1) / 2;
+    const g = (Math.sin(y + Math.sin(z + dist * Math.sin(x))) + 1) / 2;
+    const b = (Math.sin(z + Math.sin(x + dist * Math.sin(y))) + 1) / 2;
+
+    return {
+      Color: { r, g, b },
+      Fac: { type: 'magic_texture', scale, distortion, vector },
+    };
+  }
+
+  private executeImageTexture(inputs: Record<string, any>): any {
+    const vector = inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 };
+    // Image texture: placeholder when no actual image is loaded
+    // Returns a colored DataTexture placeholder based on inputs
+    const color = this.normalizeColorObj(inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 });
+    const alpha = inputs.Alpha ?? inputs.alpha ?? 1.0;
+
+    return {
+      Color: { ...color, a: alpha },
+      Alpha: alpha,
+      _imageTexture: true,
+      _source: inputs.Image ?? inputs.image ?? null,
+    };
+  }
+
+  // ==========================================================================
+  // P1 Color Node Execution (HueSaturationValue, Invert, BrightContrast)
+  // ==========================================================================
+
+  private executeHueSaturationValue(inputs: Record<string, any>): any {
+    const color = this.normalizeColorObj(inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 });
+    const hue = inputs.Hue ?? inputs.hue ?? 0.5;       // 0.5 = no change (centered)
+    const saturation = inputs.Saturation ?? inputs.saturation ?? 1.0; // 1.0 = no change
+    const value = inputs.Value ?? inputs.value ?? 1.0;  // 1.0 = no change
+    const factor = inputs.Fac ?? inputs.factor ?? inputs.Factor ?? 1.0;
+
+    // Convert RGB to HSV
+    const threeColor = new THREE.Color(color.r, color.g, color.b);
+    const hsl = { h: 0, s: 0, l: 0 };
+    threeColor.getHSL(hsl);
+
+    // Apply HSV adjustments (hue offset is centered at 0.5)
+    const newH = ((hsl.h + (hue - 0.5)) % 1 + 1) % 1;
+    const newS = Math.max(0, Math.min(1, hsl.s * saturation));
+    // Value adjustment: map HSL lightness via value multiplier
+    const newL = Math.max(0, Math.min(1, hsl.l * value));
+
+    const result = new THREE.Color().setHSL(newH, newS, newL);
+
+    // Blend with original based on factor
+    const outR = color.r + factor * (result.r - color.r);
+    const outG = color.g + factor * (result.g - color.g);
+    const outB = color.b + factor * (result.b - color.b);
+
+    return { Color: { r: outR, g: outG, b: outB } };
+  }
+
+  private executeInvert(inputs: Record<string, any>): any {
+    const color = this.normalizeColorObj(inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 });
+    const factor = inputs.Fac ?? inputs.factor ?? inputs.Factor ?? 1.0;
+
+    const invR = 1 - color.r;
+    const invG = 1 - color.g;
+    const invB = 1 - color.b;
+
+    // Blend between original and inverted based on factor
+    const outR = color.r + factor * (invR - color.r);
+    const outG = color.g + factor * (invG - color.g);
+    const outB = color.b + factor * (invB - color.b);
+
+    return { Color: { r: outR, g: outG, b: outB } };
+  }
+
+  private executeBrightContrast(inputs: Record<string, any>): any {
+    const color = this.normalizeColorObj(inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 });
+    const bright = inputs.Bright ?? inputs.bright ?? 0.0;   // 0 = no change
+    const contrast = inputs.Contrast ?? inputs.contrast ?? 0.0; // 0 = no change
+
+    // Apply brightness (additive offset)
+    let r = color.r + bright;
+    let g = color.g + bright;
+    let b = color.b + bright;
+
+    // Apply contrast (scale from 0.5 midpoint)
+    const contrastFactor = Math.max(0, 1 + contrast);
+    r = (r - 0.5) * contrastFactor + 0.5;
+    g = (g - 0.5) * contrastFactor + 0.5;
+    b = (b - 0.5) * contrastFactor + 0.5;
+
+    return { Color: { r: Math.max(0, Math.min(1, r)), g: Math.max(0, Math.min(1, g)), b: Math.max(0, Math.min(1, b)) } };
+  }
+
+  // ==========================================================================
+  // P1 Vector Node Execution (Bump, Displacement, NormalMap)
+  // ==========================================================================
+
+  private executeBump(inputs: Record<string, any>): any {
+    const strength = inputs.Strength ?? inputs.strength ?? 1.0;
+    const distance = inputs.Distance ?? inputs.distance ?? 1.0;
+    const height = inputs.Height ?? inputs.height ?? 1.0;
+    const normal = inputs.Normal ?? inputs.normal ?? { x: 0, y: 0, z: 1 };
+    const invert = inputs.Invert ?? inputs.invert ?? false;
+
+    const bumpHeight = invert ? -height : height;
+
+    // Compute perturbed normal from height (simplified finite-difference)
+    const eps = 0.001;
+    const n = this.normalizeVector(normal);
+    const hCenter = bumpHeight * strength * distance;
+    const hDx = hCenter + eps;
+    const hDy = hCenter + eps;
+
+    const nx = n.x - (hDx - hCenter) / eps * 0.5;
+    const ny = n.y - (hDy - hCenter) / eps * 0.5;
+    const nz = n.z;
+
+    // Renormalize
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    const resultNormal = len > 0 ? { x: nx / len, y: ny / len, z: nz / len } : { x: 0, y: 0, z: 1 };
+
+    return { Normal: resultNormal };
+  }
+
+  private executeDisplacement(inputs: Record<string, any>): any {
+    const height = inputs.Height ?? inputs.height ?? 0.0;
+    const midlevel = inputs.Midlevel ?? inputs.midlevel ?? 0.5;
+    const scale = inputs.Scale ?? inputs.scale ?? 1.0;
+    const normal = inputs.Normal ?? inputs.normal ?? { x: 0, y: 0, z: 1 };
+    const space = inputs.Space ?? inputs.space ?? 'object';
+
+    const n = this.normalizeVector(normal);
+    const displacement = (height - midlevel) * scale;
+
+    // Displacement vector along normal direction
+    const result = {
+      x: n.x * displacement,
+      y: n.y * displacement,
+      z: n.z * displacement,
+    };
+
+    return { Displacement: { vector: result, space } };
+  }
+
+  private executeNormalMap(inputs: Record<string, any>): any {
+    const color = this.normalizeColorObj(inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 1.0 });
+    const strength = inputs.Strength ?? inputs.strength ?? 1.0;
+    const space = inputs.Space ?? inputs.space ?? 'tangent';
+
+    // Convert color-encoded normal map to normal vector
+    // Normal map encoding: R=x [0,1]→[-1,1], G=y [0,1]→[-1,1], B=z [0,1]→[-1,1]
+    let nx = (color.r * 2 - 1) * strength;
+    let ny = (color.g * 2 - 1) * strength;
+    let nz = color.b * 2 - 1;
+
+    // Renormalize
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len > 0) {
+      nx /= len;
+      ny /= len;
+      nz /= len;
+    } else {
+      nx = 0; ny = 0; nz = 1;
+    }
+
+    return { Normal: { x: nx, y: ny, z: nz } };
+  }
+
+  // ==========================================================================
+  // P1 Input Node Execution (ObjectInfo, Value, RGB)
+  // ==========================================================================
+
+  private executeObjectInfo(inputs: Record<string, any>, settings: Record<string, any>): any {
+    // ObjectInfo provides object-level data. When not connected to a real object,
+    // return placeholder/default values from settings or defaults.
+    const location = settings.Location ?? settings.location ?? inputs.Location ?? inputs.location ?? { x: 0, y: 0, z: 0 };
+    const rotation = settings.Rotation ?? settings.rotation ?? inputs.Rotation ?? inputs.rotation ?? { x: 0, y: 0, z: 0 };
+    const scale = settings.Scale ?? settings.scale ?? inputs.Scale ?? inputs.scale ?? { x: 1, y: 1, z: 1 };
+    const random = settings.Random ?? settings.random ?? inputs.Random ?? inputs.random ?? Math.random();
+
+    return {
+      Location: this.normalizeVector(location),
+      Rotation: this.normalizeVector(rotation),
+      Scale: this.normalizeVector(scale),
+      Random: typeof random === 'number' ? random : Math.random(),
+    };
+  }
+
+  private executeValue(inputs: Record<string, any>, settings: Record<string, any>): any {
+    const value = settings.Value ?? settings.value ?? inputs.Value ?? inputs.value ?? 0.0;
+    const floatValue = typeof value === 'number' ? value : parseFloat(value) || 0.0;
+    return { Value: floatValue };
+  }
+
+  private executeRGB(inputs: Record<string, any>, settings: Record<string, any>): any {
+    const defaultColor = settings.Color ?? settings.color ?? inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 };
+    const color = this.normalizeColorObj(defaultColor);
+    return { Color: color };
   }
 
   // ==========================================================================

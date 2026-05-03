@@ -16,6 +16,9 @@ export * from '../objects';
 export * from '../objects/vegetation';
 
 // Export architectural elements
+// Note: createIndoorLighting from IndoorLightingSetup conflicts with core/rendering
+// The core/rendering version is the primary one; architectural also has one.
+// Both are valid and will be resolved at the top-level index.ts.
 export * from '../objects/architectural';
 
 // Export scatter systems (excluding ScatterConfig to avoid conflict with core/placement)
