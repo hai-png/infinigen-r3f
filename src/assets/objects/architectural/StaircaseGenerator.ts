@@ -12,7 +12,7 @@ export interface StaircaseParams extends BaseGeneratorConfig {
   totalRun: number;
   width: number;
   numSteps: number;
-  stairType: 'straight' | 'L' | 'U' | 'spiral' | 'curved';
+  stairType: 'straight' | 'L' | 'U' | 'spiral' | 'curved' | 'cantilever';
   hasLanding: boolean;
   landingPosition?: number;
   hasStringers: boolean;
@@ -88,6 +88,9 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
         break;
       case 'curved':
         this.generateCurvedStairs(group, numSteps, rise, run, width, treadThickness, treadMat);
+        break;
+      case 'cantilever':
+        this.generateCantileverStairs(group, numSteps, rise, run, width, treadThickness, hasRisers, treadMat, riserMat);
         break;
     }
 
@@ -425,6 +428,9 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
         break;
       case 'curved':
         this.addCurvedRailing(group, numSteps, rise, run, width, railingHeight, railMat, balusterMat);
+        break;
+      case 'cantilever':
+        this.addCantileverRailing(group, numSteps, rise, run, width, totalHeight, railingHeight, railMat, balusterMat);
         break;
     }
   }
@@ -785,6 +791,133 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
     }
   }
 
+  /**
+   * Cantilever staircase: treads mount directly to a wall, no stringers.
+   * Each tread is a standalone box floating from the wall with hidden
+   * mounting brackets. No visible support underneath — the hallmark
+   * of cantilever construction. Only one side has a railing (the open side).
+   *
+   * Based on the original Infinigen's CantileverStaircaseFactory which
+   * uses support_types="wall" and handrail_types="horizontal-post|vertical-post".
+   */
+  private generateCantileverStairs(
+    group: Group, numSteps: number, rise: number, run: number, width: number,
+    treadThickness: number, hasRisers: boolean,
+    treadMat: MeshStandardMaterial, riserMat: MeshStandardMaterial
+  ): void {
+    // Wall mounting side is at z = -width/2 (treads protrude in +Z direction)
+    const wallZ = -width / 2;
+    const riserThickness = 0.02; // thin risers for cantilever style
+
+    for (let i = 0; i < numSteps; i++) {
+      const y = i * rise;
+      const x = i * run;
+
+      // Tread: slightly deeper than standard to give the floating appearance
+      // more depth, and tapered at the free end for visual elegance
+      const treadDepth = width * 1.1; // extends slightly past width
+      const treadGeom = new BoxGeometry(run + 0.02, treadThickness, treadDepth);
+      const tread = new Mesh(treadGeom, treadMat);
+      tread.position.set(x + run / 2, y + treadThickness / 2, wallZ + treadDepth / 2);
+      tread.castShadow = true;
+      tread.receiveShadow = true;
+      tread.name = `cantilever_tread_${i}`;
+      group.add(tread);
+
+      // Hidden mounting bracket: small steel plate embedded in the wall
+      // that supports the tread from the wall side
+      const bracketGeom = new BoxGeometry(run * 0.6, treadThickness * 1.5, 0.04);
+      const bracketMat = this.getMaterial('steel');
+      const bracket = new Mesh(bracketGeom, bracketMat);
+      bracket.position.set(x + run / 2, y, wallZ - 0.01);
+      bracket.name = `cantilever_bracket_${i}`;
+      group.add(bracket);
+
+      // Optional riser (thin panel between treads, only on the wall side)
+      if (hasRisers && i < numSteps - 1) {
+        const riserGeom = new BoxGeometry(riserThickness, rise, width * 0.3);
+        const riser = new Mesh(riserGeom, riserMat);
+        riser.position.set(x + run / 2, y + treadThickness + rise / 2, wallZ + width * 0.15);
+        riser.castShadow = true;
+        riser.name = `cantilever_riser_${i}`;
+        group.add(riser);
+      }
+    }
+
+    // Wall backing: a thin panel along the mounting wall to suggest
+    // the wall surface that the brackets are embedded into
+    const wallPanelGeom = new BoxGeometry(numSteps * run + 0.5, numSteps * rise + 0.5, 0.05);
+    const wallPanelMat = this.getMaterial('concrete');
+    const wallPanel = new Mesh(wallPanelGeom, wallPanelMat);
+    wallPanel.position.set(
+      numSteps * run / 2 - run / 2,
+      numSteps * rise / 2 - rise / 2,
+      wallZ - 0.05
+    );
+    wallPanel.receiveShadow = true;
+    wallPanel.name = 'cantilever_wall_panel';
+    group.add(wallPanel);
+  }
+
+  /**
+   * Cantilever railing: only on the open (free) side, no wall-side railing.
+   * Uses horizontal-post handrail style (matching original Infinigen's
+   * horizontal-post handrail type for cantilever stairs).
+   */
+  private addCantileverRailing(
+    group: Group, numSteps: number, rise: number, run: number, width: number,
+    totalHeight: number, railingHeight: number,
+    railMat: MeshStandardMaterial, balusterMat: MeshStandardMaterial
+  ): void {
+    // Railing only on the open side (z = +width/2 + offset for overhang)
+    const railZ = width / 2 + width * 0.05; // slightly past the tread edge
+
+    // Vertical posts at every 2nd step (horizontal-post style)
+    for (let i = 0; i <= numSteps; i += 2) {
+      const y = i * rise;
+      const x = i * run;
+
+      // Vertical post
+      const postHeight = railingHeight + 0.05;
+      const postGeo = new CylinderGeometry(0.02, 0.025, postHeight, 8);
+      const post = new Mesh(postGeo, balusterMat);
+      post.position.set(x, y + postHeight / 2, railZ);
+      post.castShadow = true;
+      post.name = `cantilever_post_${i}`;
+      group.add(post);
+    }
+
+    // Horizontal top rail (continuous, angled with the stairs)
+    const totalRunLen = numSteps * run;
+    const railLength = Math.sqrt(totalRunLen ** 2 + totalHeight ** 2);
+    const railAngle = Math.atan2(totalHeight, totalRunLen);
+    const topRailGeo = new CylinderGeometry(0.025, 0.025, railLength, 8);
+    const topRail = new Mesh(topRailGeo, railMat);
+    topRail.position.set(
+      totalRunLen / 2,
+      totalHeight / 2 + railingHeight,
+      railZ
+    );
+    topRail.rotation.z = Math.PI / 2 - railAngle;
+    topRail.castShadow = true;
+    topRail.name = 'cantilever_top_rail';
+    group.add(topRail);
+
+    // Horizontal mid-rail (at half railing height, for horizontal-post style)
+    const midRailHeight = railingHeight * 0.5;
+    const midRailGeo = new CylinderGeometry(0.015, 0.015, railLength, 8);
+    const midRail = new Mesh(midRailGeo, railMat);
+    midRail.position.set(
+      totalRunLen / 2,
+      totalHeight / 2 + midRailHeight,
+      railZ
+    );
+    midRail.rotation.z = Math.PI / 2 - railAngle;
+    midRail.castShadow = true;
+    midRail.name = 'cantilever_mid_rail';
+    group.add(midRail);
+  }
+
   getStylePresets(): Record<string, Partial<StaircaseParams>> {
     return {
       modern: { style: 'modern', stringerType: 'mono', hasRisers: false, treadMaterial: 'glass', stringerMaterial: 'steel' },
@@ -792,6 +925,7 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
       industrial: { style: 'industrial', stringerType: 'open', hasRisers: false, treadMaterial: 'metal', stringerMaterial: 'steel' },
       rustic: { style: 'rustic', stringerType: 'closed', hasRisers: true, treadMaterial: 'reclaimed_wood', stringerMaterial: 'reclaimed_wood' },
       minimalist: { style: 'minimalist', stringerType: 'mono', hasRisers: false, treadThickness: 0.03, treadMaterial: 'concrete' },
+      cantilever: { style: 'modern', stairType: 'cantilever', hasStringers: false, hasRisers: false, treadMaterial: 'oak', stringerMaterial: 'steel' },
     };
   }
 }

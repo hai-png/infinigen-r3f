@@ -505,6 +505,11 @@ export function createGTMaterial(
     case 'emission':
       return new GTEmissionMaterial(params?.emissive);
     
+    case 'optical_flow':
+      // Optical flow material is handled by OpticalFlowPass directly,
+      // but we provide a fallback that outputs zero flow
+      return new GTFlatShadingMaterial();
+    
     default:
       console.warn(`Unknown GT pass type: ${passType}, using flat shading`);
       return new GTFlatShadingMaterial();

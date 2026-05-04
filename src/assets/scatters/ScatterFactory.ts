@@ -35,7 +35,11 @@ export type ScatterType =
   | 'rock'
   | 'mushroom'
   | 'flower'
-  | 'twig';
+  | 'twig'
+  | 'snow_layer'
+  | 'slime_mold'
+  | 'mollusk'
+  | 'jellyfish';
 
 /**
  * Selector function that determines valid placement surfaces.
@@ -670,6 +674,297 @@ export class ScatterFactory {
     });
     this.materialRegistry.set('twig', (_seed, _season) => {
       return new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9 });
+    });
+
+    // --- Snow Layer ---
+    this.geometryRegistry.set('snow_layer', (seed, lod) => {
+      const rng = new SeededRandom(seed);
+      const segments = Math.max(4, 8 - lod * 2);
+      const radius = rng.uniform(0.08, 0.2);
+      const geo = new THREE.SphereGeometry(radius, segments, Math.max(3, segments / 2));
+      // Flatten into a snow patch / accumulation shape
+      geo.scale(1, 0.15, 1);
+
+      // Add slope-based thickness variation: vertices near edge get thinner
+      const posAttr = geo.attributes.position;
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posAttr.getX(i);
+        const y = posAttr.getY(i);
+        const z = posAttr.getZ(i);
+        const dist = Math.sqrt(x * x + z * z);
+        const edgeFactor = 1.0 - Math.min(dist / radius, 1.0);
+        // Thinner at edges (slope effect), thicker at center (flat accumulation)
+        const heightMod = y * (0.5 + edgeFactor * 0.5);
+        // Wind drift: slight directional displacement
+        const windDrift = edgeFactor * rng.uniform(-0.02, 0.02);
+        posAttr.setXYZ(i, x + windDrift, heightMod, z + windDrift * 0.5);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    });
+    this.materialRegistry.set('snow_layer', (_seed, season) => {
+      // Snow is white but can have slight blue tint in winter, slight melt-yellow in summer
+      const colorMap: Record<string, number> = {
+        spring: 0xf0f0f5,
+        summer: 0xe8e8ef,
+        autumn: 0xf5f5fa,
+        winter: 0xffffff,
+      };
+      return new THREE.MeshStandardMaterial({
+        color: colorMap[season] || 0xffffff,
+        roughness: 0.85,
+        metalness: 0.0,
+      });
+    });
+
+    // --- Slime Mold ---
+    this.geometryRegistry.set('slime_mold', (seed, lod) => {
+      const rng = new SeededRandom(seed);
+      const segments = Math.max(5, 8 - lod);
+      const positions: number[] = [];
+      const normals: number[] = [];
+      const uvs: number[] = [];
+      const indices: number[] = [];
+
+      // Reaction-diffusion growth: central blob with branching tendrils
+      const blobCount = rng.nextInt(3, 6);
+
+      for (let b = 0; b < blobCount; b++) {
+        const baseIdx = positions.length / 3;
+        const cx = rng.uniform(-0.04, 0.04);
+        const cy = 0;
+        const cz = rng.uniform(-0.04, 0.04);
+        const blobRadius = rng.uniform(0.015, 0.04);
+
+        // Center vertex
+        positions.push(cx, cy, cz);
+        normals.push(0, 1, 0);
+        uvs.push(0.5, 0.5);
+
+        // Ring vertices
+        for (let s = 0; s < segments; s++) {
+          const angle = (s / segments) * Math.PI * 2;
+          // Organic wobble for blob shape
+          const wobble = rng.uniform(0.8, 1.2);
+          const px = cx + Math.cos(angle) * blobRadius * wobble;
+          const py = cy + rng.uniform(0.002, 0.01); // Slight puff upward
+          const pz = cz + Math.sin(angle) * blobRadius * wobble;
+          positions.push(px, py, pz);
+          normals.push(0, 1, 0);
+          uvs.push(0.5 + Math.cos(angle) * 0.4, 0.5 + Math.sin(angle) * 0.4);
+
+          const curr = baseIdx + 1 + s;
+          const next = baseIdx + 1 + ((s + 1) % segments);
+          indices.push(baseIdx, next, curr);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    });
+    this.materialRegistry.set('slime_mold', (seed, _season) => {
+      const rng = new SeededRandom(seed + 500);
+      // Yellow, orange, or white coloration
+      const hue = rng.choice([0.12, 0.08, 0.15, 0.0]);
+      const saturation = rng.uniform(0.4, 0.8);
+      const lightness = rng.uniform(0.5, 0.8);
+      const color = new THREE.Color().setHSL(hue, saturation, lightness);
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.95,
+        side: THREE.DoubleSide,
+      });
+    });
+
+    // --- Mollusk ---
+    this.geometryRegistry.set('mollusk', (seed, lod) => {
+      const rng = new SeededRandom(seed);
+      const segments = Math.max(6, 10 - lod * 2);
+      const spiralTurns = rng.uniform(1.5, 3.0);
+      const shellRadius = rng.uniform(0.02, 0.06);
+      const positions: number[] = [];
+      const normals: number[] = [];
+      const uvs: number[] = [];
+      const indices: number[] = [];
+
+      // Parametric spiral shell using tube-like geometry
+      const ringCount = Math.max(6, 12 - lod * 2);
+      const ringSegments = Math.max(5, 8 - lod);
+
+      for (let r = 0; r < ringCount; r++) {
+        const t = r / (ringCount - 1);
+        // Spiral path
+        const spiralAngle = t * spiralTurns * Math.PI * 2;
+        const spiralRadius = t * shellRadius;
+        const cx = Math.cos(spiralAngle) * spiralRadius;
+        const cy = t * shellRadius * 1.5; // Shell grows upward
+        const cz = Math.sin(spiralAngle) * spiralRadius;
+
+        // Cross-section ring
+        const crossRadius = shellRadius * (1 - t * 0.5) * 0.4;
+        for (let s = 0; s < ringSegments; s++) {
+          const angle = (s / ringSegments) * Math.PI * 2;
+          positions.push(
+            cx + Math.cos(angle) * crossRadius,
+            cy + Math.sin(angle) * crossRadius * 0.5,
+            cz + Math.sin(angle) * crossRadius
+          );
+          normals.push(Math.cos(angle), 0, Math.sin(angle));
+          uvs.push(r / ringCount, s / ringSegments);
+        }
+      }
+
+      // Build triangle indices
+      for (let r = 0; r < ringCount - 1; r++) {
+        for (let s = 0; s < ringSegments; s++) {
+          const curr = r * ringSegments + s;
+          const next = r * ringSegments + ((s + 1) % ringSegments);
+          const currAbove = (r + 1) * ringSegments + s;
+          const nextAbove = (r + 1) * ringSegments + ((s + 1) % ringSegments);
+          indices.push(curr, next, currAbove);
+          indices.push(next, nextAbove, currAbove);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    });
+    this.materialRegistry.set('mollusk', (seed, _season) => {
+      const rng = new SeededRandom(seed + 600);
+      // Mollusk shells: cream, pinkish, or brownish
+      const hue = rng.uniform(0.02, 0.12);
+      const saturation = rng.uniform(0.1, 0.4);
+      const lightness = rng.uniform(0.6, 0.85);
+      const color = new THREE.Color().setHSL(hue, saturation, lightness);
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.35,
+        metalness: 0.1,
+      });
+    });
+
+    // --- Jellyfish ---
+    this.geometryRegistry.set('jellyfish', (seed, lod) => {
+      const rng = new SeededRandom(seed);
+      const segments = Math.max(8, 16 - lod * 2);
+      const bellRadius = rng.uniform(0.06, 0.15);
+      const bellHeight = rng.uniform(0.04, 0.1);
+      const tentacleCount = rng.nextInt(4, 8);
+      const tentacleSegments = Math.max(4, 8 - lod * 2);
+
+      const positions: number[] = [];
+      const normals: number[] = [];
+      const uvs: number[] = [];
+      const indices: number[] = [];
+
+      // Bell: hemisphere dome
+      const bellRings = Math.max(4, 8 - lod);
+      // Apex
+      positions.push(0, bellHeight, 0);
+      normals.push(0, 1, 0);
+      uvs.push(0.5, 0);
+
+      for (let r = 1; r <= bellRings; r++) {
+        const t = r / bellRings;
+        const ringY = bellHeight * (1 - t * t); // Parabolic dome
+        const ringRadius = bellRadius * Math.sin(t * Math.PI * 0.5);
+
+        for (let s = 0; s < segments; s++) {
+          const angle = (s / segments) * Math.PI * 2;
+          const px = Math.cos(angle) * ringRadius;
+          const pz = Math.sin(angle) * ringRadius;
+          positions.push(px, ringY, pz);
+          normals.push(px, 0.5, pz);
+          uvs.push(s / segments, t);
+
+          if (r < bellRings) {
+            const curr = 1 + (r - 1) * segments + s;
+            const next = 1 + (r - 1) * segments + ((s + 1) % segments);
+            const currAbove = 1 + r * segments + s;
+            const nextAbove = 1 + r * segments + ((s + 1) % segments);
+
+            if (r === 1) {
+              indices.push(0, next, curr);
+            }
+            indices.push(curr, next, currAbove);
+            indices.push(next, nextAbove, currAbove);
+          }
+        }
+      }
+
+      // Tentacles: thin strips hanging from bell edge
+      const bellEdgeStart = 1 + (bellRings - 1) * segments;
+      for (let t = 0; t < tentacleCount; t++) {
+        const tentAngle = (t / tentacleCount) * Math.PI * 2;
+        const segIdx = Math.floor((t / tentacleCount) * segments);
+        const baseVertex = bellEdgeStart + segIdx;
+
+        // Get base position
+        const bx = positions[baseVertex * 3];
+        const by = positions[baseVertex * 3 + 1];
+        const bz = positions[baseVertex * 3 + 2];
+
+        const tentLength = rng.uniform(0.1, 0.3);
+        const tentBaseIdx = positions.length / 3;
+
+        for (let s = 0; s <= tentacleSegments; s++) {
+          const st = s / tentacleSegments;
+          // Tentacle curves outward and downward
+          const sx = bx + Math.cos(tentAngle) * st * 0.02;
+          const sy = by - st * tentLength;
+          const sz = bz + Math.sin(tentAngle) * st * 0.02;
+
+          // Two vertices per segment for thin strip
+          const stripWidth = 0.003 * (1 - st * 0.5);
+          positions.push(sx - stripWidth, sy, sz);
+          normals.push(0, 0, 1);
+          uvs.push(0, st);
+
+          positions.push(sx + stripWidth, sy, sz);
+          normals.push(0, 0, 1);
+          uvs.push(1, st);
+
+          if (s > 0) {
+            const vi = tentBaseIdx + s * 2;
+            indices.push(vi - 2, vi - 1, vi);
+            indices.push(vi - 1, vi + 1, vi);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    });
+    this.materialRegistry.set('jellyfish', (seed, _season) => {
+      const rng = new SeededRandom(seed + 700);
+      // Translucent jellyfish colors: pale blue, pink, or white
+      const hue = rng.choice([0.55, 0.58, 0.92, 0.0]);
+      const saturation = rng.uniform(0.2, 0.6);
+      const lightness = rng.uniform(0.7, 0.9);
+      const color = new THREE.Color().setHSL(hue, saturation, lightness);
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.2,
+        metalness: 0.0,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+      });
     });
   }
 }

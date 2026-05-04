@@ -1,25 +1,28 @@
 /**
  * NewScatterTypes.ts — P4.5: New Scatter Types
  *
- * Implements 7 new scatter generators for ground-level detail objects.
+ * Implements 11 scatter generators for ground-level and underwater detail objects.
  * Each generator is a class implementing a common ScatterGenerator interface,
  * supporting density control, seed-based randomization, and seasonal variation.
  *
  * Scatter generators:
- *   1. FernScatter      — Small fern fronds on forest floor
- *   2. MossScatter       — Moss patches on rocks and ground
- *   3. GroundLeavesScatter — Fallen leaves on the ground
- *   4. PineNeedleScatter — Pine needle debris under conifers
- *   5. SeashellScatter   — Seashells on beaches
- *   6. LichenScatter     — Lichen patches on rocks and tree bark
- *   7. PebbleScatter     — Small pebbles on paths and riverbeds
+ *   1. FernScatter         — Small fern fronds on forest floor
+ *   2. MossScatter          — Moss patches on rocks and ground
+ *   3. GroundLeavesScatter  — Fallen leaves on the ground
+ *   4. PineNeedleScatter    — Pine needle debris under conifers
+ *   5. SeashellScatter      — Seashells on beaches
+ *   6. LichenScatter        — Lichen patches on rocks and tree bark (enhanced)
+ *   7. PebbleScatter        — Small pebbles on paths and riverbeds
+ *   8. SnowLayerScatter     — Snow accumulation with slope-based thickness
+ *   9. SlimeMoldScatter     — Reaction-diffusion slime mold growth
+ *  10. MolluskScatter       — Spiral shells on underwater surfaces
+ *  11. JellyfishScatter     — Translucent jellyfish in water column
  *
  * Ported from: infinigen/terrain/objects/scatter/*.py
  */
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
-import { seededFbm } from '@/core/util/MathUtils';
 
 // ============================================================================
 // Common Interface & Types
@@ -664,6 +667,8 @@ export interface LichenScatterConfig extends BaseScatterConfig {
   patchRadius: number;
   /** Whether lichen grows on vertical surfaces (default true) */
   growsOnVertical: boolean;
+  /** Color variant: 'green' | 'gray_green' | 'yellow_green' (default 'green') */
+  colorVariant: 'green' | 'gray_green' | 'yellow_green';
 }
 
 /**
@@ -676,11 +681,12 @@ export class LichenScatter implements ScatterGenerator<LichenScatterConfig> {
       ...DEFAULT_BASE_CONFIG,
       patchRadius: 0.04,
       growsOnVertical: true,
+      colorVariant: 'green',
       ...config,
     };
     const rng = new SeededRandom(cfg.seed);
     const geometry = this.getGeometry(cfg.seed);
-    const material = this.getMaterial(cfg.seed, cfg.season);
+    const material = this.getMaterial(cfg.seed, cfg.season, cfg.colorVariant);
 
     const boundsSize = new THREE.Vector3();
     cfg.bounds.getSize(boundsSize);
@@ -700,17 +706,24 @@ export class LichenScatter implements ScatterGenerator<LichenScatterConfig> {
       const y = cfg.bounds.min.y + rng.uniform(0, boundsSize.y * 0.5);
 
       dummy.position.set(x, y, z);
-      // Lichen grows on surfaces facing various directions
+
+      // Surface normal alignment: lichen grows on surfaces facing various directions
       if (cfg.growsOnVertical && rng.next() > 0.5) {
-        // On vertical surface
+        // On vertical surface — align to wall normal
         const wallAngle = rng.uniform(0, Math.PI * 2);
         dummy.rotation.set(0, wallAngle, Math.PI / 2);
       } else {
-        // On horizontal surface
+        // On horizontal surface — flat attachment
         dummy.rotation.set(-Math.PI / 2, rng.uniform(0, Math.PI * 2), 0);
       }
+
       const s = rng.uniform(cfg.minScale, cfg.maxScale);
-      dummy.scale.set(s * rng.uniform(0.8, 1.5), s, s * rng.uniform(0.8, 1.5));
+      // Lichen patches are flat and irregular
+      dummy.scale.set(
+        s * rng.uniform(0.8, 1.5),
+        s * rng.uniform(0.02, 0.06),
+        s * rng.uniform(0.8, 1.5)
+      );
       dummy.updateMatrix();
       instancedMesh.setMatrixAt(i, dummy.matrix);
       positions.push(new THREE.Vector3(x, y, z));
@@ -724,19 +737,35 @@ export class LichenScatter implements ScatterGenerator<LichenScatterConfig> {
     const rng = new SeededRandom(seed);
     const segments = Math.max(6, 10);
     const radius = rng.uniform(0.03, 0.06);
+    // Flat patch geometry with irregular outline
     const geo = new THREE.CircleGeometry(radius, segments);
+
+    // Add organic wobble for irregular patch shape
+    const posAttr = geo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const z = posAttr.getZ(i);
+      const dist = Math.sqrt(x * x + z * z);
+      if (dist > 0.001) {
+        const wobble = rng.uniform(0.85, 1.15);
+        posAttr.setX(i, x * wobble);
+        posAttr.setZ(i, z * wobble);
+      }
+    }
+    geo.computeVertexNormals();
     return geo;
   }
 
-  getMaterial(seed: number, season: Season): THREE.MeshStandardMaterial {
+  getMaterial(seed: number, season: Season, colorVariant?: 'green' | 'gray_green' | 'yellow_green'): THREE.MeshStandardMaterial {
     const rng = new SeededRandom(seed + 300);
-    const colors: Record<Season, number> = {
-      spring: 0x9e9d24,
-      summer: 0x827717,
-      autumn: 0x9e9d24,
-      winter: 0x827717,
+    // Color variation: green, gray-green, yellow-green
+    const variantColors: Record<string, Record<Season, number>> = {
+      green: { spring: 0x4caf50, summer: 0x2e7d32, autumn: 0x558b2f, winter: 0x33691e },
+      gray_green: { spring: 0x9e9d24, summer: 0x827717, autumn: 0x9e9d24, winter: 0x827717 },
+      yellow_green: { spring: 0xc0ca33, summer: 0x9e9d24, autumn: 0xc0ca33, winter: 0x9e9d24 },
     };
-    const baseColor = new THREE.Color(colors[season]);
+    const palette = variantColors[colorVariant || 'green'] || variantColors.green;
+    const baseColor = new THREE.Color(palette[season]);
     baseColor.offsetHSL(rng.uniform(-0.03, 0.03), 0, rng.uniform(-0.05, 0.05));
     return new THREE.MeshStandardMaterial({
       color: baseColor,
@@ -843,6 +872,625 @@ export class PebbleScatter implements ScatterGenerator<PebbleScatterConfig> {
       color,
       roughness: 0.85,
       metalness: 0.0,
+    });
+  }
+}
+
+// ============================================================================
+// 8. SnowLayerScatter
+// ============================================================================
+
+export interface SnowLayerScatterConfig extends BaseScatterConfig {
+  /** Snow patch radius (default 0.12) */
+  patchRadius: number;
+  /** Snow thickness on flat surfaces (default 0.03) */
+  flatThickness: number;
+  /** Wind drift direction angle in radians (default 0) */
+  windDirection: number;
+  /** Wind drift strength (default 0.02) */
+  windStrength: number;
+  /** Melt factor: 0 = full snow, 1 = heavily melted (default 0) */
+  meltFactor: number;
+}
+
+/**
+ * SnowLayerScatter — Generates snow accumulation patches on terrain surfaces.
+ * Produces flattened dome shapes with slope-based thickness (thicker on flat
+ * surfaces, thinner on steep), wind drift displacement, and melting effects.
+ */
+export class SnowLayerScatter implements ScatterGenerator<SnowLayerScatterConfig> {
+  generate(config?: Partial<SnowLayerScatterConfig>): ScatterGeneratorResult {
+    const cfg: SnowLayerScatterConfig = {
+      ...DEFAULT_BASE_CONFIG,
+      patchRadius: 0.12,
+      flatThickness: 0.03,
+      windDirection: 0,
+      windStrength: 0.02,
+      meltFactor: 0,
+      ...config,
+    };
+    const rng = new SeededRandom(cfg.seed);
+    const geometry = this.getGeometry(cfg.seed);
+    const material = this.getMaterial(cfg.seed, cfg.season);
+
+    const boundsSize = new THREE.Vector3();
+    cfg.bounds.getSize(boundsSize);
+    const areaXZ = boundsSize.x * boundsSize.z;
+    const count = Math.round(areaXZ * cfg.density);
+
+    const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+    instancedMesh.castShadow = true;
+    instancedMesh.receiveShadow = true;
+
+    const positions: THREE.Vector3[] = [];
+    const dummy = new THREE.Object3D();
+
+    for (let i = 0; i < count; i++) {
+      const x = cfg.bounds.min.x + rng.next() * boundsSize.x;
+      const z = cfg.bounds.min.z + rng.next() * boundsSize.z;
+      const y = cfg.bounds.min.y + rng.uniform(0, 0.01);
+
+      // Wind drift displacement
+      const drift = cfg.windStrength * rng.uniform(0.5, 1.5);
+      const dx = Math.cos(cfg.windDirection) * drift;
+      const dz = Math.sin(cfg.windDirection) * drift;
+
+      dummy.position.set(x + dx, y, z + dz);
+      // Snow lies mostly flat on surfaces
+      dummy.rotation.set(
+        rng.uniform(-0.05, 0.05),
+        rng.uniform(0, Math.PI * 2),
+        rng.uniform(-0.05, 0.05)
+      );
+
+      const s = rng.uniform(cfg.minScale, cfg.maxScale);
+      // Snow is wide and thin; melt reduces thickness
+      const meltScale = 1.0 - cfg.meltFactor * rng.uniform(0.3, 0.7);
+      dummy.scale.set(
+        s * rng.uniform(0.9, 1.3),
+        s * 0.15 * meltScale,
+        s * rng.uniform(0.9, 1.3)
+      );
+      dummy.updateMatrix();
+      instancedMesh.setMatrixAt(i, dummy.matrix);
+      positions.push(new THREE.Vector3(x, y, z));
+    }
+
+    instancedMesh.instanceMatrix.needsUpdate = true;
+    return { mesh: instancedMesh, count, positions, success: count > 0 };
+  }
+
+  getGeometry(seed: number): THREE.BufferGeometry {
+    const rng = new SeededRandom(seed);
+    const segments = 8;
+    const radius = rng.uniform(0.08, 0.2);
+    const geo = new THREE.SphereGeometry(radius, segments, Math.max(3, segments / 2));
+    // Flatten into a snow accumulation shape
+    geo.scale(1, 0.15, 1);
+
+    // Slope-based thickness: thinner at edges (simulating steep terrain)
+    const posAttr = geo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+      const z = posAttr.getZ(i);
+      const dist = Math.sqrt(x * x + z * z);
+      const edgeFactor = 1.0 - Math.min(dist / radius, 1.0);
+      // Thinner at edges (slope), thicker at center (flat accumulation)
+      const heightMod = y * (0.5 + edgeFactor * 0.5);
+      posAttr.setXYZ(i, x, heightMod, z);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  getMaterial(_seed: number, season: Season): THREE.MeshStandardMaterial {
+    const colorMap: Record<Season, number> = {
+      spring: 0xf0f0f5, // Slightly dirty snow
+      summer: 0xe8e8ef, // Melted / thin
+      autumn: 0xf5f5fa, // Fresh snow
+      winter: 0xffffff,  // Pristine white
+    };
+    return new THREE.MeshStandardMaterial({
+      color: colorMap[season] || 0xffffff,
+      roughness: 0.85,
+      metalness: 0.0,
+    });
+  }
+}
+
+// ============================================================================
+// 9. SlimeMoldScatter
+// ============================================================================
+
+export interface SlimeMoldScatterConfig extends BaseScatterConfig {
+  /** Number of organic blobs per cluster (default 4) */
+  blobCount: number;
+  /** Growth spread radius (default 0.06) */
+  spreadRadius: number;
+  /** Color type: 'yellow' | 'orange' | 'white' (default 'yellow') */
+  colorType: 'yellow' | 'orange' | 'white';
+}
+
+/**
+ * SlimeMoldScatter — Generates slime mold growth on surfaces (rocks, trees, ground).
+ * Uses reaction-diffusion-inspired placement with organic blob shapes
+ * and color variation (yellow, orange, white).
+ */
+export class SlimeMoldScatter implements ScatterGenerator<SlimeMoldScatterConfig> {
+  generate(config?: Partial<SlimeMoldScatterConfig>): ScatterGeneratorResult {
+    const cfg: SlimeMoldScatterConfig = {
+      ...DEFAULT_BASE_CONFIG,
+      blobCount: 4,
+      spreadRadius: 0.06,
+      colorType: 'yellow',
+      ...config,
+    };
+    const rng = new SeededRandom(cfg.seed);
+    const geometry = this.getGeometry(cfg.seed);
+    const material = this.getMaterial(cfg.seed, cfg.season, cfg.colorType);
+
+    const boundsSize = new THREE.Vector3();
+    cfg.bounds.getSize(boundsSize);
+    const areaXZ = boundsSize.x * boundsSize.z;
+    const count = Math.round(areaXZ * cfg.density);
+
+    const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+    instancedMesh.castShadow = true;
+    instancedMesh.receiveShadow = true;
+
+    const positions: THREE.Vector3[] = [];
+    const dummy = new THREE.Object3D();
+
+    for (let i = 0; i < count; i++) {
+      const x = cfg.bounds.min.x + rng.next() * boundsSize.x;
+      const z = cfg.bounds.min.z + rng.next() * boundsSize.z;
+      // Slime mold attaches to surfaces (ground, rocks, tree trunks)
+      const y = cfg.bounds.min.y + rng.uniform(0, boundsSize.y * 0.6);
+
+      dummy.position.set(x, y, z);
+
+      // Surface-attached: mostly flat with slight random tilt
+      if (rng.next() > 0.7) {
+        // On vertical surface
+        const wallAngle = rng.uniform(0, Math.PI * 2);
+        dummy.rotation.set(0, wallAngle, Math.PI / 2);
+      } else {
+        // On horizontal / sloped surface
+        dummy.rotation.set(
+          -Math.PI / 2 + rng.uniform(-0.3, 0.3),
+          rng.uniform(0, Math.PI * 2),
+          rng.uniform(-0.3, 0.3)
+        );
+      }
+
+      const s = rng.uniform(cfg.minScale, cfg.maxScale);
+      // Slime mold is flat and spread out
+      dummy.scale.set(
+        s * rng.uniform(0.8, 1.4),
+        s * rng.uniform(0.03, 0.08),
+        s * rng.uniform(0.8, 1.4)
+      );
+      dummy.updateMatrix();
+      instancedMesh.setMatrixAt(i, dummy.matrix);
+      positions.push(new THREE.Vector3(x, y, z));
+    }
+
+    instancedMesh.instanceMatrix.needsUpdate = true;
+    return { mesh: instancedMesh, count, positions, success: count > 0 };
+  }
+
+  getGeometry(seed: number): THREE.BufferGeometry {
+    const rng = new SeededRandom(seed);
+    const segments = Math.max(5, 8);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    // Reaction-diffusion growth pattern: multiple organic blobs
+    const blobCount = rng.nextInt(3, 6);
+
+    for (let b = 0; b < blobCount; b++) {
+      const baseIdx = positions.length / 3;
+      // Spread blobs from center using grid-based growth simulation
+      const cx = rng.uniform(-0.04, 0.04);
+      const cy = 0;
+      const cz = rng.uniform(-0.04, 0.04);
+      const blobRadius = rng.uniform(0.015, 0.04);
+
+      // Center vertex
+      positions.push(cx, cy, cz);
+      normals.push(0, 1, 0);
+      uvs.push(0.5, 0.5);
+
+      // Ring vertices with organic wobble
+      for (let s = 0; s < segments; s++) {
+        const angle = (s / segments) * Math.PI * 2;
+        const wobble = rng.uniform(0.8, 1.2);
+        const px = cx + Math.cos(angle) * blobRadius * wobble;
+        const py = cy + rng.uniform(0.002, 0.01);
+        const pz = cz + Math.sin(angle) * blobRadius * wobble;
+        positions.push(px, py, pz);
+        normals.push(0, 1, 0);
+        uvs.push(0.5 + Math.cos(angle) * 0.4, 0.5 + Math.sin(angle) * 0.4);
+
+        const curr = baseIdx + 1 + s;
+        const next = baseIdx + 1 + ((s + 1) % segments);
+        indices.push(baseIdx, next, curr);
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  getMaterial(seed: number, _season: Season, colorType?: 'yellow' | 'orange' | 'white'): THREE.MeshStandardMaterial {
+    const rng = new SeededRandom(seed + 500);
+    const colorMap: Record<string, [number, number, number]> = {
+      yellow: [0.12, 0.7, 0.65],
+      orange: [0.08, 0.65, 0.55],
+      white: [0.0, 0.1, 0.85],
+    };
+    const base = colorMap[colorType || 'yellow'] || colorMap.yellow;
+    const hue = base[0] + rng.uniform(-0.02, 0.02);
+    const saturation = base[1] + rng.uniform(-0.1, 0.1);
+    const lightness = base[2] + rng.uniform(-0.05, 0.05);
+    const color = new THREE.Color().setHSL(hue, saturation, lightness);
+    return new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.95,
+      side: THREE.DoubleSide,
+    });
+  }
+}
+
+// ============================================================================
+// 10. MolluskScatter
+// ============================================================================
+
+export interface MolluskScatterConfig extends BaseScatterConfig {
+  /** Shell spiral turns (default 2.0) */
+  spiralTurns: number;
+  /** Shell radius (default 0.04) */
+  shellRadius: number;
+  /** Whether shells are underwater (default true) */
+  underwater: boolean;
+}
+
+/**
+ * MolluskScatter — Generates mollusk shells attached to underwater rocks and surfaces.
+ * Produces parametric spiral shell geometry with size/shape variation via SeededRandom.
+ * Shell orientation follows the surface normal of attachment points.
+ */
+export class MolluskScatter implements ScatterGenerator<MolluskScatterConfig> {
+  generate(config?: Partial<MolluskScatterConfig>): ScatterGeneratorResult {
+    const cfg: MolluskScatterConfig = {
+      ...DEFAULT_BASE_CONFIG,
+      spiralTurns: 2.0,
+      shellRadius: 0.04,
+      underwater: true,
+      ...config,
+    };
+    const rng = new SeededRandom(cfg.seed);
+    const geometry = this.getGeometry(cfg.seed);
+    const material = this.getMaterial(cfg.seed, cfg.season);
+
+    const boundsSize = new THREE.Vector3();
+    cfg.bounds.getSize(boundsSize);
+    const areaXZ = boundsSize.x * boundsSize.z;
+    const count = Math.round(areaXZ * cfg.density);
+
+    const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+    instancedMesh.castShadow = true;
+    instancedMesh.receiveShadow = true;
+
+    const positions: THREE.Vector3[] = [];
+    const dummy = new THREE.Object3D();
+
+    for (let i = 0; i < count; i++) {
+      const x = cfg.bounds.min.x + rng.next() * boundsSize.x;
+      const z = cfg.bounds.min.z + rng.next() * boundsSize.z;
+      // Mollusks attach to underwater surfaces
+      const y = cfg.underwater
+        ? cfg.bounds.min.y + rng.uniform(0, boundsSize.y * 0.3)
+        : cfg.bounds.min.y + rng.uniform(0, 0.02);
+
+      dummy.position.set(x, y, z);
+
+      // Shell orientation follows surface normal
+      // For underwater rocks, shells face outward at various angles
+      const normalAngle = rng.uniform(0, Math.PI * 2);
+      const tilt = rng.uniform(0, Math.PI * 0.5);
+      dummy.rotation.set(
+        tilt * Math.cos(normalAngle),
+        rng.uniform(0, Math.PI * 2),
+        tilt * Math.sin(normalAngle)
+      );
+
+      const s = rng.uniform(cfg.minScale, cfg.maxScale);
+      // Shells vary in proportions
+      dummy.scale.set(
+        s * rng.uniform(0.8, 1.2),
+        s * rng.uniform(0.9, 1.3),
+        s * rng.uniform(0.8, 1.2)
+      );
+      dummy.updateMatrix();
+      instancedMesh.setMatrixAt(i, dummy.matrix);
+      positions.push(new THREE.Vector3(x, y, z));
+    }
+
+    instancedMesh.instanceMatrix.needsUpdate = true;
+    return { mesh: instancedMesh, count, positions, success: count > 0 };
+  }
+
+  getGeometry(seed: number): THREE.BufferGeometry {
+    const rng = new SeededRandom(seed);
+    const spiralTurns = rng.uniform(1.5, 3.0);
+    const shellRadius = rng.uniform(0.02, 0.06);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    // Parametric spiral shell using tube-like geometry
+    const ringCount = 8;
+    const ringSegments = 6;
+
+    for (let r = 0; r < ringCount; r++) {
+      const t = r / (ringCount - 1);
+      // Spiral path
+      const spiralAngle = t * spiralTurns * Math.PI * 2;
+      const spiralRadius = t * shellRadius;
+      const cx = Math.cos(spiralAngle) * spiralRadius;
+      const cy = t * shellRadius * 1.5;
+      const cz = Math.sin(spiralAngle) * spiralRadius;
+
+      // Cross-section ring that tapers toward the tip
+      const crossRadius = shellRadius * (1 - t * 0.5) * 0.4;
+      for (let s = 0; s < ringSegments; s++) {
+        const angle = (s / ringSegments) * Math.PI * 2;
+        positions.push(
+          cx + Math.cos(angle) * crossRadius,
+          cy + Math.sin(angle) * crossRadius * 0.5,
+          cz + Math.sin(angle) * crossRadius
+        );
+        normals.push(Math.cos(angle), 0, Math.sin(angle));
+        uvs.push(r / ringCount, s / ringSegments);
+      }
+    }
+
+    // Build triangle indices connecting rings
+    for (let r = 0; r < ringCount - 1; r++) {
+      for (let s = 0; s < ringSegments; s++) {
+        const curr = r * ringSegments + s;
+        const next = r * ringSegments + ((s + 1) % ringSegments);
+        const currAbove = (r + 1) * ringSegments + s;
+        const nextAbove = (r + 1) * ringSegments + ((s + 1) % ringSegments);
+        indices.push(curr, next, currAbove);
+        indices.push(next, nextAbove, currAbove);
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  getMaterial(seed: number, _season: Season): THREE.MeshStandardMaterial {
+    const rng = new SeededRandom(seed + 600);
+    // Mollusk shells: cream, pinkish, or brownish
+    const hue = rng.uniform(0.02, 0.12);
+    const saturation = rng.uniform(0.1, 0.4);
+    const lightness = rng.uniform(0.6, 0.85);
+    const color = new THREE.Color().setHSL(hue, saturation, lightness);
+    return new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.35,
+      metalness: 0.1,
+    });
+  }
+}
+
+// ============================================================================
+// 11. JellyfishScatter
+// ============================================================================
+
+export interface JellyfishScatterConfig extends BaseScatterConfig {
+  /** Bell radius (default 0.1) */
+  bellRadius: number;
+  /** Bell height (default 0.07) */
+  bellHeight: number;
+  /** Number of tentacles (default 6) */
+  tentacleCount: number;
+  /** Tentacle length (default 0.2) */
+  tentacleLength: number;
+  /** Water surface Y height for positioning (default 5.0) */
+  waterSurfaceY: number;
+  /** Water floor Y height (default 0.0) */
+  waterFloorY: number;
+  /** Pulse animation phase offset (default 0) */
+  pulsePhase: number;
+}
+
+/**
+ * JellyfishScatter — Generates jellyfish floating in the water column.
+ * Produces bell-shaped geometry with tentacles, positioned between water
+ * surface and floor. Features translucent material and tentacle variation.
+ */
+export class JellyfishScatter implements ScatterGenerator<JellyfishScatterConfig> {
+  generate(config?: Partial<JellyfishScatterConfig>): ScatterGeneratorResult {
+    const cfg: JellyfishScatterConfig = {
+      ...DEFAULT_BASE_CONFIG,
+      bellRadius: 0.1,
+      bellHeight: 0.07,
+      tentacleCount: 6,
+      tentacleLength: 0.2,
+      waterSurfaceY: 5.0,
+      waterFloorY: 0.0,
+      pulsePhase: 0,
+      ...config,
+    };
+    const rng = new SeededRandom(cfg.seed);
+    const geometry = this.getGeometry(cfg.seed);
+    const material = this.getMaterial(cfg.seed, cfg.season);
+
+    const boundsSize = new THREE.Vector3();
+    cfg.bounds.getSize(boundsSize);
+    const areaXZ = boundsSize.x * boundsSize.z;
+    const count = Math.round(areaXZ * cfg.density);
+
+    const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+    instancedMesh.castShadow = true;
+    instancedMesh.receiveShadow = true;
+
+    const positions: THREE.Vector3[] = [];
+    const dummy = new THREE.Object3D();
+
+    for (let i = 0; i < count; i++) {
+      const x = cfg.bounds.min.x + rng.next() * boundsSize.x;
+      const z = cfg.bounds.min.z + rng.next() * boundsSize.z;
+      // Float in water column between surface and floor
+      const minY = cfg.waterFloorY + 0.5;
+      const maxY = cfg.waterSurfaceY - 0.3;
+      const y = minY + rng.next() * Math.max(0.1, maxY - minY);
+
+      dummy.position.set(x, y, z);
+      // Jellyfish gently rotate and tilt
+      dummy.rotation.set(
+        rng.uniform(-0.15, 0.15),
+        rng.uniform(0, Math.PI * 2),
+        rng.uniform(-0.15, 0.15)
+      );
+
+      const s = rng.uniform(cfg.minScale, cfg.maxScale);
+      dummy.scale.set(s, s * rng.uniform(0.9, 1.2), s);
+      dummy.updateMatrix();
+      instancedMesh.setMatrixAt(i, dummy.matrix);
+      positions.push(new THREE.Vector3(x, y, z));
+    }
+
+    instancedMesh.instanceMatrix.needsUpdate = true;
+    return { mesh: instancedMesh, count, positions, success: count > 0 };
+  }
+
+  getGeometry(seed: number): THREE.BufferGeometry {
+    const rng = new SeededRandom(seed);
+    const bellRadius = rng.uniform(0.06, 0.15);
+    const bellHeight = rng.uniform(0.04, 0.1);
+    const tentacleCount = rng.nextInt(4, 8);
+    const tentacleSegments = 6;
+    const segments = 12;
+
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    // Bell: parabolic dome shape
+    const bellRings = 6;
+    // Apex vertex
+    positions.push(0, bellHeight, 0);
+    normals.push(0, 1, 0);
+    uvs.push(0.5, 0);
+
+    for (let r = 1; r <= bellRings; r++) {
+      const t = r / bellRings;
+      const ringY = bellHeight * (1 - t * t); // Parabolic dome
+      const ringRadius = bellRadius * Math.sin(t * Math.PI * 0.5);
+
+      for (let s = 0; s < segments; s++) {
+        const angle = (s / segments) * Math.PI * 2;
+        const px = Math.cos(angle) * ringRadius;
+        const pz = Math.sin(angle) * ringRadius;
+        positions.push(px, ringY, pz);
+        normals.push(px, 0.5, pz);
+        uvs.push(s / segments, t);
+
+        if (r < bellRings) {
+          const curr = 1 + (r - 1) * segments + s;
+          const next = 1 + (r - 1) * segments + ((s + 1) % segments);
+          const currAbove = 1 + r * segments + s;
+          const nextAbove = 1 + r * segments + ((s + 1) % segments);
+
+          if (r === 1) {
+            indices.push(0, next, curr);
+          }
+          indices.push(curr, next, currAbove);
+          indices.push(next, nextAbove, currAbove);
+        }
+      }
+    }
+
+    // Tentacles: thin strips hanging from bell edge
+    const bellEdgeStart = 1 + (bellRings - 1) * segments;
+    for (let t = 0; t < tentacleCount; t++) {
+      const tentAngle = (t / tentacleCount) * Math.PI * 2;
+      const segIdx = Math.floor((t / tentacleCount) * segments);
+      const baseVertex = bellEdgeStart + segIdx;
+
+      const bx = positions[baseVertex * 3];
+      const by = positions[baseVertex * 3 + 1];
+      const bz = positions[baseVertex * 3 + 2];
+
+      const tentLength = rng.uniform(0.1, 0.3);
+      const tentBaseIdx = positions.length / 3;
+
+      for (let s = 0; s <= tentacleSegments; s++) {
+        const st = s / tentacleSegments;
+        const sx = bx + Math.cos(tentAngle) * st * 0.02;
+        const sy = by - st * tentLength;
+        const sz = bz + Math.sin(tentAngle) * st * 0.02;
+
+        const stripWidth = 0.003 * (1 - st * 0.5);
+        positions.push(sx - stripWidth, sy, sz);
+        normals.push(0, 0, 1);
+        uvs.push(0, st);
+
+        positions.push(sx + stripWidth, sy, sz);
+        normals.push(0, 0, 1);
+        uvs.push(1, st);
+
+        if (s > 0) {
+          const vi = tentBaseIdx + s * 2;
+          indices.push(vi - 2, vi - 1, vi);
+          indices.push(vi - 1, vi + 1, vi);
+        }
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  getMaterial(seed: number, _season: Season): THREE.MeshStandardMaterial {
+    const rng = new SeededRandom(seed + 700);
+    // Translucent jellyfish colors: pale blue, pink, or white
+    const hue = rng.choice([0.55, 0.58, 0.92, 0.0]);
+    const saturation = rng.uniform(0.2, 0.6);
+    const lightness = rng.uniform(0.7, 0.9);
+    const color = new THREE.Color().setHSL(hue, saturation, lightness);
+    return new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.2,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
     });
   }
 }

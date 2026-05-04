@@ -32,7 +32,7 @@ export * from './assets/materials/index';
 export * from './assets/shaders/index';
 export {
   SkyLightingSystem,
-  type SkyLightingConfig,
+  type SkyLightingSystemConfig,
   ThreePointLightingSystem,
   type ThreePointLightingConfig,
 } from './assets/lighting/index';

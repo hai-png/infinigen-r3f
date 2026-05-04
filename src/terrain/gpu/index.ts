@@ -18,3 +18,17 @@ export {
   type ErosionConfig as HydraulicErosionGPUConfig,
   type ErosionData as HydraulicErosionGPUData,
 } from './HydraulicErosionGPU';
+
+export {
+  TerrainSurfaceShaderPipeline,
+  DEFAULT_TERRAIN_SURFACE_CONFIG,
+  type TerrainSurfaceConfig,
+} from './TerrainSurfaceShaderPipeline';
+
+export {
+  GPUSurfaceShaders,
+  SDF_SURFACE_DISPLACEMENT_WGSL,
+  DEFAULT_SDF_DISPLACEMENT_UNIFORMS,
+  type SurfaceShaderConfig,
+  type SDFDisplacementUniforms,
+} from './GPUSurfaceShaders';

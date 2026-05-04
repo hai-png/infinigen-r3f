@@ -13,12 +13,47 @@ export { UnderwaterGenerator } from './UnderwaterGenerator';
 
 // Body part generators
 export { BodyPartGenerator } from './parts/BodyPartGenerator';
-export { WingGenerator } from './parts/WingGenerator';
+export { WingGenerator, FeatherGenerator, MembraneGenerator, type WingResult } from './parts/WingGenerator';
 export { AntennaGenerator } from './parts/AntennaGenerator';
-export { LegGenerator } from './parts/LegGenerator';
+export { LegGenerator, type LegResult, type LegSubType } from './parts/LegGenerator';
 export { TailGenerator } from './parts/TailGenerator';
-export { EyeGenerator } from './parts/EyeGenerator';
-export { MouthGenerator, BeakGenerator } from './parts/MouthGenerator';
+export { EyeGenerator, type EyeResult, type PupilType } from './parts/EyeGenerator';
+export { MouthGenerator, BeakGenerator, type MouthResult, type TeethType } from './parts/MouthGenerator';
+
+// Phase 2: Head detail generators
+export {
+  EarGenerator,
+  NoseGenerator,
+  HornGenerator,
+  AntlerGenerator,
+  type HeadDetailResult,
+  type EarType as HeadEarType,
+  type EarConfig,
+  type NoseType,
+  type NoseConfig,
+  type HornType,
+  type HornConfig,
+  type AntlerConfig,
+  type Joint,
+} from './parts/HeadDetailGenerator';
+
+// Phase 2: Rigging system
+export {
+  NURBSToArmature,
+  sampleJointPositionsFromProfile,
+  generateAttachmentPoints,
+  type RiggingJoint,
+  type IKParams,
+  type PartAttachment as RiggingPartAttachment,
+  type IKTarget,
+  type ArmatureResult,
+} from './rigging/NURBSToArmature';
+export {
+  CreatureRiggingSystem,
+  type RiggedCreature,
+  type RiggingConfig,
+  type PartRiggingData,
+} from './rigging/CreatureRiggingSystem';
 
 // Skeleton system
 export { SkeletonBuilder, type CreatureSkeletonConfig } from './skeleton/SkeletonBuilder';
@@ -69,7 +104,7 @@ export {
   TailGenerator as BodyTailGenerator,
   type HeadShape,
   type PupilShape,
-  type EarType,
+  type EarType as PartEarType,
   type MouthType,
   type TorsoShape,
   type FootType,
@@ -98,3 +133,48 @@ export {
   SwarmSystem,
   type SwarmConfig,
 } from './swarm/SwarmSystem';
+
+// NURBS body system
+export {
+  NURBSSurface,
+  findKnotSpan,
+  evaluateBasis,
+  evaluateBasisDerivatives,
+  createBSplineSurface,
+  createNURBSSurfaceFromArrays,
+  NURBSBodyBuilder,
+  buildCreatureBody,
+  TESSELLATION_LOW,
+  TESSELLATION_MEDIUM,
+  TESSELLATION_HIGH,
+  createBodyProfile,
+  createMammalProfile,
+  createReptileProfile,
+  createBirdProfile,
+  createFishProfile,
+  createAmphibianProfile,
+  getDefaultConfigForType,
+  DEFAULT_BODY_PROFILE_CONFIG,
+  type BodyProfileType as NURBSBodyProfileType,
+  type BodyProfileConfig,
+  type TessellationConfig,
+  type AttachmentPoint,
+  type NURBSBodyResult,
+} from './nurbs';
+
+// Genome system
+export {
+  type GeneValueType,
+  type GeneColor,
+  type CreatureGene,
+  type InterpolatableAttachment,
+  CreatureGenome,
+  MaximumBipartiteMatching,
+  GenomeInterpolator,
+  AttachmentInterpolator,
+  GenomeFactory,
+  type SpeciesType,
+  geneColorToThreeColor,
+  threeColorToGeneColor,
+  genomeToPlainObject,
+} from './genome';

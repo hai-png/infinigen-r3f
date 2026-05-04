@@ -889,12 +889,52 @@ export class USDExporter {
   
   /**
    * Export scene to USD format (USDA text format)
+   * Now includes USD Physics schema when includeCollisions is true.
    */
   export(scene: Scene, filename?: string): string {
     const outputPath = filename || `${this.config.outputPath}/scene.usda`;
     
     let usda = '#usda 1.0\n\n';
     usda += `(defaultPrim "scene")\n\n`;
+    
+    // Add physics schema declarations if collisions are included
+    if (this.config.includeCollisions) {
+      usda += `class PhysicsRigidBody "PhysicsRigidBody"\n{\n`;
+      usda += `  float physics:mass = 0.0\n`;
+      usda += `  bool physics:rigidBodyEnabled = true\n`;
+      usda += `  float3 physics:velocity = (0.0, 0.0, 0.0)\n`;
+      usda += `  float3 physics:angularVelocity = (0.0, 0.0, 0.0)\n`;
+      usda += `}\n\n`;
+      
+      usda += `class PhysicsCollision "PhysicsCollision"\n{\n`;
+      usda += `  float physics:collisionMargin = ${this.config.collisionMargin.toFixed(4)}\n`;
+      usda += `}\n\n`;
+      
+      usda += `class PhysicsRevoluteJoint "PhysicsRevoluteJoint"\n{\n`;
+      usda += `  float physics:lowerLimit = -3.14159\n`;
+      usda += `  float physics:upperLimit = 3.14159\n`;
+      usda += `  float physics:damping = 0.0\n`;
+      usda += `  float physics:stiffness = 0.0\n`;
+      usda += `  float3 physics:axis = (0.0, 0.0, 1.0)\n`;
+      usda += `}\n\n`;
+      
+      usda += `class PhysicsPrismaticJoint "PhysicsPrismaticJoint"\n{\n`;
+      usda += `  float physics:lowerLimit = -1.0\n`;
+      usda += `  float physics:upperLimit = 1.0\n`;
+      usda += `  float physics:damping = 0.0\n`;
+      usda += `  float physics:stiffness = 0.0\n`;
+      usda += `  float3 physics:axis = (0.0, 0.0, 1.0)\n`;
+      usda += `}\n\n`;
+      
+      usda += `class PhysicsFixedJoint "PhysicsFixedJoint"\n{\n`;
+      usda += `}\n\n`;
+      
+      usda += `class PhysicsBallJoint "PhysicsBallJoint"\n{\n`;
+      usda += `  float physics:damping = 0.0\n`;
+      usda += `  float physics:stiffness = 0.0\n`;
+      usda += `}\n\n`;
+    }
+    
     usda += `def Xform "scene"\n`;
     usda += `{\n`;
     
@@ -902,6 +942,11 @@ export class USDExporter {
     scene.children.forEach((obj) => {
       usda += this.exportObject(obj, 1);
     });
+    
+    // Export joints if collisions included
+    if (this.config.includeCollisions) {
+      usda += this.exportPhysicsJoints(scene, 1);
+    }
     
     usda += '}\n';
     return usda;
@@ -930,6 +975,11 @@ export class USDExporter {
     // Add mesh if applicable
     if (obj instanceof Mesh && obj.geometry) {
       usda += this.exportMeshData(obj, indentLevel + 1);
+    }
+    
+    // Add physics schema prims if collisions are included
+    if (this.config.includeCollisions) {
+      usda += this.exportPhysicsPrims(obj, indentLevel + 1);
     }
     
     // Export children
@@ -977,6 +1027,248 @@ export class USDExporter {
     
     usda += `${indent}}\n`;
     return usda;
+  }
+  
+  /**
+   * Export USD Physics schema prims for an object.
+   * Reads physics metadata from obj.userData.physics and obj.userData.joint.
+   * Generates PhysicsRigidBody, PhysicsCollision, and PhysicsMassProperties prims.
+   */
+  private exportPhysicsPrims(obj: Object3D, indentLevel: number): string {
+    const indent = '  '.repeat(indentLevel);
+    let usda = '';
+    
+    // Read physics metadata from userData (set by SimFactory)
+    const physicsData = obj.userData?.physics as {
+      mass?: number;
+      inertia?: { x: number; y: number; z: number };
+      friction?: number;
+      restitution?: number;
+      isStatic?: boolean;
+      collisionShape?: string;
+      velocity?: { x: number; y: number; z: number };
+      angularVelocity?: { x: number; y: number; z: number };
+    } | undefined;
+    
+    // If no physics data, compute from mesh geometry
+    const rbProps = this.calculateUSDPhysicsProps(obj, physicsData);
+    
+    // PhysicsRigidBody prim
+    usda += `${indent}def PhysicsRigidBody "physics_rigid_body"\n`;
+    usda += `${indent}{\n`;
+    usda += `${indent}  float physics:mass = ${rbProps.mass.toFixed(6)}\n`;
+    usda += `${indent}  bool physics:rigidBodyEnabled = true\n`;
+    if (rbProps.velocity) {
+      usda += `${indent}  float3 physics:velocity = (${rbProps.velocity.x.toFixed(4)}, ${rbProps.velocity.y.toFixed(4)}, ${rbProps.velocity.z.toFixed(4)})\n`;
+    }
+    if (rbProps.angularVelocity) {
+      usda += `${indent}  float3 physics:angularVelocity = (${rbProps.angularVelocity.x.toFixed(4)}, ${rbProps.angularVelocity.y.toFixed(4)}, ${rbProps.angularVelocity.z.toFixed(4)})\n`;
+    }
+    if (rbProps.isStatic) {
+      usda += `${indent}  bool physics:kinematicEnabled = true\n`;
+    }
+    usda += `${indent}}\n`;
+    
+    // PhysicsMassProperties prim
+    usda += `${indent}def PhysicsMassProperties "mass_properties"\n`;
+    usda += `${indent}{\n`;
+    usda += `${indent}  float3 physics:diagonalInertia = (${rbProps.inertia.x.toFixed(6)}, ${rbProps.inertia.y.toFixed(6)}, ${rbProps.inertia.z.toFixed(6)})\n`;
+    usda += `${indent}  float3 physics:centerOfMass = (0.0, 0.0, 0.0)\n`;
+    usda += `${indent}  float3 physics:principalAxes = (1.0, 0.0, 0.0)\n`;
+    usda += `${indent}}\n`;
+    
+    // PhysicsCollision prim
+    if (obj instanceof Mesh && obj.geometry) {
+      usda += `${indent}def PhysicsCollision "collision"\n`;
+      usda += `${indent}{\n`;
+      usda += `${indent}  float physics:collisionMargin = ${this.config.collisionMargin.toFixed(4)}\n`;
+      const collisionShape = physicsData?.collisionShape || this.inferUSDGeomType(obj as Mesh);
+      usda += `${indent}  uniform token physics:collisionShape = "${collisionShape}"\n`;
+      usda += `${indent}  float physics:friction = ${rbProps.friction.toFixed(4)}\n`;
+      usda += `${indent}  float physics:restitution = ${rbProps.restitution.toFixed(4)}\n`;
+      usda += `${indent}}\n`;
+    }
+    
+    return usda;
+  }
+  
+  /**
+   * Export USD Physics joints for the entire scene.
+   * Reads joint metadata from obj.userData.joint.
+   */
+  private exportPhysicsJoints(scene: Scene, indentLevel: number): string {
+    const indent = '  '.repeat(indentLevel);
+    let usda = '';
+    const joints: {
+      name: string;
+      type: string;
+      parent: string;
+      child: string;
+      props: JointProps & { type: ExtendedJointType };
+    }[] = [];
+    
+    scene.traverse((obj) => {
+      const joint = obj.userData?.joint as (JointProps & { type: ExtendedJointType }) | undefined;
+      if (!joint || joint.type === 'fixed') return;
+      
+      const jointName = obj.name || `joint_${obj.id}`;
+      const parentName = obj.parent?.name || 'scene';
+      const childName = obj.children[0]?.name || `link_${obj.id}`;
+      
+      joints.push({
+        name: jointName,
+        type: joint.type as string,
+        parent: parentName,
+        child: childName,
+        props: joint,
+      });
+    });
+    
+    if (joints.length === 0) return '';
+    
+    usda += `${indent}# Physics Joints\n`;
+    
+    for (const joint of joints) {
+      const origin = joint.props.origin || new Vector3();
+      const axis = joint.props.axis || new Vector3(0, 0, 1);
+      
+      // Determine USD joint type
+      let usdJointType: string;
+      let jointClass: string;
+      switch (joint.type as ExtendedJointType) {
+        case 'revolute':
+        case 'hinge':
+          usdJointType = 'PhysicsRevoluteJoint';
+          jointClass = 'PhysicsRevoluteJoint';
+          break;
+        case 'continuous':
+          usdJointType = 'PhysicsRevoluteJoint';
+          jointClass = 'PhysicsRevoluteJoint';
+          break;
+        case 'prismatic':
+          usdJointType = 'PhysicsPrismaticJoint';
+          jointClass = 'PhysicsPrismaticJoint';
+          break;
+        case 'ball':
+        case 'ball_socket':
+          usdJointType = 'PhysicsBallJoint';
+          jointClass = 'PhysicsBallJoint';
+          break;
+        default:
+          usdJointType = 'PhysicsFixedJoint';
+          jointClass = 'PhysicsFixedJoint';
+          break;
+      }
+      
+      usda += `${indent}def ${jointClass} "${joint.name}"\n`;
+      usda += `${indent}{\n`;
+      usda += `${indent}  rel physics:body0 = </scene/${joint.parent}>\n`;
+      usda += `${indent}  rel physics:body1 = </scene/${joint.child}>\n`;
+      usda += `${indent}  float3 physics:localPos0 = (${origin.x.toFixed(4)}, ${origin.y.toFixed(4)}, ${origin.z.toFixed(4)})\n`;
+      usda += `${indent}  float3 physics:localPos1 = (0.0, 0.0, 0.0)\n`;
+      
+      // Joint-type-specific properties
+      if (usdJointType === 'PhysicsRevoluteJoint') {
+        const lower = joint.props.lowerLimit ?? -3.14159;
+        const upper = joint.props.upperLimit ?? (joint.type === 'continuous' ? 3.14159 : joint.props.upperLimit ?? 3.14159);
+        usda += `${indent}  float physics:lowerLimit = ${lower.toFixed(6)}\n`;
+        usda += `${indent}  float physics:upperLimit = ${upper.toFixed(6)}\n`;
+        usda += `${indent}  float3 physics:axis = (${axis.x.toFixed(4)}, ${axis.y.toFixed(4)}, ${axis.z.toFixed(4)})\n`;
+      } else if (usdJointType === 'PhysicsPrismaticJoint') {
+        const lower = joint.props.lowerLimit ?? -1.0;
+        const upper = joint.props.upperLimit ?? 1.0;
+        usda += `${indent}  float physics:lowerLimit = ${lower.toFixed(6)}\n`;
+        usda += `${indent}  float physics:upperLimit = ${upper.toFixed(6)}\n`;
+        usda += `${indent}  float3 physics:axis = (${axis.x.toFixed(4)}, ${axis.y.toFixed(4)}, ${axis.z.toFixed(4)})\n`;
+      }
+      
+      // Damping and stiffness
+      if (joint.props.damping > 0) {
+        usda += `${indent}  float physics:damping = ${joint.props.damping.toFixed(6)}\n`;
+      }
+      if (joint.props.friction > 0) {
+        usda += `${indent}  float physics:stiffness = 0.0\n`;
+      }
+      
+      // Break force
+      if (joint.props.maxEffort !== undefined) {
+        usda += `${indent}  float physics:breakForce = ${joint.props.maxEffort.toFixed(4)}\n`;
+      }
+      
+      usda += `${indent}}\n\n`;
+    }
+    
+    return usda;
+  }
+  
+  /**
+   * Calculate physics properties for USD export.
+   * Uses userData.physics if available, otherwise computes from geometry.
+   */
+  private calculateUSDPhysicsProps(
+    obj: Object3D,
+    physicsData: {
+      mass?: number;
+      inertia?: { x: number; y: number; z: number };
+      friction?: number;
+      restitution?: number;
+      isStatic?: boolean;
+      collisionShape?: string;
+      velocity?: { x: number; y: number; z: number };
+      angularVelocity?: { x: number; y: number; z: number };
+    } | undefined
+  ): {
+    mass: number;
+    inertia: { x: number; y: number; z: number };
+    friction: number;
+    restitution: number;
+    isStatic: boolean;
+    velocity: { x: number; y: number; z: number } | null;
+    angularVelocity: { x: number; y: number; z: number } | null;
+  } {
+    const mesh = obj as Mesh;
+    const massConfig = this.config.massProperties;
+    
+    let mass = physicsData?.mass ?? massConfig.defaultMass;
+    let inertia = physicsData?.inertia ?? { x: 1, y: 1, z: 1 };
+    
+    if (!physicsData?.mass && mesh.geometry && massConfig.useMeshVolume) {
+      const bbox = mesh.geometry.boundingBox;
+      if (bbox) {
+        const size = new Vector3();
+        bbox.getSize(size);
+        const volume = size.x * size.y * size.z;
+        mass = volume * massConfig.density;
+        inertia = {
+          x: (mass / 12) * (size.y * size.y + size.z * size.z),
+          y: (mass / 12) * (size.x * size.x + size.z * size.z),
+          z: (mass / 12) * (size.x * size.x + size.y * size.y),
+        };
+      }
+    }
+    
+    return {
+      mass,
+      inertia,
+      friction: physicsData?.friction ?? 0.5,
+      restitution: physicsData?.restitution ?? 0.1,
+      isStatic: physicsData?.isStatic ?? (mass < 0.001),
+      velocity: physicsData?.velocity ?? null,
+      angularVelocity: physicsData?.angularVelocity ?? null,
+    };
+  }
+  
+  /**
+   * Infer USD collision geometry type from mesh
+   */
+  private inferUSDGeomType(mesh: Mesh): string {
+    const geom = mesh.geometry;
+    if (!geom) return 'convexHull';
+    if (geom.type === 'BoxGeometry') return 'box';
+    if (geom.type === 'SphereGeometry') return 'sphere';
+    if (geom.type === 'CylinderGeometry') return 'cylinder';
+    if (geom.type === 'CapsuleGeometry') return 'capsule';
+    return 'convexHull';
   }
 }
 

@@ -15,6 +15,8 @@
 
 import * as THREE from 'three';
 import { TerrainGenerator, type TerrainData } from '@/terrain/core/TerrainGenerator';
+import { TerrainSurfaceShaderPipeline } from '@/terrain/gpu/TerrainSurfaceShaderPipeline';
+import type { SignedDistanceField } from '@/terrain/sdf/sdf-operations';
 import { ChunkStitcher } from '@/terrain/mesher/ChunkStitcher';
 
 // ---------------------------------------------------------------------------
@@ -117,11 +119,137 @@ export class ChunkedTerrainSystem {
   private chunkSize: number;
   private needsStitching: boolean = false;
 
+  // -----------------------------------------------------------------------
+  // Surface Shader Pipeline Integration
+  // -----------------------------------------------------------------------
+
+  /**
+   * Optional surface shader pipeline for SDF-based displacement.
+   * Set via `setSurfaceShaderPipeline()`.
+   */
+  private surfaceShaderPipeline: TerrainSurfaceShaderPipeline | null = null;
+
   constructor(config: Partial<ChunkedTerrainConfig> = {}) {
     this.config = { ...DEFAULT_CHUNKED_CONFIG, ...config };
     this.group = new THREE.Group();
     this.stitcher = new ChunkStitcher();
     this.chunkSize = this.config.worldSize / this.config.chunksX;
+  }
+
+  // -----------------------------------------------------------------------
+  // Surface Shader Pipeline — Public API
+  // -----------------------------------------------------------------------
+
+  /**
+   * Set the surface shader pipeline for displacement.
+   *
+   * When attached and initialized, `generateWithDisplacement()` will apply
+   * SDF-based displacement to each chunk's geometry after generation.
+   *
+   * Pass `null` to detach the pipeline.
+   */
+  setSurfaceShaderPipeline(pipeline: TerrainSurfaceShaderPipeline | null): void {
+    this.surfaceShaderPipeline = pipeline;
+  }
+
+  /**
+   * Check whether the surface shader pipeline is attached and initialized.
+   */
+  isSurfaceShaderReady(): boolean {
+    return this.surfaceShaderPipeline !== null && this.surfaceShaderPipeline.isInitialized();
+  }
+
+  /**
+   * Generate all terrain chunks and optionally apply surface displacement.
+   *
+   * This is the async counterpart to `generate()`.  If a surface shader
+   * pipeline is attached and initialized, each chunk's geometry is refined
+   * via SDF-based displacement before being added to the scene.
+   *
+   * The displaced geometry replaces the original in the TerrainChunk and
+   * the corresponding mesh is updated.
+   *
+   * @param sdf - The signed distance field for displacement.
+   *              Required if pipeline is attached; ignored otherwise.
+   * @returns   The THREE.Group containing all chunk meshes
+   */
+  async generateWithDisplacement(sdf?: SignedDistanceField): Promise<THREE.Group> {
+    // Generate base chunks synchronously
+    const group = this.generate();
+
+    // Apply displacement to each chunk if pipeline is available
+    if (this.surfaceShaderPipeline && this.surfaceShaderPipeline.isInitialized() && sdf) {
+      for (const chunk of this.chunks) {
+        try {
+          const displacedGeometry = await this.surfaceShaderPipeline.computeDisplacement(
+            chunk.geometry,
+            sdf,
+          );
+
+          if (displacedGeometry !== chunk.geometry) {
+            chunk.geometry.dispose();
+            chunk.geometry = displacedGeometry;
+
+            // Update the mesh to use the displaced geometry
+            chunk.mesh.geometry = displacedGeometry;
+
+            // Recompute bounding volumes
+            displacedGeometry.computeBoundingBox();
+            displacedGeometry.computeBoundingSphere();
+          }
+        } catch (err) {
+          console.warn(
+            `[ChunkedTerrainSystem] Surface displacement failed for chunk [${chunk.col},${chunk.row}]:`,
+            err,
+          );
+        }
+      }
+
+      // Re-stitch seams after displacement
+      this.stitchAllSeams();
+    }
+
+    return group;
+  }
+
+  /**
+   * Apply surface displacement to existing chunks in place.
+   *
+   * Useful when chunks have already been generated (via `generate()`) and
+   * you want to apply displacement after the fact.
+   *
+   * @param sdf - The signed distance field for displacement
+   */
+  async applyDisplacementToChunks(sdf: SignedDistanceField): Promise<void> {
+    if (!this.surfaceShaderPipeline || !this.surfaceShaderPipeline.isInitialized()) {
+      return;
+    }
+
+    for (const chunk of this.chunks) {
+      try {
+        const displacedGeometry = await this.surfaceShaderPipeline.computeDisplacement(
+          chunk.geometry,
+          sdf,
+        );
+
+        if (displacedGeometry !== chunk.geometry) {
+          chunk.geometry.dispose();
+          chunk.geometry = displacedGeometry;
+          chunk.mesh.geometry = displacedGeometry;
+
+          displacedGeometry.computeBoundingBox();
+          displacedGeometry.computeBoundingSphere();
+        }
+      } catch (err) {
+        console.warn(
+          `[ChunkedTerrainSystem] Surface displacement failed for chunk [${chunk.col},${chunk.row}]:`,
+          err,
+        );
+      }
+    }
+
+    // Re-stitch seams after displacement
+    this.stitchAllSeams();
   }
 
   // -----------------------------------------------------------------------

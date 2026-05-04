@@ -1,6 +1,9 @@
 /**
  * ShaderCompiler - Compiles a node graph into GLSL fragment + vertex shaders
  *
+ * Now uses GLSLShaderComposer for full node graph → GLSL generation.
+ * Falls back to simplified PBR material when composer fails.
+ *
  * Handles the PrincipledBSDF node as the output node and generates GLSL code
  * for each node type:
  * - Texture nodes → GLSL noise functions
@@ -11,11 +14,19 @@
  *
  * Produces a complete Three.js ShaderMaterial with proper uniforms and varyings.
  * All shaders are WebGL2 compatible (no deprecated GLSL built-ins).
+ *
+ * Supports:
+ * - IBL (Image-Based Lighting) via environment map uniforms
+ * - Multi-light environments (up to 4 point lights + 1 directional)
+ * - Shadow mapping for directional light
  */
 
 import * as THREE from 'three';
 import type { NodeGraph } from './NodeEvaluator';
 import { NodeEvaluator, EvaluationMode } from './NodeEvaluator';
+import { GLSLShaderComposer } from './glsl/GLSLShaderComposer';
+import type { ShaderGraph, ComposableNode } from './glsl/GLSLShaderComposer';
+import type { NodeLink } from '../core/types';
 
 // ============================================================================
 // Types
@@ -30,6 +41,17 @@ export interface ShaderCompileResult {
   errors: string[];
 }
 
+export interface ShaderCompileOptions {
+  /** Enable IBL (Image-Based Lighting) */
+  enableIBL?: boolean;
+  /** Enable shadow mapping */
+  enableShadows?: boolean;
+  /** Environment map for IBL */
+  envMap?: THREE.Texture;
+  /** Use the full GLSLShaderComposer (true) or simplified mode (false) */
+  useComposer?: boolean;
+}
+
 interface UniformInfo {
   name: string;
   type: 'float' | 'vec2' | 'vec3' | 'vec4' | 'sampler2D' | 'int';
@@ -37,7 +59,7 @@ interface UniformInfo {
 }
 
 // ============================================================================
-// GLSL Code Templates
+// GLSL Code Templates (simplified fallback)
 // ============================================================================
 
 const GLSL_HEADER = `#version 300 es
@@ -80,6 +102,7 @@ void main() {
 
 export class NodeShaderCompiler {
   private evaluator: NodeEvaluator;
+  private composer: GLSLShaderComposer;
   private uniforms: Map<string, UniformInfo> = new Map();
   private functions: Set<string> = new Set();
   private warnings: string[] = [];
@@ -88,10 +111,68 @@ export class NodeShaderCompiler {
 
   constructor(evaluator?: NodeEvaluator) {
     this.evaluator = evaluator ?? new NodeEvaluator();
+    this.composer = new GLSLShaderComposer();
   }
 
   /**
-   * Compile a node graph into a ShaderMaterial
+   * Compile a node graph into a ShaderMaterial using the full GLSLShaderComposer
+   */
+  compileToGLSL(graph: ShaderGraph): string {
+    const result = this.composer.compose(graph);
+    return result.fragmentShader;
+  }
+
+  /**
+   * Compile a node graph into a usable Three.js ShaderMaterial
+   * Uses the full GLSLShaderComposer for complete node graph traversal
+   */
+  compileToMaterial(graph: ShaderGraph, options?: ShaderCompileOptions): THREE.Material {
+    try {
+      const composed = this.composer.compose(graph, {
+        enableIBL: options?.enableIBL,
+        enableShadows: options?.enableShadows,
+      });
+
+      this.warnings = composed.warnings;
+      this.errors = composed.errors;
+
+      const materialOptions: THREE.ShaderMaterialParameters = {
+        vertexShader: composed.vertexShader,
+        fragmentShader: composed.fragmentShader,
+        uniforms: composed.uniforms,
+        side: THREE.FrontSide,
+        transparent: false,
+      };
+
+      // Check if any alpha < 1 or transmission
+      const fragStr = composed.fragmentShader;
+      if (fragStr.includes('transmission') || fragStr.includes('alpha')) {
+        materialOptions.transparent = true;
+        materialOptions.side = THREE.DoubleSide;
+      }
+
+      // Add environment map if provided
+      if (options?.envMap) {
+        composed.uniforms['u_envMap'] = { value: options.envMap };
+      }
+
+      const material = new THREE.ShaderMaterial(materialOptions);
+
+      if (composed.errors.length > 0) {
+        console.warn('[ShaderCompiler] Errors during composition:', composed.errors);
+      }
+
+      return material;
+    } catch (error: any) {
+      console.warn('[ShaderCompiler] Full composition failed, using fallback:', error.message);
+      return this.createFallbackMaterial();
+    }
+  }
+
+  /**
+   * Compile a node graph using the legacy (simplified) path.
+   * This evaluates the graph through NodeEvaluator and generates
+   * a simplified PBR shader from the extracted BSDF parameters.
    */
   compile(graph: NodeGraph): ShaderCompileResult {
     this.uniforms.clear();
@@ -162,14 +243,68 @@ export class NodeShaderCompiler {
     if (result.errors.length > 0) {
       // Fall back to MeshPhysicalMaterial with approximate parameters
       const evalResult = this.evaluator.evaluate(graph, EvaluationMode.MATERIAL);
-      return this.createFallbackMaterial(evalResult.value);
+      return this.createFallbackMaterialFromBSDF(evalResult.value);
     }
 
     return result.material;
   }
 
   // ==========================================================================
-  // BSDF Parameter Extraction
+  // Convert NodeGraph to ShaderGraph for the composer
+  // ==========================================================================
+
+  /**
+   * Convert a NodeGraph (from NodeEvaluator) to a ShaderGraph (for GLSLShaderComposer)
+   */
+  private nodeGraphToShaderGraph(graph: NodeGraph): ShaderGraph {
+    const nodes: Map<string, ComposableNode> = new Map();
+    const links: NodeLink[] = [];
+
+    for (const [id, nodeInst] of graph.nodes) {
+      const composableNode: ComposableNode = {
+        id,
+        type: nodeInst.type,
+        name: nodeInst.name,
+        inputs: new Map(),
+        outputs: new Map(),
+        settings: nodeInst.settings,
+      };
+
+      // Convert inputs
+      if (nodeInst.inputs instanceof Map) {
+        for (const [key, value] of nodeInst.inputs) {
+          composableNode.inputs.set(key, {
+            type: 'FLOAT',
+            value,
+            connectedLinks: [],
+          });
+        }
+      }
+
+      // Convert outputs
+      if (nodeInst.outputs instanceof Map) {
+        for (const [key, value] of nodeInst.outputs) {
+          composableNode.outputs.set(key, {
+            type: 'FLOAT',
+            value,
+            connectedLinks: [],
+          });
+        }
+      }
+
+      nodes.set(id, composableNode);
+    }
+
+    // Copy links
+    for (const link of graph.links) {
+      links.push({ ...link });
+    }
+
+    return { nodes, links };
+  }
+
+  // ==========================================================================
+  // BSDF Parameter Extraction (legacy path)
   // ==========================================================================
 
   private extractBSDFParameters(evalOutput: any): BSDFParams {
@@ -247,7 +382,7 @@ export class NodeShaderCompiler {
   }
 
   // ==========================================================================
-  // Fragment Shader Generation
+  // Fragment Shader Generation (simplified legacy path)
   // ==========================================================================
 
   private generateFragmentShader(params: BSDFParams): string {
@@ -479,7 +614,7 @@ void main() {
   }
 
   // ==========================================================================
-  // GLSL Noise Functions
+  // GLSL Noise Functions (simplified legacy)
   // ==========================================================================
 
   private getNoiseFunctions(): string {
@@ -557,7 +692,15 @@ float voronoi(vec2 p) {
   // Fallback Material
   // ==========================================================================
 
-  private createFallbackMaterial(evalOutput: any): THREE.MeshPhysicalMaterial {
+  private createFallbackMaterial(): THREE.MeshPhysicalMaterial {
+    return new THREE.MeshPhysicalMaterial({
+      color: 0x888888,
+      roughness: 0.5,
+      metalness: 0.0,
+    });
+  }
+
+  private createFallbackMaterialFromBSDF(evalOutput: any): THREE.MeshPhysicalMaterial {
     const params = this.extractBSDFParameters(evalOutput);
 
     const materialParams: THREE.MeshPhysicalMaterialParameters = {

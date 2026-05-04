@@ -15,6 +15,7 @@
  */
 
 import * as THREE from 'three';
+import { Evaluator, Brush, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
 import { NodeWrangler } from '../core/node-wrangler';
 import { AttributeManager, AttributeDomain, AttributeType } from './AttributeIO';
 
@@ -293,7 +294,7 @@ GeometryNodeExecutor.register('Boolean', (inputs, context) => {
     return { context };
   }
 
-  // Use a voxel-based CSG approach (same technique as MeshOperations)
+  // Perform CSG boolean operation using three-bvh-csg
   const result = voxelBoolean(context.geometry, operandGeometry, operation);
 
   const newCtx = new GeometryNodeContext(result);
@@ -302,61 +303,84 @@ GeometryNodeExecutor.register('Boolean', (inputs, context) => {
 });
 
 /**
- * Simplified voxel-based boolean for CSG operations.
- * For production, consider integrating three-bvh-csg or similar.
+ * CSG boolean operation using three-bvh-csg.
+ *
+ * Wraps the input BufferGeometry instances as Brush objects and delegates
+ * the boolean evaluation to the three-bvh-csg Evaluator.
+ *
+ * Supported operations:
+ *  - 'union'      → ADDITION       (A ∪ B)
+ *  - 'subtract'   → SUBTRACTION    (A − B)
+ *  - 'intersect'  → INTERSECTION   (A ∩ B)
  */
 function voxelBoolean(
   geoA: THREE.BufferGeometry,
   geoB: THREE.BufferGeometry,
   operation: 'union' | 'subtract' | 'intersect',
 ): THREE.BufferGeometry {
-  // Clone and merge as point-cloud approximation for now
-  // Real CSG would use BSP trees or mesh-bvh
-  const positionsA = geoA.getAttribute('position')?.array as Float32Array | undefined;
-  const positionsB = geoB.getAttribute('position')?.array as Float32Array | undefined;
+  // Validate that both geometries have position data
+  const posA = geoA.getAttribute('position');
+  const posB = geoB.getAttribute('position');
+  if (!posA) {
+    console.warn('[voxelBoolean] Operand A has no position attribute, returning empty geometry.');
+    return new THREE.BufferGeometry();
+  }
+  if (!posB) {
+    console.warn('[voxelBoolean] Operand B has no position attribute, returning geometry A unchanged.');
+    return geoA.clone();
+  }
 
-  if (!positionsA) return geoA.clone();
-  if (!positionsB) return operation === 'union' ? geoA.clone() : new THREE.BufferGeometry();
+  // Ensure both geometries are indexed; three-bvh-csg requires indexed geometry.
+  // If non-indexed, convert to indexed by using the existing vertex order.
+  const ensureIndexed = (geo: THREE.BufferGeometry): THREE.BufferGeometry => {
+    if (geo.getIndex()) return geo;
+    const count = geo.getAttribute('position').count;
+    const indices = new Uint32Array(count);
+    for (let i = 0; i < count; i++) indices[i] = i;
+    const indexed = geo.clone();
+    indexed.setIndex(new THREE.BufferAttribute(indices, 1));
+    return indexed;
+  };
 
-  switch (operation) {
-    case 'union': {
-      // Merge both geometries
-      const merged = new THREE.BufferGeometry();
-      const countA = positionsA.length / 3;
-      const countB = positionsB.length / 3;
-      const mergedPositions = new Float32Array(positionsA.length + positionsB.length);
-      mergedPositions.set(positionsA, 0);
-      mergedPositions.set(positionsB, positionsA.length);
-      merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
+  const preparedA = ensureIndexed(geoA);
+  const preparedB = ensureIndexed(geoB);
 
-      // Merge indices
-      const idxA = geoA.getIndex();
-      const idxB = geoB.getIndex();
-      const newIndices: number[] = [];
-      if (idxA) {
-        const arr = idxA.array as Uint32Array | Uint16Array;
-        for (let i = 0; i < arr.length; i++) newIndices.push(arr[i]);
-      } else {
-        for (let i = 0; i < countA; i++) newIndices.push(i);
-      }
-      if (idxB) {
-        const arr = idxB.array as Uint32Array | Uint16Array;
-        for (let i = 0; i < arr.length; i++) newIndices.push(arr[i] + countA);
-      } else {
-        for (let i = 0; i < countB; i++) newIndices.push(i + countA);
-      }
-      merged.setIndex(newIndices);
-      merged.computeVertexNormals();
-      return merged;
-    }
-    case 'subtract':
-      // Return A minus B - simplified: just return A (full CSG needs BSP)
-      return geoA.clone();
-    case 'intersect':
-      // Return intersection - simplified (full CSG needs BSP)
-      return geoA.clone();
-    default:
-      return geoA.clone();
+  // Map our operation names to three-bvh-csg operation constants
+  const operationMap: Record<string, typeof ADDITION> = {
+    union: ADDITION,
+    subtract: SUBTRACTION,
+    intersect: INTERSECTION,
+  };
+
+  const csgOp = operationMap[operation];
+  if (csgOp === undefined) {
+    console.warn(`[voxelBoolean] Unknown operation "${operation}", returning geometry A unchanged.`);
+    return geoA.clone();
+  }
+
+  try {
+    // Create Brush instances from the geometries.
+    // Brush extends Mesh, so it needs a geometry and a material.
+    const brushA = new Brush(preparedA, new THREE.MeshBasicMaterial());
+    const brushB = new Brush(preparedB, new THREE.MeshBasicMaterial());
+
+    // Ensure the BVH cache is built for each brush
+    brushA.prepareGeometry();
+    brushB.prepareGeometry();
+
+    // Perform the CSG evaluation
+    const evaluator = new Evaluator();
+    const resultBrush = evaluator.evaluate(brushA, brushB, csgOp);
+
+    // Extract the resulting BufferGeometry
+    const resultGeo = resultBrush.geometry;
+    resultGeo.computeVertexNormals();
+
+    return resultGeo;
+  } catch (err) {
+    console.error('[voxelBoolean] CSG evaluation failed:', err);
+    // Fall back to returning geometry A on failure
+    return geoA.clone();
   }
 }
 

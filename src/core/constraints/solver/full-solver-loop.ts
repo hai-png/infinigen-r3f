@@ -6,10 +6,14 @@
  * 
  * FIX: Implemented evaluateAll() method so energy is computed correctly via
  * constraint violation counting instead of always returning 0.
+ * 
+ * UPDATE: Added structured move proposals (addition/deletion/translation/
+ * rotation/rescale/resample) with LinearDecaySchedule weight annealing and
+ * violation-aware Metropolis-Hastings acceptance (metrop_hastings_with_viol).
  */
 
 import { ConstraintSystem } from '../language/constraint-system';
-import { Variable, Domain } from '../language/types';
+import { Variable, Domain, Node } from '../language/types';
 import { evaluateNode, violCount, evaluateProblem } from '../evaluator/evaluate';
 import { State as EvaluatorState } from '../evaluator/state';
 import { 
@@ -21,6 +25,16 @@ import { SimulatedAnnealingSolver } from './sa-solver';
 import { bridge } from './bridge';
 import { SolverState, Proposal } from './types';
 import { SeededRandom } from '../../util/MathUtils';
+import {
+  StructuredMoveProposer,
+  ViolationAwareAcceptance,
+  StructuredMoveType,
+  StructuredMove,
+  LinearDecaySchedule,
+  createDefaultSchedules,
+  structuredMoveToProposal,
+  MoveExecutor,
+} from './StructuredMoveProposals';
 
 export interface SolverConfig {
   maxIterations: number;
@@ -29,6 +43,16 @@ export interface SolverConfig {
   minTemperature: number;
   useHybridBridge: boolean;
   enableDomainReasoning: boolean;
+  /** Use structured move proposals instead of random variable assignment */
+  useStructuredMoves: boolean;
+  /** Penalty multiplier for violation-aware acceptance (default 5.0) */
+  violationPenalty: number;
+  /** Maximum number of objects in scene (affects ADDITION move suppression) */
+  maxObjects: number;
+  /** Available object types for ADDITION moves */
+  availableTypes?: string[];
+  /** Custom move schedules (overrides defaults if provided) */
+  moveSchedules?: Map<StructuredMoveType, LinearDecaySchedule>;
   seed?: number;
 }
 
@@ -48,6 +72,10 @@ export class FullSolverLoop {
    */
   private evaluatorState: EvaluatorState | null = null;
 
+  // Structured move proposal system
+  private structuredMoveProposer: StructuredMoveProposer;
+  private violationAwareAcceptance: ViolationAwareAcceptance;
+
   constructor(config: Partial<SolverConfig> = {}) {
     this.config = {
       maxIterations: config.maxIterations ?? 10000,
@@ -56,15 +84,36 @@ export class FullSolverLoop {
       minTemperature: config.minTemperature ?? 0.1,
       useHybridBridge: config.useHybridBridge ?? false,
       enableDomainReasoning: config.enableDomainReasoning ?? true,
+      useStructuredMoves: config.useStructuredMoves ?? true,
+      violationPenalty: config.violationPenalty ?? 5.0,
+      maxObjects: config.maxObjects ?? 50,
+      availableTypes: config.availableTypes,
+      moveSchedules: config.moveSchedules,
       seed: config.seed,
     };
 
-    this.rng = new SeededRandom(this.config.seed ?? 42);
+    const seed = this.config.seed ?? 42;
+    this.rng = new SeededRandom(seed);
     this.constraintSystem = new ConstraintSystem();
     this.continuousProposer = new ContinuousProposer();
     this.discreteProposer = new DiscreteProposer();
     this.hybridProposer = new HybridProposer();
     this.saSolver = new SimulatedAnnealingSolver(this.config);
+
+    // Initialize structured move proposer with schedules
+    const schedules = this.config.moveSchedules ?? createDefaultSchedules();
+    this.structuredMoveProposer = new StructuredMoveProposer(
+      schedules,
+      seed + 1, // Different seed from main RNG
+      this.config.maxObjects,
+      this.config.availableTypes
+    );
+
+    // Initialize violation-aware acceptance
+    this.violationAwareAcceptance = new ViolationAwareAcceptance(
+      this.config.violationPenalty,
+      seed + 2
+    );
   }
 
   /**
@@ -143,7 +192,8 @@ export class FullSolverLoop {
    */
   async solve(): Promise<SolverState> {
     console.log('[FullSolverLoop] Starting solve...');
-    
+    console.log(`[FullSolverLoop] Structured moves: ${this.config.useStructuredMoves ? 'enabled' : 'disabled'}`);
+
     // Initialize bridge if enabled
     if (this.config.useHybridBridge) {
       try {
@@ -172,26 +222,63 @@ export class FullSolverLoop {
 
     while (iteration < this.config.maxIterations && temperature > this.config.minTemperature) {
       iteration++;
-      
-      // Generate proposal using hybrid strategy
-      const proposal = this.generateProposal(temperature);
-      
-      if (!proposal) {
-        continue;
-      }
 
-      // Evaluate energy change
-      const energyDelta = this.evaluateProposal(proposal);
+      if (this.config.useStructuredMoves) {
+        // === Structured move proposal path ===
+        const moveResult = this.generateStructuredProposal(iteration);
+        if (!moveResult) {
+          continue;
+        }
 
-      // Accept/reject based on Metropolis criterion
-      // acceptProposal takes (currentEnergy, proposedEnergy) and uses internal temperature
-      const currentEnergy = this.state!.energy;
-      const proposedEnergy = currentEnergy + energyDelta;
-      const accepted = this.saSolver.acceptProposal(currentEnergy, proposedEnergy);
-      
-      if (accepted) {
-        this.applyProposal(proposal);
-        this.state!.energy += energyDelta;
+        const { move, proposal } = moveResult;
+
+        // Evaluate energy change
+        const energyDelta = this.evaluateProposal(proposal);
+
+        // Count violations for violation-aware acceptance
+        const currentEnergy = this.state!.energy;
+        const proposedEnergy = currentEnergy + energyDelta;
+        const currentViolations = this.violationAwareAcceptance.countViolationsFromEnergy(currentEnergy);
+        const proposedViolations = this.violationAcceptanceCountViolations(proposedEnergy);
+
+        // Use violation-aware Metropolis-Hastings acceptance
+        const accepted = this.violationAwareAcceptance.accept(
+          currentEnergy,
+          proposedEnergy,
+          currentViolations,
+          proposedViolations,
+          temperature
+        );
+
+        if (accepted) {
+          this.applyProposal(proposal);
+          this.state!.energy += energyDelta;
+          this.state!.lastMove = proposal;
+          this.state!.lastMoveAccepted = true;
+        } else {
+          this.state!.lastMove = proposal;
+          this.state!.lastMoveAccepted = false;
+        }
+      } else {
+        // === Legacy proposal path (backward compatibility) ===
+        const proposal = this.generateProposal(temperature);
+
+        if (!proposal) {
+          continue;
+        }
+
+        // Evaluate energy change
+        const energyDelta = this.evaluateProposal(proposal);
+
+        // Accept/reject based on standard Metropolis criterion
+        const currentEnergy = this.state!.energy;
+        const proposedEnergy = currentEnergy + energyDelta;
+        const accepted = this.saSolver.acceptProposal(currentEnergy, proposedEnergy);
+
+        if (accepted) {
+          this.applyProposal(proposal);
+          this.state!.energy += energyDelta;
+        }
       }
 
       // Cool down
@@ -199,7 +286,13 @@ export class FullSolverLoop {
 
       // Progress logging
       if (iteration % 1000 === 0) {
-        console.log(`[FullSolverLoop] Iteration ${iteration}, Energy: ${this.state!.energy.toFixed(4)}, Temp: ${temperature.toFixed(4)}`);
+        const weightSnapshot = this.config.useStructuredMoves
+          ? this.structuredMoveProposer.getWeightSnapshot(iteration)
+          : {};
+        console.log(
+          `[FullSolverLoop] Iteration ${iteration}, Energy: ${this.state!.energy.toFixed(4)}, ` +
+          `Temp: ${temperature.toFixed(4)}, Weights: ${JSON.stringify(weightSnapshot)}`
+        );
       }
 
       // Early exit if energy is near zero (all constraints satisfied)
@@ -218,6 +311,63 @@ export class FullSolverLoop {
     console.log(`[FullSolverLoop] Solve complete after ${iteration} iterations, final energy: ${this.state!.energy.toFixed(4)}`);
 
     return this.state!;
+  }
+
+  /**
+   * Helper: count violations from proposed energy for violation-aware acceptance.
+   * Uses the evaluator state if available, otherwise estimates from energy.
+   */
+  private violationAcceptanceCountViolations(proposedEnergy: number): number {
+    if (this.evaluatorState) {
+      const problem = this.constraintSystem.buildProblem();
+      if (problem.constraints.size > 0) {
+        try {
+          return this.violationAwareAcceptance.countViolations(
+            problem.constraints.values() as Iterable<Node>,
+            this.evaluatorState
+          );
+        } catch {
+          // Fall through to energy-based estimation
+        }
+      }
+    }
+    return this.violationAwareAcceptance.countViolationsFromEnergy(proposedEnergy);
+  }
+
+  /**
+   * Generate a structured move proposal.
+   * Uses StructuredMoveProposer with LinearDecaySchedule weights.
+   *
+   * @param iteration Current iteration number (for weight decay)
+   * @returns The structured move and its Proposal representation, or null
+   */
+  private generateStructuredProposal(iteration: number): {
+    move: StructuredMove;
+    proposal: Proposal;
+  } | null {
+    if (!this.state) return null;
+
+    const move = this.structuredMoveProposer.propose(this.state, iteration);
+    if (!move) return null;
+
+    // Validate the move
+    if (!this.structuredMoveProposer.isValid(this.state, move)) {
+      return null;
+    }
+
+    // Convert to existing Proposal format for backward compatibility
+    const converted = structuredMoveToProposal(move);
+
+    const proposal: Proposal = {
+      objectId: move.objectId,
+      variableId: converted.variableId,
+      newValue: converted.newValue,
+      newState: {} as any, // Will be computed during application
+      score: 0,
+      metadata: converted.metadata,
+    };
+
+    return { move, proposal };
   }
 
   /**
@@ -310,6 +460,28 @@ export class FullSolverLoop {
         this.state.assignments.set(proposal.variableId, proposal.newValue);
       }
     }
+  }
+
+  /**
+   * Get the structured move proposer (for external configuration)
+   */
+  getStructuredMoveProposer(): StructuredMoveProposer {
+    return this.structuredMoveProposer;
+  }
+
+  /**
+   * Get the violation-aware acceptance (for external configuration)
+   */
+  getViolationAwareAcceptance(): ViolationAwareAcceptance {
+    return this.violationAwareAcceptance;
+  }
+
+  /**
+   * Register a custom move executor for a specific move type.
+   * This allows external code to control how moves are applied/validated.
+   */
+  registerMoveExecutor(type: StructuredMoveType, executor: MoveExecutor): void {
+    this.structuredMoveProposer.registerMoveType(type, executor);
   }
 
   /**

@@ -18,6 +18,8 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
+import { PolygonOps } from '@/core/util/geometry/Polygon2DOperations';
+import type { Point2D } from '@/core/util/geometry/Polygon2DOperations';
 import {
   RoomType,
   BuildingStyle,
@@ -476,8 +478,40 @@ class RoomSegmenter {
     return segments;
   }
 
-  /** Split a polygon along a horizontal or vertical line */
+  /** Split a polygon along a horizontal or vertical line using exact intersection */
   private splitPolygon(poly: Polygon2D, pos: number, horizontal: boolean): [Polygon2D, Polygon2D] {
+    // Use exact polygon intersection with half-planes via Martinez clipping
+    const bounds = polygonBounds(poly);
+    const margin = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 10;
+
+    // Create left and right half-plane polygons
+    let leftPlane: Polygon2D;
+    let rightPlane: Polygon2D;
+
+    if (horizontal) {
+      leftPlane = [[-margin, -margin], [pos, -margin], [pos, margin], [-margin, margin]];
+      rightPlane = [[pos, -margin], [margin, -margin], [margin, margin], [pos, margin]];
+    } else {
+      leftPlane = [[-margin, -margin], [margin, -margin], [margin, pos], [-margin, pos]];
+      rightPlane = [[-margin, pos], [margin, pos], [margin, margin], [-margin, margin]];
+    }
+
+    try {
+      const leftResult = PolygonOps.intersection(poly as Point2D[], leftPlane as Point2D[]);
+      const rightResult = PolygonOps.intersection(poly as Point2D[], rightPlane as Point2D[]);
+
+      const left = leftResult.length > 0 ? leftResult[0] as Polygon2D : [];
+      const right = rightResult.length > 0 ? rightResult[0] as Polygon2D : [];
+
+      return [left, right];
+    } catch {
+      // Fallback to the original sampling-based approach
+      return this.splitPolygonFallback(poly, pos, horizontal);
+    }
+  }
+
+  /** Fallback: Split a polygon along a horizontal or vertical line using vertex sampling */
+  private splitPolygonFallback(poly: Polygon2D, pos: number, horizontal: boolean): [Polygon2D, Polygon2D] {
     const left: Polygon2D = [];
     const right: Polygon2D = [];
 
@@ -505,7 +539,7 @@ class RoomSegmenter {
       }
     }
 
-    // Order the points correctly (convex hull or sort by angle)
+    // Order the points correctly
     return [this.orderPolygon(left), this.orderPolygon(right)];
   }
 
@@ -667,9 +701,29 @@ class RoomSegmenter {
     return result;
   }
 
-  /** Merge two polygons by taking their convex hull */
+  /** Merge two polygons using exact boolean union (Martinez-Rueda-Feito) */
   private mergePolygons(polyA: Polygon2D, polyB: Polygon2D): Polygon2D {
-    // Simple merge: take all points and compute convex hull
+    // Use exact boolean union via Martinez polygon clipping
+    try {
+      const unionResult = PolygonOps.union(polyA as Point2D[], polyB as Point2D[]);
+      if (unionResult.length > 0) {
+        // Return the largest result polygon
+        let best = unionResult[0];
+        let bestArea = PolygonOps.area(best);
+        for (let i = 1; i < unionResult.length; i++) {
+          const a = PolygonOps.area(unionResult[i]);
+          if (a > bestArea) {
+            best = unionResult[i];
+            bestArea = a;
+          }
+        }
+        return best as Polygon2D;
+      }
+    } catch {
+      // Fall back to convex hull on error
+    }
+
+    // Fallback: convex hull merge
     const allPoints = [...polyA, ...polyB];
     return this.convexHull(allPoints);
   }
@@ -1011,8 +1065,27 @@ class FloorPlanSolver {
     return energy;
   }
 
-  /** Approximate shared boundary length between two polygons */
+  /** Compute shared boundary length using exact polygon intersection */
   private approximateSharedBoundary(polyA: Polygon2D, polyB: Polygon2D): number {
+    // Try exact intersection first for watertight geometry
+    try {
+      const intersectResult = PolygonOps.intersection(polyA as Point2D[], polyB as Point2D[]);
+      if (intersectResult.length > 0) {
+        // The intersection area gives us a measure of shared boundary
+        // Compute perimeter of the intersection as the shared boundary length
+        let totalPerimeter = 0;
+        for (const poly of intersectResult) {
+          totalPerimeter += PolygonOps.perimeter(poly);
+        }
+        // Approximate shared boundary as half the intersection perimeter
+        // (since the intersection is shared between both polygons)
+        return totalPerimeter / 2;
+      }
+    } catch {
+      // Fall back to approximation
+    }
+
+    // Fallback: distance-based approximation
     let length = 0;
     const threshold = this.wallThickness * 2;
 

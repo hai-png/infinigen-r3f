@@ -548,4 +548,273 @@ export class FluidSurfaceRenderer {
   }
 }
 
+// ─── Fluid Render Integration ────────────────────────────────────────────────────
+
+/**
+ * High-level integration class for fluid rendering.
+ *
+ * Provides seamless integration between:
+ * - FLIP solver output → rendered fluid surface mesh
+ * - WhitewaterGenerator → foam/spray/bubble overlay
+ * - Depth-based refraction for underwater views
+ *
+ * Phase 2, Item 8: Fluid Scale and Materials
+ */
+export class FluidRenderIntegration {
+  private surfaceRenderer: FluidSurfaceRenderer;
+  private fluidMesh: THREE.Mesh | null = null;
+  private whitewaterGroup: THREE.Group | null = null;
+  private underwaterMaterial: THREE.ShaderMaterial | null = null;
+
+  // Whitewater instanced meshes
+  private foamInstances: THREE.InstancedMesh | null = null;
+  private sprayInstances: THREE.InstancedMesh | null = null;
+  private bubbleInstances: THREE.InstancedMesh | null = null;
+
+  constructor(config: Partial<FluidSurfaceRendererConfig> = {}) {
+    this.surfaceRenderer = new FluidSurfaceRenderer(config);
+  }
+
+  /**
+   * Create a fluid mesh from FLIP solver output and surface extractor.
+   * The mesh is updated each frame with the latest surface geometry.
+   */
+  createFluidMesh(
+    particlePositions: THREE.Vector3[],
+  ): THREE.Mesh {
+    this.surfaceRenderer.update(particlePositions);
+    this.fluidMesh = this.surfaceRenderer.getMesh();
+    return this.fluidMesh;
+  }
+
+  /**
+   * Add whitewater overlay (foam, spray, bubbles) to the scene.
+   * Creates instanced meshes for each whitewater type.
+   */
+  addWhitewaterLayer(
+    renderData: import('./WhitewaterGenerator').WhitewaterRenderData,
+  ): THREE.Group {
+    if (!this.whitewaterGroup) {
+      this.whitewaterGroup = new THREE.Group();
+      this.whitewaterGroup.name = 'whitewater_group';
+    }
+
+    // Remove existing instances
+    if (this.foamInstances) {
+      this.whitewaterGroup.remove(this.foamInstances);
+      this.foamInstances.geometry.dispose();
+      (this.foamInstances.material as THREE.Material).dispose();
+    }
+    if (this.sprayInstances) {
+      this.whitewaterGroup.remove(this.sprayInstances);
+      this.sprayInstances.geometry.dispose();
+      (this.sprayInstances.material as THREE.Material).dispose();
+    }
+    if (this.bubbleInstances) {
+      this.whitewaterGroup.remove(this.bubbleInstances);
+      this.bubbleInstances.geometry.dispose();
+      (this.bubbleInstances.material as THREE.Material).dispose();
+    }
+
+    // Foam: flat white discs on surface
+    if (renderData.foamMatrices.length > 0) {
+      const foamGeo = new THREE.CircleGeometry(0.05, 8);
+      const foamMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        roughness: 0.15,
+        metalness: 0.0,
+        transmission: 0.5,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      this.foamInstances = new THREE.InstancedMesh(
+        foamGeo,
+        foamMat,
+        renderData.foamMatrices.length,
+      );
+      for (let i = 0; i < renderData.foamMatrices.length; i++) {
+        this.foamInstances.setMatrixAt(i, renderData.foamMatrices[i]);
+        this.foamInstances.setColorAt(i, new THREE.Color(1, 1, 1));
+      }
+      this.foamInstances.instanceMatrix.needsUpdate = true;
+      this.whitewaterGroup.add(this.foamInstances);
+    }
+
+    // Spray: small white spheres above surface
+    if (renderData.sprayMatrices.length > 0) {
+      const sprayGeo = new THREE.SphereGeometry(0.01, 6, 4);
+      const sprayMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        roughness: 0.1,
+        metalness: 0.3,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+      });
+      this.sprayInstances = new THREE.InstancedMesh(
+        sprayGeo,
+        sprayMat,
+        renderData.sprayMatrices.length,
+      );
+      for (let i = 0; i < renderData.sprayMatrices.length; i++) {
+        this.sprayInstances.setMatrixAt(i, renderData.sprayMatrices[i]);
+      }
+      this.sprayInstances.instanceMatrix.needsUpdate = true;
+      this.whitewaterGroup.add(this.sprayInstances);
+    }
+
+    // Bubbles: subsurface bluish spheres
+    if (renderData.bubbleMatrices.length > 0) {
+      const bubbleGeo = new THREE.SphereGeometry(0.02, 8, 6);
+      const bubbleMat = new THREE.MeshPhysicalMaterial({
+        color: 0xaaddff,
+        roughness: 0.0,
+        metalness: 0.0,
+        transmission: 0.7,
+        ior: 1.0,
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+      });
+      this.bubbleInstances = new THREE.InstancedMesh(
+        bubbleGeo,
+        bubbleMat,
+        renderData.bubbleMatrices.length,
+      );
+      for (let i = 0; i < renderData.bubbleMatrices.length; i++) {
+        this.bubbleInstances.setMatrixAt(i, renderData.bubbleMatrices[i]);
+      }
+      this.bubbleInstances.instanceMatrix.needsUpdate = true;
+      this.whitewaterGroup.add(this.bubbleInstances);
+    }
+
+    return this.whitewaterGroup;
+  }
+
+  /**
+   * Create an underwater post-processing effect.
+   * Applies depth-based color shift and distortion.
+   */
+  createUnderwaterEffect(): THREE.ShaderMaterial {
+    if (this.underwaterMaterial) return this.underwaterMaterial;
+
+    this.underwaterMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: null },
+        tDepth: { value: null },
+        uCameraPos: { value: new THREE.Vector3() },
+        uWaterLevel: { value: 0.0 },
+        uFogColor: { value: new THREE.Color(0x004466) },
+        uFogDensity: { value: 0.15 },
+        uAbsorption: { value: new THREE.Vector3(0.4, 0.15, 0.05) },
+        uTime: { value: 0 },
+      },
+
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        varying vec3 vWorldPos;
+
+        void main() {
+          vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPos = worldPos.xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tDepth;
+        uniform vec3 uCameraPos;
+        uniform float uWaterLevel;
+        uniform vec3 uFogColor;
+        uniform float uFogDensity;
+        uniform vec3 uAbsorption;
+        uniform float uTime;
+
+        varying vec2 vUv;
+        varying vec3 vWorldPos;
+
+        void main() {
+          vec4 color = texture2D(tDiffuse, vUv);
+
+          // Depth from depth buffer
+          float depth = texture2D(tDepth, vUv).r;
+
+          // Underwater check
+          float underwaterFactor = smoothstep(uWaterLevel + 0.1, uWaterLevel - 0.5, vWorldPos.y);
+
+          if (underwaterFactor > 0.0) {
+            // Caustics-like pattern
+            float caustic = sin(vWorldPos.x * 5.0 + uTime * 2.0) *
+                           sin(vWorldPos.z * 5.0 + uTime * 1.5) * 0.5 + 0.5;
+            caustic = pow(caustic, 3.0);
+
+            // Depth-based absorption (more red absorbed at depth)
+            float depthBelow = max(0.0, uWaterLevel - vWorldPos.y);
+            vec3 absorption = exp(-uAbsorption * depthBelow);
+
+            // Fog
+            float fogFactor = 1.0 - exp(-uFogDensity * depthBelow);
+
+            // Apply
+            color.rgb *= absorption;
+            color.rgb = mix(color.rgb, uFogColor, fogFactor * 0.7);
+            color.rgb += caustic * absorption * 0.1;
+
+            // Slight blue tint
+            color.rgb = mix(color.rgb, vec3(0.0, 0.3, 0.5), underwaterFactor * 0.3);
+          }
+
+          gl_FragColor = color;
+        }
+      `,
+
+      transparent: true,
+      depthWrite: false,
+    });
+
+    return this.underwaterMaterial;
+  }
+
+  /**
+   * Get the surface renderer.
+   */
+  getSurfaceRenderer(): FluidSurfaceRenderer {
+    return this.surfaceRenderer;
+  }
+
+  /**
+   * Update the fluid mesh with new particle positions.
+   */
+  update(particlePositions: THREE.Vector3[]): void {
+    this.surfaceRenderer.update(particlePositions);
+  }
+
+  /**
+   * Dispose all resources.
+   */
+  dispose(): void {
+    this.surfaceRenderer.dispose();
+
+    if (this.foamInstances) {
+      this.foamInstances.geometry.dispose();
+      (this.foamInstances.material as THREE.Material).dispose();
+    }
+    if (this.sprayInstances) {
+      this.sprayInstances.geometry.dispose();
+      (this.sprayInstances.material as THREE.Material).dispose();
+    }
+    if (this.bubbleInstances) {
+      this.bubbleInstances.geometry.dispose();
+      (this.bubbleInstances.material as THREE.Material).dispose();
+    }
+    if (this.underwaterMaterial) {
+      this.underwaterMaterial.dispose();
+    }
+  }
+}
+
 export default FluidSurfaceRenderer;

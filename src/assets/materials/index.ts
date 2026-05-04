@@ -63,3 +63,22 @@ export type { MaterialCategory, NodeMaterialParams, NodeMaterialResult } from '.
 // Unified material pipeline: preset library + node graph bridges + texture baker
 export { MaterialPipeline } from './MaterialPipeline';
 export type { TextureMaps } from './MaterialPipeline';
+
+// 3D Material Evaluation — runtime GLSL shader pipeline
+export { Material3DEvaluator, CoordinateSpace, DEFAULT_3D_CONFIG } from './Material3DEvaluator';
+export type { MaterialPointEvaluation, Material3DConfig } from './Material3DEvaluator';
+
+export { RuntimeMaterialBuilder, DEFAULT_NODEGRAPH_3D_CONFIG } from './RuntimeMaterialBuilder';
+export type { NodeGraph3DConfig } from './RuntimeMaterialBuilder';
+
+export {
+  TRIPLANAR_GLSL,
+  TEXCOORD_GLSL,
+  NOISE_4D_GLSL,
+  IBL_GLSL,
+  MULTI_LIGHT_GLSL,
+  VERTEX_SHADER_3D,
+  VERTEX_VARYINGS_3D,
+  FRAGMENT_VARYINGS_3D,
+  buildVertexShaderWithDisplacement,
+} from './shaders/TriplanarProjection';

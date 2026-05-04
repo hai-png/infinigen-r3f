@@ -24,3 +24,8 @@ export type { LODConfig, LODChunk } from './LODMesher';
 // Chunked terrain system with LOD management
 export { ChunkedTerrainSystem, LODLevel } from './ChunkedTerrainSystem';
 export type { ChunkedTerrainConfig, TerrainChunk } from './ChunkedTerrainSystem';
+
+// Occlusion-aware mesher for wide-FOV cameras
+export { OcclusionMesher, OpaqueOcMesher, TransparentOcMesher, CollectiveOcMesher, OctreeNode } from './OcMesher';
+export type { OcMesherConfig, OcMesherResult } from './OcMesher';
+export { DEFAULT_OC_MESHER_CONFIG } from './OcMesher';

@@ -10,6 +10,8 @@
 import * as THREE from 'three';
 import { createNoise3D, NoiseFunction3D } from 'simplex-noise';
 import { SeededRandom } from '../../core/util/math/index';
+import { SPHSurfaceExtractor } from '../../sim/fluid/SPHSurfaceExtractor';
+import type { SPHSurfaceExtractorConfig } from '../../sim/fluid/SPHSurfaceExtractor';
 
 export interface FluidParticle {
   position: THREE.Vector3;
@@ -39,6 +41,7 @@ export class FluidDynamics {
   private spatialHash: Map<string, FluidParticle[]>;
   private hashScale: number;
   private rng: SeededRandom;
+  private surfaceExtractor: SPHSurfaceExtractor;
 
   constructor(params?: Partial<FluidSimulationParams>) {
     this.params = {
@@ -58,6 +61,17 @@ export class FluidDynamics {
     this.spatialHash = new Map();
     this.hashScale = this.params.smoothingRadius;
     this.rng = new SeededRandom(this.params.seed);
+
+    // Initialize SPH surface extractor with matching parameters
+    this.surfaceExtractor = new SPHSurfaceExtractor({
+      gridResolution: 32,
+      smoothingRadius: this.params.smoothingRadius,
+      particleMass: this.params.restDensity * Math.pow(this.params.particleRadius, 3),
+      isoThreshold: this.params.restDensity * 0.5,
+      boundsPadding: this.params.particleRadius * 2,
+      smoothingIterations: 2,
+      smoothingFactor: 0.3,
+    });
   }
 
   /**
@@ -360,6 +374,29 @@ export class FluidDynamics {
     });
     
     return new THREE.Points(geometry, material);
+  }
+
+  /**
+   * Extract a smooth mesh surface from the current SPH particles using
+   * marching cubes on a density field computed with the Poly6 kernel.
+   *
+   * This converts the point cloud into a watertight triangle mesh suitable
+   * for rendering with a water material.
+   *
+   * @param overrideParams Optional parameters to override the default extractor config
+   * @returns THREE.BufferGeometry with the extracted surface
+   */
+  getSurfaceGeometry(
+    overrideParams?: Partial<SPHSurfaceExtractorConfig>,
+  ): THREE.BufferGeometry {
+    return this.surfaceExtractor.extractSurface(this.particles, overrideParams);
+  }
+
+  /**
+   * Get the underlying SPHSurfaceExtractor for advanced configuration.
+   */
+  getSurfaceExtractor(): SPHSurfaceExtractor {
+    return this.surfaceExtractor;
   }
 }
 

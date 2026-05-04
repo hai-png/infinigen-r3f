@@ -17,6 +17,11 @@ import * as THREE from 'three';
 import { SignedDistanceField, extractIsosurface, sdfBoolean, sdfSmoothUnion, sdfOffset } from './sdf-operations';
 import { NoiseUtils } from '@/core/util/math/noise';
 import { SeededRandom } from '../../core/util/MathUtils';
+import {
+  TerrainSurfaceShaderPipeline,
+  TerrainSurfaceConfig,
+  DEFAULT_TERRAIN_SURFACE_CONFIG,
+} from '../gpu/TerrainSurfaceShaderPipeline';
 
 /**
  * Configuration for SDF terrain generation
@@ -58,6 +63,8 @@ export interface SDFTerrainConfig {
   roughness: number;
   /** Smooth blend factor for boolean unions */
   smoothBlend: number;
+  /** Configuration for the GPU surface shader displacement pipeline */
+  surfaceShader: TerrainSurfaceConfig;
 }
 
 /**
@@ -81,6 +88,7 @@ export const DEFAULT_SDF_TERRAIN_CONFIG: Partial<SDFTerrainConfig> = {
   color: 0x8b7355,
   roughness: 0.9,
   smoothBlend: 0.3,
+  surfaceShader: { ...DEFAULT_TERRAIN_SURFACE_CONFIG },
 };
 
 /**
@@ -119,6 +127,7 @@ export class SDFTerrainGenerator {
   private config: SDFTerrainConfig;
   private rng: SeededRandom;
   private noise: NoiseUtils;
+  private surfaceShaderPipeline: TerrainSurfaceShaderPipeline | null = null;
 
   constructor(config: Partial<SDFTerrainConfig> = {}) {
     this.config = { ...DEFAULT_SDF_TERRAIN_CONFIG, ...config } as SDFTerrainConfig;
@@ -131,12 +140,26 @@ export class SDFTerrainGenerator {
       );
     }
 
+    // Ensure surface shader config is set
+    if (!this.config.surfaceShader) {
+      this.config.surfaceShader = { ...DEFAULT_TERRAIN_SURFACE_CONFIG };
+    }
+
     this.rng = new SeededRandom(this.config.seed);
     this.noise = new NoiseUtils(this.config.seed);
+
+    // Create the surface shader pipeline (initialization is deferred to generate())
+    if (this.config.surfaceShader.enabled) {
+      this.surfaceShaderPipeline = new TerrainSurfaceShaderPipeline(this.config.surfaceShader);
+    }
   }
 
   /**
    * Generate the SDF terrain as a THREE.Group containing the mesh.
+   *
+   * This is the synchronous generation path. It uses CPU-only surface
+   * displacement (if the surface shader pipeline is enabled). For GPU
+   * acceleration, use `generateAsync()` instead.
    */
   public generate(): THREE.Group {
     const group = new THREE.Group();
@@ -145,11 +168,79 @@ export class SDFTerrainGenerator {
     const sdf = this.buildSDF();
 
     // Extract isosurface via marching cubes
-    const geometry = extractIsosurface(sdf, 0);
+    let geometry = extractIsosurface(sdf, 0);
 
     if (geometry.attributes.position.count === 0) {
       console.warn('SDFTerrainGenerator: extractIsosurface produced empty geometry');
       return group;
+    }
+
+    // Apply surface shader displacement (CPU fallback since this is sync)
+    if (this.surfaceShaderPipeline && this.config.surfaceShader.enabled) {
+      try {
+        geometry = this.surfaceShaderPipeline.computeDisplacementCPU(geometry, sdf);
+        console.log('SDFTerrainGenerator: Applied CPU surface shader displacement');
+      } catch (err) {
+        console.warn('SDFTerrainGenerator: Surface shader displacement failed, using original geometry:', err);
+      }
+    }
+
+    geometry.computeBoundingSphere();
+
+    const material = new THREE.MeshStandardMaterial({
+      color: this.config.color,
+      roughness: this.config.roughness,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+      flatShading: false,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = 'SDFTerrainMesh';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+
+    return group;
+  }
+
+  /**
+   * Generate the SDF terrain with GPU-accelerated surface displacement.
+   *
+   * This async method initializes the WebGPU pipeline (if available) and
+   * runs the WGSL compute shader for surface displacement. Falls back to
+   * CPU computation if WebGPU is not available.
+   *
+   * @param device - Optional pre-existing GPUDevice
+   * @returns THREE.Group with the terrain mesh
+   */
+  public async generateAsync(device?: GPUDevice): Promise<THREE.Group> {
+    const group = new THREE.Group();
+    group.name = 'SDFTerrain';
+
+    const sdf = this.buildSDF();
+
+    // Extract isosurface via marching cubes
+    let geometry = extractIsosurface(sdf, 0);
+
+    if (geometry.attributes.position.count === 0) {
+      console.warn('SDFTerrainGenerator: extractIsosurface produced empty geometry');
+      return group;
+    }
+
+    // Apply surface shader displacement (GPU if available, CPU fallback)
+    if (this.surfaceShaderPipeline && this.config.surfaceShader.enabled) {
+      try {
+        // Initialize the pipeline (only does work on first call)
+        await this.surfaceShaderPipeline.initialize(device);
+
+        geometry = await this.surfaceShaderPipeline.computeDisplacement(geometry, sdf);
+
+        const gpuUsed = this.surfaceShaderPipeline.isGPUAvailable() ? 'GPU' : 'CPU';
+        console.log(`SDFTerrainGenerator: Applied ${gpuUsed} surface shader displacement`);
+      } catch (err) {
+        console.warn('SDFTerrainGenerator: Surface shader displacement failed, using original geometry:', err);
+      }
     }
 
     geometry.computeBoundingSphere();
@@ -580,6 +671,22 @@ export class SDFTerrainGenerator {
     if (k <= 0) return Math.min(a, b);
     const h = Math.max(0, Math.min(1, (b - a + k) / (2 * k)));
     return b + (a - b) * h - k * h * (1 - h);
+  }
+
+  /**
+   * Get the surface shader pipeline instance (for external configuration).
+   */
+  public getSurfaceShaderPipeline(): TerrainSurfaceShaderPipeline | null {
+    return this.surfaceShaderPipeline;
+  }
+
+  /**
+   * Dispose of GPU resources held by the surface shader pipeline.
+   */
+  public dispose(): void {
+    if (this.surfaceShaderPipeline) {
+      this.surfaceShaderPipeline.dispose();
+    }
   }
 
   /**

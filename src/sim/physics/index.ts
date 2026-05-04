@@ -101,6 +101,20 @@ export type {
   CollisionLayer,
 } from './RigidBodyDynamics';
 
+// Quickhull convex hull algorithm
+export {
+  computeConvexHull,
+  convexHullSupport,
+  createConvexHullSupportFn,
+  computeConvexHullFromGeometry,
+  computeConvexHullFromFloat32Array,
+} from './collision/Quickhull';
+export type { HullFace, HullEdge, QuickhullResult } from './collision/Quickhull';
+
+// BVH-accelerated triangle mesh collider
+export { TrimeshCollider } from './collision/TrimeshCollider';
+export type { TrimeshCollisionResult, TrimeshRayResult } from './collision/TrimeshCollider';
+
 // Re-export shape types from PhysicsWorld for backward compatibility
 // (consumers that imported these from RigidBodyDynamics will still get them)
 export type { PhysicsShapeType as RigidBodyDynamicsShapeType } from './PhysicsWorld';

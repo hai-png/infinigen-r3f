@@ -1,6 +1,9 @@
 /**
  * Infinigen R3F Port - Phase 10: Terrain Generation
  * Adaptive Meshing System with LOD and Chunk Streaming
+ *
+ * Integrated with TerrainSurfaceShaderPipeline for optional GPU/CPU
+ * SDF-based surface displacement after mesh generation.
  */
 
 import { 
@@ -12,6 +15,8 @@ import {
   Sphere
 } from 'three';
 import { HeightMap, NormalMap, TerrainData } from './TerrainGenerator';
+import { TerrainSurfaceShaderPipeline } from '../gpu/TerrainSurfaceShaderPipeline';
+import type { SignedDistanceField } from '../sdf/sdf-operations';
 
 export interface MeshConfig {
   chunkSize: number;
@@ -33,6 +38,19 @@ export class TerrainMesher {
   private config: MeshConfig;
   private chunks: Map<string, ChunkData>;
 
+  // -----------------------------------------------------------------------
+  // Surface Shader Pipeline Integration
+  // -----------------------------------------------------------------------
+
+  /**
+   * Optional surface shader pipeline for SDF-based displacement.
+   *
+   * Set via `setSurfaceShaderPipeline()`. When present and the pipeline
+   * reports it is initialized, the async displacement methods will apply
+   * vertex displacement to generated geometry.
+   */
+  private surfaceShaderPipeline: TerrainSurfaceShaderPipeline | null = null;
+
   constructor(config: Partial<MeshConfig> = {}) {
     this.config = {
       chunkSize: 64,
@@ -44,6 +62,182 @@ export class TerrainMesher {
 
     this.chunks = new Map();
   }
+
+  // =====================================================================
+  // Surface Shader Pipeline — Public API
+  // =====================================================================
+
+  /**
+   * Set the surface shader pipeline for displacement.
+   *
+   * Pass a `TerrainSurfaceShaderPipeline` instance (typically obtained from
+   * `TerrainGenerator.getSurfaceShaderPipeline()`).  The pipeline must
+   * already be initialized before displacement methods are called.
+   *
+   * Pass `null` to detach the pipeline.
+   */
+  setSurfaceShaderPipeline(pipeline: TerrainSurfaceShaderPipeline | null): void {
+    this.surfaceShaderPipeline = pipeline;
+  }
+
+  /**
+   * Check whether the surface shader pipeline is attached and initialized.
+   */
+  isSurfaceShaderReady(): boolean {
+    return this.surfaceShaderPipeline !== null && this.surfaceShaderPipeline.isInitialized();
+  }
+
+  /**
+   * Generate mesh from terrain data and optionally apply surface displacement.
+   *
+   * This is the async counterpart to `generateMesh()`.  If a surface shader
+   * pipeline is attached and initialized, the generated geometry is refined
+   * via SDF-based displacement before being returned.
+   *
+   * If no pipeline is attached, the result is identical to `generateMesh()`.
+   *
+   * @param terrainData - The terrain data to mesh
+   * @param sdf         - The signed distance field for displacement.
+   *                      Required if pipeline is attached; ignored otherwise.
+   * @returns           The (possibly displaced) terrain mesh geometry
+   */
+  async generateMeshWithDisplacement(
+    terrainData: TerrainData,
+    sdf?: SignedDistanceField,
+  ): Promise<BufferGeometry> {
+    let geometry = this.generateMesh(terrainData);
+
+    if (this.surfaceShaderPipeline && this.surfaceShaderPipeline.isInitialized() && sdf) {
+      try {
+        geometry = await this.surfaceShaderPipeline.computeDisplacement(geometry, sdf);
+      } catch (err) {
+        console.warn(
+          '[TerrainMesher] Surface displacement failed, using original geometry:',
+          err,
+        );
+      }
+    }
+
+    return geometry;
+  }
+
+  /**
+   * Generate chunked mesh with LOD and optionally apply surface displacement
+   * to every chunk.
+   *
+   * This is the async counterpart to `generateChunkedMesh()`.  If a surface
+   * shader pipeline is attached and initialized, each chunk's geometry is
+   * refined via SDF-based displacement.
+   *
+   * The displaced geometry replaces the original in the returned `ChunkData`,
+   * and bounding volumes are recomputed.
+   *
+   * @param terrainData    - The terrain data to mesh
+   * @param cameraPosition - Camera position for LOD selection
+   * @param sdf            - The signed distance field for displacement.
+   *                         Required if pipeline is attached; ignored otherwise.
+   * @returns              Map of chunk key → ChunkData (with displaced geometry)
+   */
+  async generateChunkedMeshWithDisplacement(
+    terrainData: TerrainData,
+    cameraPosition: Vector3,
+    sdf?: SignedDistanceField,
+  ): Promise<Map<string, ChunkData>> {
+    // Generate the base chunked mesh synchronously
+    const chunks = this.generateChunkedMesh(terrainData, cameraPosition);
+
+    // Apply displacement to each chunk if pipeline is available
+    if (this.surfaceShaderPipeline && this.surfaceShaderPipeline.isInitialized() && sdf) {
+      for (const [key, chunkData] of chunks) {
+        try {
+          const displacedGeometry = await this.surfaceShaderPipeline.computeDisplacement(
+            chunkData.geometry,
+            sdf,
+          );
+
+          // Replace the geometry in the chunk
+          // Dispose the old geometry only if it was replaced by a new one
+          if (displacedGeometry !== chunkData.geometry) {
+            chunkData.geometry.dispose();
+            chunkData.geometry = displacedGeometry;
+
+            // Recompute bounding volumes for the displaced geometry
+            chunkData.geometry.computeBoundingBox();
+            chunkData.geometry.computeBoundingSphere();
+
+            chunkData.bounds = chunkData.geometry.boundingBox!;
+            const sphere = chunkData.geometry.boundingSphere!;
+            chunkData.boundingSphere = new Sphere(sphere.center, sphere.radius);
+          }
+        } catch (err) {
+          console.warn(
+            `[TerrainMesher] Surface displacement failed for chunk ${key}, using original:`,
+            err,
+          );
+        }
+      }
+    }
+
+    this.chunks = chunks;
+    return chunks;
+  }
+
+  /**
+   * Apply surface displacement to already-generated chunks in place.
+   *
+   * Useful when chunks have already been created (e.g. via `generateChunkedMesh`)
+   * and you want to apply displacement after the fact without regenerating.
+   *
+   * The geometry in each `ChunkData` is replaced with the displaced version,
+   * and bounding volumes are recomputed.
+   *
+   * @param sdf - The signed distance field for displacement
+   */
+  async applyDisplacementToChunks(sdf: SignedDistanceField): Promise<void> {
+    if (!this.surfaceShaderPipeline || !this.surfaceShaderPipeline.isInitialized()) {
+      return;
+    }
+
+    for (const [key, chunkData] of this.chunks) {
+      try {
+        const displacedGeometry = await this.surfaceShaderPipeline.computeDisplacement(
+          chunkData.geometry,
+          sdf,
+        );
+
+        if (displacedGeometry !== chunkData.geometry) {
+          chunkData.geometry.dispose();
+          chunkData.geometry = displacedGeometry;
+
+          // Recompute bounding volumes
+          chunkData.geometry.computeBoundingBox();
+          chunkData.geometry.computeBoundingSphere();
+          chunkData.bounds = chunkData.geometry.boundingBox!;
+          const sphere = chunkData.geometry.boundingSphere!;
+          chunkData.boundingSphere = new Sphere(sphere.center, sphere.radius);
+        }
+      } catch (err) {
+        console.warn(
+          `[TerrainMesher] Surface displacement failed for chunk ${key}:`,
+          err,
+        );
+      }
+    }
+  }
+
+  /**
+   * Release the surface shader pipeline reference.
+   *
+   * Does NOT dispose the pipeline itself — ownership remains with whoever
+   * created it (typically TerrainGenerator).
+   */
+  disposeSurfaceShader(): void {
+    this.surfaceShaderPipeline = null;
+  }
+
+  // =====================================================================
+  // Mesh Generation
+  // =====================================================================
 
   /**
    * Generate mesh from terrain data

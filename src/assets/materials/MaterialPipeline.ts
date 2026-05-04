@@ -1,11 +1,13 @@
 /**
  * MaterialPipeline - Unified entry point for material creation
  *
- * Bridges three subsystems:
+ * Bridges subsystems:
  * 1. MaterialPresetLibrary — 50+ named material presets with PBR parameters
  * 2. NodeGraphMaterialBridge — Converts NodeEvaluator BSDF output to MeshPhysicalMaterial
  * 3. NodeGraphTextureBridge — Converts texture node outputs to Three.js Textures
  * 4. TextureBakePipeline — Bakes full PBR texture sets from material parameters
+ * 5. Material3DEvaluator — Runtime GLSL shader pipeline for 3D material evaluation
+ * 6. RuntimeMaterialBuilder — Node graph → GLSL ShaderMaterial conversion
  *
  * Usage:
  *   const pipeline = new MaterialPipeline();
@@ -20,8 +22,11 @@
  *   // From a preset with baked PBR textures
  *   const mat3 = pipeline.fromPresetBaked('oak');
  *
+ *   // From a preset with 3D GLSL shader evaluation (runtime, no baking)
+ *   const mat4 = pipeline.create3DMaterial('oak');
+ *
  *   // Assign texture maps to an existing material
- *   const mat4 = pipeline.withAllMaps(material, { diffuse: tex, normal: normTex });
+ *   const mat5 = pipeline.withAllMaps(material, { diffuse: tex, normal: normTex });
  */
 
 import * as THREE from 'three';
@@ -29,6 +34,9 @@ import { MaterialPresetLibrary, type MaterialPreset, type MaterialCategory, type
 import { NodeGraphMaterialBridge, type BSDFOutput, type NodeEvaluationOutput } from '../../core/nodes/execution/NodeGraphMaterialBridge';
 import { NodeGraphTextureBridge, type TextureNodeOutput } from '../../core/nodes/execution/NodeGraphTextureBridge';
 import { TextureBakePipeline, type PBRTextureSet, type BakeResolution, type MaterialPBRParams } from './textures/TextureBakePipeline';
+import { Material3DEvaluator, CoordinateSpace, type Material3DConfig, DEFAULT_3D_CONFIG } from './Material3DEvaluator';
+import { RuntimeMaterialBuilder, type NodeGraph3DConfig } from './RuntimeMaterialBuilder';
+import type { NodeGraph } from '../../core/nodes/execution/NodeEvaluator';
 
 // ============================================================================
 // Types
@@ -55,6 +63,8 @@ export class MaterialPipeline {
   private textureBridge = new NodeGraphTextureBridge();
   private presetLibrary = new MaterialPresetLibrary();
   private bakePipeline = new TextureBakePipeline();
+  private evaluator3D = new Material3DEvaluator();
+  private runtimeBuilder = new RuntimeMaterialBuilder();
 
   // ==========================================================================
   // Preset-based Material Creation
@@ -147,6 +157,128 @@ export class MaterialPipeline {
    */
   createTexture(textureOutput: TextureNodeOutput): THREE.Texture {
     return this.textureBridge.convert(textureOutput);
+  }
+
+  // ==========================================================================
+  // 3D Material Evaluation (Runtime GLSL Shader Pipeline)
+  // ==========================================================================
+
+  /**
+   * Create a 3D-evaluated material from a preset name.
+   * Uses the runtime GLSL shader pipeline with triplanar projection instead of
+   * baking textures onto 2D canvases. The material is evaluated per-pixel in
+   * 3D texture space (Object/World/Generated coordinates).
+   *
+   * This is more expensive than baked textures but produces seamless materials
+   * on arbitrary mesh orientations without UV seam artifacts.
+   *
+   * @param name - Preset name
+   * @param config - Optional 3D evaluation configuration
+   * @returns THREE.ShaderMaterial with 3D evaluation
+   */
+  create3DMaterial(name: string, config?: Partial<Material3DConfig>): THREE.ShaderMaterial {
+    const preset = this.presetLibrary.getPreset(name);
+    if (!preset) {
+      console.warn(`MaterialPipeline: Unknown preset "${name}" for 3D material, returning fallback`);
+      return this.createDefault3DMaterial();
+    }
+
+    const params = preset.params;
+    const cfg: Partial<Material3DConfig> = {
+      ...config,
+    };
+
+    return this.evaluator3D.createShaderMaterialFromParams(params, cfg);
+  }
+
+  /**
+   * Create a 3D-evaluated material from a node graph.
+   * Uses the RuntimeMaterialBuilder to generate a complete GLSL shader
+   * that evaluates the material per-pixel in 3D texture space.
+   *
+   * @param graph - Node graph defining the material
+   * @param config - Optional configuration for the builder
+   * @returns THREE.ShaderMaterial with 3D evaluation
+   */
+  create3DMaterialFromGraph(graph: NodeGraph, config?: Partial<NodeGraph3DConfig>): THREE.ShaderMaterial {
+    return this.runtimeBuilder.buildFromNodeGraph(graph, config);
+  }
+
+  /**
+   * Create a 3D-evaluated material from PBR parameters directly.
+   * Convenience method for creating 3D materials without a preset or node graph.
+   *
+   * @param params - PBR parameters
+   * @param config - Optional 3D evaluation configuration
+   * @returns THREE.ShaderMaterial with 3D evaluation
+   */
+  create3DMaterialFromParams(params: MaterialPBRParams, config?: Partial<Material3DConfig>): THREE.ShaderMaterial {
+    return this.evaluator3D.createShaderMaterialFromParams(params, config);
+  }
+
+  /**
+   * Evaluate a material at a specific 3D point (CPU fallback).
+   * Useful for offline evaluation, baking, or validation.
+   *
+   * @param graph - Node graph defining the material
+   * @param point - 3D position
+   * @param normal - Surface normal at the point
+   * @returns PBR parameters at the given point
+   */
+  evaluateMaterialAtPoint(
+    graph: NodeGraph,
+    point: THREE.Vector3,
+    normal: THREE.Vector3
+  ) {
+    return this.evaluator3D.evaluateMaterialAtPoint(graph, point, normal);
+  }
+
+  /**
+   * Update the time uniform for animated 3D materials.
+   * Call this in the render loop when the material has animated: true.
+   */
+  update3DMaterialTime(material: THREE.ShaderMaterial, time: number): void {
+    this.evaluator3D.updateTime(material, time);
+  }
+
+  /**
+   * Update the camera position for a 3D material.
+   * Required for proper PBR lighting calculations.
+   */
+  update3DMaterialCamera(material: THREE.ShaderMaterial, camera: THREE.Camera): void {
+    this.evaluator3D.updateCamera(material, camera);
+  }
+
+  /**
+   * Get the 3D evaluator for advanced usage.
+   */
+  getEvaluator3D(): Material3DEvaluator {
+    return this.evaluator3D;
+  }
+
+  /**
+   * Get the runtime builder for advanced usage.
+   */
+  getRuntimeBuilder(): RuntimeMaterialBuilder {
+    return this.runtimeBuilder;
+  }
+
+  /**
+   * Create a default/placeholder 3D material.
+   */
+  createDefault3DMaterial(): THREE.ShaderMaterial {
+    return this.evaluator3D.createShaderMaterialFromParams({
+      baseColor: new THREE.Color(0.5, 0.5, 0.5),
+      roughness: 0.5,
+      metallic: 0.0,
+      noiseScale: 5.0,
+      noiseDetail: 4,
+      normalStrength: 1.0,
+      aoStrength: 0.5,
+      heightScale: 0.02,
+      emissionColor: null,
+      emissionStrength: 0,
+    });
   }
 
   // ==========================================================================

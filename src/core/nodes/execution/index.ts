@@ -28,6 +28,7 @@ export {
 
 export type {
   ShaderCompileResult,
+  ShaderCompileOptions,
 } from './ShaderCompiler';
 
 // MaterialFactory - High-level API for creating materials from presets
@@ -114,3 +115,82 @@ export {
 export type {
   MaterialCompileOptions,
 } from './SurfaceIntegration';
+
+// ExtendedNodeExecutors - 30 additional curve, attribute, input, utility, and geometry-utility executors
+export {
+  executeCurveLine,
+  executeQuadraticBezier,
+  executeBezierSegment,
+  executeCurveLength,
+  executeSampleCurve,
+  executeStoreNamedAttribute,
+  executeNamedAttribute,
+  executeAttributeStatistic,
+  executeAttributeTransfer,
+  executeObjectInfo,
+  executeCollectionInfo,
+  executeSelfObject,
+  executeInputVector,
+  executeInputColor,
+  executeInputInt,
+  executeInputFloat,
+  executeInputBool,
+  executeClamp,
+  executeMapRange,
+  executeFloatToInt,
+  executeRotateEuler,
+  executeRotateVector,
+  executeAlignEulerToVector,
+  executeSwitch,
+  executeRandomValue,
+  executeBoundingBox,
+  executeGeometryProximity,
+  executeRaycastEnhanced,
+  executeSampleNearestSurfaceEnhanced,
+  executeMeshToPoints,
+} from './ExtendedNodeExecutors';
+
+// GLSL Shader Generation - Node function libraries and shader composition
+export {
+  GLSLShaderComposer,
+} from './glsl/GLSLShaderComposer';
+
+export type {
+  ComposableNode,
+  ShaderGraph,
+  ComposedShader,
+} from './glsl/GLSLShaderComposer';
+
+export {
+  ALL_GLSL_NODE_FUNCTIONS,
+  NODE_TYPE_GLSL_REQUIREMENTS,
+  GLSL_SNIPPET_MAP,
+} from './glsl/GLSLNodeFunctions';
+
+// GPU Per-Vertex Evaluation - WebGPU compute shader evaluation
+export {
+  GPUPerVertexEvaluator,
+} from './gpu/GPUPerVertexEvaluator';
+
+export type {
+  GPUEvaluationChannels,
+  GPUEvaluationResult,
+  GPUNode,
+  GPUShaderGraph,
+  GPUEvalOptions,
+} from './gpu/GPUPerVertexEvaluator';
+
+export {
+  GPUEvaluationPipeline,
+  isWebGPUAvailable,
+  getWebGPUDevice,
+} from './gpu/GPUEvaluationPipeline';
+
+export type {
+  PipelineEvalOptions,
+  PipelineEvalResult,
+} from './gpu/GPUEvaluationPipeline';
+
+export {
+  ALL_WGSL_NODE_FUNCTIONS,
+} from './gpu/WGSLNodeFunctions';

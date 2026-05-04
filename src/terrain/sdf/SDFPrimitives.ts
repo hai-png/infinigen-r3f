@@ -39,6 +39,7 @@ export const TERRAIN_MATERIALS = {
   GRASS: 8,
   WATER: 9,
   LAVA: 10,
+  SAND_DUNE: 11,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,229 @@ export function sdCapsule(point: THREE.Vector3, radius: number, halfHeight: numb
 /** SDF of an infinite ground plane at y=0 */
 export function sdGroundPlane(point: THREE.Vector3): number {
   return point.y;
+}
+
+// ---------------------------------------------------------------------------
+// Cave-Aware Ground SDF with Auxiliary Outputs
+// ---------------------------------------------------------------------------
+
+/**
+ * Auxiliary output structure for the enhanced ground SDF.
+ * Provides cave tags, boundary information, and sand dune data
+ * alongside the standard distance and material fields.
+ */
+export interface GroundAuxiliaryOutput {
+  /** Signed distance to ground surface */
+  distance: number;
+  /** Material ID (soil, sand, sand-dune, etc.) */
+  materialId: number;
+  /** Whether this point is inside a cave */
+  caveTag: boolean;
+  /** Distance to nearest boundary (shore, cave entrance) */
+  boundarySDF: number;
+  /** Local sand dune displacement value */
+  sandDuneHeight: number;
+}
+
+/**
+ * Configuration for the enhanced ground SDF element.
+ * Controls ground mode (flat plane or spherical planet),
+ * sand dune warping, and cave-awareness.
+ */
+export interface GroundConfig {
+  /** Ground mode: flat infinite plane or spherical planet */
+  mode: 'flat' | 'spherical';
+  /** Sphere radius for spherical mode (default 1000) */
+  sphereRadius: number;
+  /** Enable sand dune displacement */
+  sandDunes: boolean;
+  /** Dune height amplitude (default 2.0) */
+  sandDuneAmplitude: number;
+  /** Dune spatial frequency (default 0.02) */
+  sandDuneFrequency: number;
+  /** Dune noise octaves (default 4) */
+  sandDuneOctaves: number;
+  /** Enable cave tags in output */
+  caveAware: boolean;
+  /** Ground plane height offset (default 0) */
+  baseHeight: number;
+}
+
+/** Default ground configuration */
+export const DEFAULT_GROUND_CONFIG: GroundConfig = {
+  mode: 'flat',
+  sphereRadius: 1000,
+  sandDunes: false,
+  sandDuneAmplitude: 2.0,
+  sandDuneFrequency: 0.02,
+  sandDuneOctaves: 4,
+  caveAware: false,
+  baseHeight: 0,
+};
+
+/**
+ * Compute FBM-based sand dune displacement on the Y axis.
+ * Uses multiple octaves of noise to create rolling dune shapes.
+ *
+ * @param x - World X coordinate
+ * @param z - World Z coordinate
+ * @param amplitude - Maximum dune height
+ * @param frequency - Spatial frequency of dunes
+ * @param octaves - Number of FBM noise octaves
+ * @param noiseFn - Noise function (x, y, z, octaves) => number
+ */
+function computeSandDuneHeight(
+  x: number,
+  z: number,
+  amplitude: number,
+  frequency: number,
+  octaves: number,
+  noiseFn: (x: number, y: number, z: number, octaves: number) => number,
+): number {
+  // Use two noise samples offset in Z to create directional dune crests
+  const n1 = noiseFn(x * frequency, 0, z * frequency, octaves);
+  const n2 = noiseFn(x * frequency + 500, 0, z * frequency + 500, octaves);
+
+  // Blend: primary dune direction with cross-wind ridges
+  const duneValue = n1 * 0.7 + n2 * 0.3;
+
+  // Scale and offset so dunes are always positive (above base ground)
+  // Map from roughly [-1,1] to [0,1] then scale by amplitude
+  return Math.max(0, (duneValue + 1.0) * 0.5) * amplitude;
+}
+
+/**
+ * Enhanced ground SDF supporting flat/spherical modes, sand dune warping,
+ * and cave-aware boundary outputs.
+ *
+ * @param point - Query point in world space
+ * @param config - Ground configuration
+ * @param noiseFn - Noise function for dune displacement
+ * @param caveEvaluators - Optional array of cave SDF evaluators for cave-aware output
+ * @returns Ground auxiliary output with distance, material, cave/boundary tags
+ */
+export function sdGround(
+  point: THREE.Vector3,
+  config: GroundConfig,
+  noiseFn: (x: number, y: number, z: number, octaves: number) => number,
+  caveEvaluators?: SDFEvaluator[],
+): GroundAuxiliaryOutput {
+  // --- Compute base ground distance ---
+  let baseDistance: number;
+
+  if (config.mode === 'spherical') {
+    // Spherical planet mode: distance = point.length() - sphereRadius
+    baseDistance = point.length() - config.sphereRadius;
+  } else {
+    // Flat plane mode: distance = point.y - baseHeight
+    baseDistance = point.y - config.baseHeight;
+  }
+
+  // --- Compute sand dune displacement ---
+  let sandDuneHeight = 0;
+  let duneDisplacement = 0;
+
+  if (config.sandDunes) {
+    sandDuneHeight = computeSandDuneHeight(
+      point.x,
+      point.z,
+      config.sandDuneAmplitude,
+      config.sandDuneFrequency,
+      config.sandDuneOctaves,
+      noiseFn,
+    );
+
+    if (config.mode === 'spherical') {
+      // For spherical mode, dunes push the surface outward along the radial direction.
+      // Approximate by subtracting dune height from the distance.
+      duneDisplacement = -sandDuneHeight;
+    } else {
+      // For flat mode, dunes displace the Y surface upward.
+      // SDF: point.y - (baseHeight + duneHeight) = (point.y - baseHeight) - duneHeight
+      duneDisplacement = -sandDuneHeight;
+    }
+  }
+
+  const distance = baseDistance + duneDisplacement;
+
+  // --- Determine material ---
+  let materialId: number = TERRAIN_MATERIALS.SOIL;
+  if (config.sandDunes && sandDuneHeight > 0.1) {
+    materialId = TERRAIN_MATERIALS.SAND_DUNE;
+  } else if (config.mode === 'flat' && Math.abs(point.y - config.baseHeight) < 0.5) {
+    // Near the surface in flat mode, use SOIL (already default)
+    materialId = TERRAIN_MATERIALS.SOIL;
+  }
+
+  // --- Compute cave-aware outputs ---
+  let caveTag = false;
+  let boundarySDF = Infinity;
+
+  if (config.caveAware && caveEvaluators && caveEvaluators.length > 0) {
+    for (const caveEval of caveEvaluators) {
+      const caveResult = caveEval(point);
+      const caveDist = caveResult.distance;
+
+      // Point is inside a cave if the cave SDF is negative
+      if (caveDist < 0) {
+        caveTag = true;
+      }
+
+      // Boundary SDF is the minimum distance to any cave boundary
+      // (the absolute distance to the nearest cave surface)
+      boundarySDF = Math.min(boundarySDF, Math.abs(caveDist));
+    }
+  }
+
+  // If no caves are registered, boundarySDF stays at Infinity (no boundary)
+  // and caveTag stays false.
+
+  return {
+    distance,
+    materialId,
+    caveTag,
+    boundarySDF: config.caveAware ? boundarySDF : Infinity,
+    sandDuneHeight,
+  };
+}
+
+/**
+ * Create a ground SDF evaluator that produces `GroundAuxiliaryOutput`.
+ * The returned evaluator is compatible with the `SDFEvaluator` type signature
+ * (returns `{ distance, materialId }`) while also supporting the extended
+ * auxiliary output via the `evaluateFull` method.
+ *
+ * @param config - Ground configuration
+ * @param noiseFn - Noise function for dune displacement
+ * @param caveEvaluators - Optional cave SDF evaluators for cave-aware output
+ * @returns An object with an `evaluate` method (SDFEvaluator-compatible) and
+ *          an `evaluateFull` method returning the full auxiliary output
+ */
+export function createGroundSDF(
+  config: Partial<GroundConfig> = {},
+  noiseFn: (x: number, y: number, z: number, octaves: number) => number,
+  caveEvaluators: SDFEvaluator[] = [],
+): {
+  evaluate: SDFEvaluator;
+  evaluateFull: (point: THREE.Vector3) => GroundAuxiliaryOutput;
+} {
+  const fullConfig: GroundConfig = { ...DEFAULT_GROUND_CONFIG, ...config };
+
+  return {
+    /** SDFEvaluator-compatible evaluate function */
+    evaluate: (point: THREE.Vector3): SDFPrimitiveResult => {
+      const result = sdGround(point, fullConfig, noiseFn, caveEvaluators);
+      return {
+        distance: result.distance,
+        materialId: result.materialId,
+      };
+    },
+
+    /** Full auxiliary output evaluation */
+    evaluateFull: (point: THREE.Vector3): GroundAuxiliaryOutput => {
+      return sdGround(point, fullConfig, noiseFn, caveEvaluators);
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -291,11 +515,23 @@ export function createTerrainSDF(
         };
       };
 
-    case 'ground':
-      return (point: THREE.Vector3) => ({
-        distance: sdGroundPlane(point),
-        materialId: TERRAIN_MATERIALS.SOIL,
-      });
+    case 'ground': {
+      const groundSDF = createGroundSDF(
+        {
+          mode: params.mode ?? 'flat',
+          sphereRadius: params.sphereRadius ?? 1000,
+          sandDunes: params.sandDunes ?? false,
+          sandDuneAmplitude: params.sandDuneAmplitude ?? 2.0,
+          sandDuneFrequency: params.sandDuneFrequency ?? 0.02,
+          sandDuneOctaves: params.sandDuneOctaves ?? 4,
+          caveAware: params.caveAware ?? false,
+          baseHeight: params.baseHeight ?? 0,
+        },
+        noiseFn,
+        params.caveEvaluators ?? [],
+      );
+      return groundSDF.evaluate;
+    }
 
     case 'waterbody':
       return (point: THREE.Vector3) => {

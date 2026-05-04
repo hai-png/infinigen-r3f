@@ -10,6 +10,7 @@
  * - Generator: Main terrain generation pipeline
  * - GPU: GPU-accelerated terrain processing
  * - Land Process: Landform processing algorithms
+ * - LandTiles: Tile-based terrain with heightmaps and biome interpolation
  * - Mesher: Mesh generation from implicit surfaces
  * - SDF: Signed distance field utilities
  * - Snow: Snow accumulation and rendering
@@ -34,6 +35,7 @@ export * from './elements';
 export * from './erosion';
 export * from './gpu';
 export * from './land-process';
+export * from './tiles';
 export * from './materials';
 export * from './mesher';
 export * from './sdf';
@@ -52,6 +54,9 @@ export {
   sdCone,
   sdCapsule,
   sdGroundPlane,
+  sdGround,
+  createGroundSDF,
+  DEFAULT_GROUND_CONFIG,
   sdMountainRidge,
   sdVoronoiRock,
   sdWarpedRock,
@@ -59,6 +64,8 @@ export {
   TERRAIN_MATERIALS,
   type SDFPrimitiveResult,
   type SDFEvaluator,
+  type GroundAuxiliaryOutput,
+  type GroundConfig,
 } from './sdf/SDFPrimitives';
 
 export {

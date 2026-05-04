@@ -1,32 +1,71 @@
 /**
- * MouthGenerator - Procedural mouth generation
- * Jaw with teeth for mammals, beak for birds, mandibles for insects
+ * MouthGenerator - Procedural mouth generation with deep detail
+ *
+ * Supports:
+ * - Jaw with articulation joint at the hinge point
+ * - Teeth geometry (incisors, canines, molars) with species-specific shapes
+ * - Tongue geometry
+ * - Lip geometry that wraps around teeth
+ * - Beak for birds, mandibles for insects, snout, filter mouth, tube mouth
+ *
+ * Phase 2: Now returns Joint and IKParams data for the NURBS-to-armature pipeline,
+ * including jaw articulation joint at the hinge point.
  */
+
 import * as THREE from 'three';
+import { SeededRandom } from '../../../../core/util/MathUtils';
+import type { Joint } from './HeadDetailGenerator';
+import type { IKParams } from '../rigging/NURBSToArmature';
+
+// ── Types ────────────────────────────────────────────────────────────
 
 export type MouthType = 'jaw' | 'beak' | 'mandible' | 'snout' | 'filter' | 'tube';
+export type TeethType = 'herbivore' | 'carnivore' | 'omnivore';
 
 export interface MouthConfig {
   type: MouthType;
   size: number;
   color: number;
   teethColor?: number;
-  openAmount?: number; // 0 = closed, 1 = fully open
+  openAmount?: number;     // 0 = closed, 1 = fully open
   jawWidth?: number;
   jawDepth?: number;
+  jawLength?: number;
   toothCount?: number;
+  teethType?: TeethType;
+  tongueLength?: number;
+  hasLips?: boolean;
+  lipColor?: number;
 }
+
+export interface MouthResult {
+  group: THREE.Group;
+  joints: Record<string, Joint>;
+  ikParams: IKParams[];
+}
+
+// ── Mouth Generator ──────────────────────────────────────────────────
 
 export class MouthGenerator {
   private seed: number;
+  private rng: SeededRandom;
 
   constructor(seed?: number) {
     this.seed = seed ?? 42;
+    this.rng = new SeededRandom(this.seed);
   }
 
   generate(type: string, size: number): THREE.Group;
   generate(config: Partial<MouthConfig>): THREE.Group;
   generate(typeOrConfig: string | Partial<MouthConfig>, size?: number): THREE.Group {
+    const result = this.generateWithJoints(typeOrConfig, size);
+    return result.group;
+  }
+
+  /**
+   * Generate mouth with full joint and IK data for rigging.
+   */
+  generateWithJoints(typeOrConfig: string | Partial<MouthConfig>, size?: number): MouthResult {
     let config: MouthConfig;
 
     if (typeof typeOrConfig === 'string') {
@@ -38,7 +77,12 @@ export class MouthGenerator {
         openAmount: 0.2,
         jawWidth: size ? size * 0.5 : 0.05,
         jawDepth: size ? size * 0.3 : 0.03,
+        jawLength: size ? size * 0.3 : 0.03,
         toothCount: 8,
+        teethType: 'omnivore',
+        tongueLength: size ? size * 0.4 : 0.04,
+        hasLips: true,
+        lipColor: 0xcc7777,
       };
     } else {
       config = {
@@ -49,7 +93,12 @@ export class MouthGenerator {
         openAmount: 0.2,
         jawWidth: 0.05,
         jawDepth: 0.03,
+        jawLength: 0.03,
         toothCount: 8,
+        teethType: 'omnivore',
+        tongueLength: 0.04,
+        hasLips: true,
+        lipColor: 0xcc7777,
         ...typeOrConfig,
       };
     }
@@ -57,108 +106,283 @@ export class MouthGenerator {
     const group = new THREE.Group();
     group.name = 'mouth';
 
+    const joints: Record<string, Joint> = {};
+    const ikParams: IKParams[] = [];
+
     switch (config.type) {
       case 'jaw':
-        this.buildJaw(group, config);
+        this.buildJaw(group, config, joints);
         break;
       case 'beak':
-        this.buildBeak(group, config);
+        this.buildBeak(group, config, joints);
         break;
       case 'mandible':
-        this.buildMandible(group, config);
+        this.buildMandible(group, config, joints);
         break;
       case 'snout':
-        this.buildSnout(group, config);
+        this.buildSnout(group, config, joints);
         break;
       case 'filter':
-        this.buildFilterMouth(group, config);
+        this.buildFilterMouth(group, config, joints);
         break;
       case 'tube':
-        this.buildTubeMouth(group, config);
+        this.buildTubeMouth(group, config, joints);
         break;
       default:
-        this.buildJaw(group, config);
+        this.buildJaw(group, config, joints);
     }
 
-    return group;
+    // Jaw articulation joint at the hinge point
+    joints['jaw_hinge'] = {
+      name: 'jaw_hinge',
+      position: new THREE.Vector3(0, -config.size * 0.05, -config.jawDepth! * 0.5),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(0, 0, 0),    // closed
+        max: new THREE.Vector3(0, -0.8, 0), // open wide
+      },
+    };
+
+    return { group, joints, ikParams };
   }
 
   /**
    * Jaw with teeth for mammals
    */
-  private buildJaw(group: THREE.Group, config: MouthConfig): void {
-    const { size, color, teethColor, openAmount, jawWidth, jawDepth, toothCount } = config;
+  private buildJaw(group: THREE.Group, config: MouthConfig, joints: Record<string, Joint>): void {
+    const { size, color, teethColor, openAmount, jawWidth, jawDepth, jawLength, toothCount, teethType, tongueLength, hasLips, lipColor } = config;
     const w = jawWidth ?? size * 0.5;
     const d = jawDepth ?? size * 0.3;
     const open = openAmount ?? 0.2;
+    const jl = jawLength ?? size * 0.3;
 
     const gumMat = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
     const teethMat = new THREE.MeshStandardMaterial({ color: teethColor ?? 0xffffee, roughness: 0.3 });
-    const lipColor = new THREE.Color(color).offsetHSL(0, 0, 0.1);
-    const lipMat = new THREE.MeshStandardMaterial({ color: lipColor, roughness: 0.7 });
 
-    // Upper jaw
-    const upperJawGeo = new THREE.BoxGeometry(w, size * 0.08, d);
+    // Upper jaw (fixed)
+    const upperJawGeo = new THREE.BoxGeometry(w, size * 0.08, jl);
     const upperJaw = new THREE.Mesh(upperJawGeo, gumMat);
     upperJaw.position.y = open * size * 0.15;
     upperJaw.name = 'upperJaw';
     group.add(upperJaw);
 
-    // Lower jaw
-    const lowerJawGeo = new THREE.BoxGeometry(w, size * 0.06, d);
+    // Upper teeth (species-specific)
+    this.buildUpperTeeth(group, config, teethMat);
+
+    // Lower jaw (articulated - can rotate at hinge)
+    const lowerJawGroup = new THREE.Group();
+    lowerJawGroup.name = 'lowerJawGroup';
+
+    const lowerJawGeo = new THREE.BoxGeometry(w, size * 0.06, jl);
     const lowerJaw = new THREE.Mesh(lowerJawGeo, gumMat);
     lowerJaw.position.y = -open * size * 0.15;
     lowerJaw.name = 'lowerJaw';
-    group.add(lowerJaw);
+    lowerJawGroup.add(lowerJaw);
 
-    // Upper teeth
+    // Lower teeth
+    this.buildLowerTeeth(lowerJawGroup, config, teethMat);
+
+    // Set pivot at the hinge point (back of the jaw)
+    lowerJawGroup.position.set(0, 0, -d * 0.5);
+    group.add(lowerJawGroup);
+
+    // Tongue
+    this.buildTongue(group, config);
+
+    // Lips
+    if (hasLips !== false) {
+      this.buildLips(group, config);
+    }
+
+    // Joint for jaw animation
+    joints['lowerJaw'] = {
+      name: 'lowerJaw',
+      position: new THREE.Vector3(0, -open * size * 0.15, -d * 0.5),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(0, 0, 0),
+        max: new THREE.Vector3(0, -0.8, 0),
+      },
+    };
+  }
+
+  /**
+   * Build upper teeth with species-specific shapes
+   */
+  private buildUpperTeeth(group: THREE.Group, config: MouthConfig, teethMat: THREE.MeshStandardMaterial): void {
+    const { size, jawWidth, toothCount, teethType } = config;
+    const w = jawWidth ?? size * 0.5;
     const tc = toothCount ?? 8;
-    const incisors = Math.floor(tc * 0.3);
-    const canines = 2;
+    const tt = teethType ?? 'omnivore';
+    const d = config.jawDepth ?? size * 0.3;
+    const open = config.openAmount ?? 0.2;
 
-    // Incisors (front)
-    for (let i = 0; i < incisors; i++) {
-      const toothGeo = new THREE.BoxGeometry(w * 0.12, size * 0.04, size * 0.03);
-      const tooth = new THREE.Mesh(toothGeo, teethMat);
-      const x = (i / (incisors - 1 || 1) - 0.5) * w * 0.6;
-      tooth.position.set(x, open * size * 0.15 - size * 0.04, d * 0.4);
-      tooth.name = `upperIncisor_${i}`;
-      group.add(tooth);
-    }
-
-    // Canines
-    for (const side of [-1, 1]) {
-      const toothGeo = new THREE.ConeGeometry(w * 0.04, size * 0.06, 6);
-      const tooth = new THREE.Mesh(toothGeo, teethMat);
-      tooth.position.set(side * w * 0.35, open * size * 0.15 - size * 0.05, d * 0.35);
-      tooth.name = `upperCanine_${side}`;
-      group.add(tooth);
-    }
-
-    // Molars (back)
-    const molars = tc - incisors - canines;
-    for (let i = 0; i < molars; i++) {
-      for (const side of [-1, 1]) {
-        const toothGeo = new THREE.BoxGeometry(w * 0.1, size * 0.03, size * 0.06);
-        const tooth = new THREE.Mesh(toothGeo, teethMat);
-        const x = side * (w * 0.4 + i * w * 0.08);
-        tooth.position.set(x, open * size * 0.15 - size * 0.03, d * 0.2);
-        tooth.name = `upperMolar_${side}_${i}`;
-        group.add(tooth);
+    switch (tt) {
+      case 'herbivore': {
+        // Flat incisors for cutting, large flat molars for grinding
+        const incisors = Math.max(2, Math.floor(tc * 0.25));
+        // Incisors
+        for (let i = 0; i < incisors; i++) {
+          const x = ((i / (incisors - 1 || 1)) - 0.5) * w * 0.5;
+          const toothGeo = new THREE.BoxGeometry(w * 0.12, size * 0.03, size * 0.04);
+          const tooth = new THREE.Mesh(toothGeo, teethMat);
+          tooth.position.set(x, open * size * 0.15 - size * 0.04, d * 0.4);
+          tooth.name = `upperIncisor_${i}`;
+          group.add(tooth);
+        }
+        // Molars (large, flat)
+        const molars = Math.max(2, tc - incisors);
+        for (let i = 0; i < molars; i++) {
+          for (const side of [-1, 1]) {
+            const toothGeo = new THREE.BoxGeometry(w * 0.12, size * 0.03, size * 0.08);
+            const tooth = new THREE.Mesh(toothGeo, teethMat);
+            const x = side * (w * 0.35 + i * w * 0.06);
+            tooth.position.set(x, open * size * 0.15 - size * 0.03, d * 0.15);
+            tooth.name = `upperMolar_${side}_${i}`;
+            group.add(tooth);
+          }
+        }
+        break;
+      }
+      case 'carnivore': {
+        // Small incisors, large canines, sharp molars (carnassials)
+        const incisors = Math.max(2, Math.floor(tc * 0.3));
+        // Incisors
+        for (let i = 0; i < incisors; i++) {
+          const x = ((i / (incisors - 1 || 1)) - 0.5) * w * 0.5;
+          const toothGeo = new THREE.BoxGeometry(w * 0.08, size * 0.035, size * 0.03);
+          const tooth = new THREE.Mesh(toothGeo, teethMat);
+          tooth.position.set(x, open * size * 0.15 - size * 0.035, d * 0.35);
+          tooth.name = `upperIncisor_${i}`;
+          group.add(tooth);
+        }
+        // Canines (large, pointed)
+        for (const side of [-1, 1]) {
+          const canineGeo = new THREE.ConeGeometry(w * 0.04, size * 0.08, 6);
+          const canine = new THREE.Mesh(canineGeo, teethMat);
+          canine.position.set(side * w * 0.3, open * size * 0.15 - size * 0.06, d * 0.3);
+          canine.name = `upperCanine_${side}`;
+          group.add(canine);
+        }
+        // Carnassials (blade-like)
+        for (const side of [-1, 1]) {
+          const carnassialGeo = new THREE.BoxGeometry(w * 0.06, size * 0.03, size * 0.06);
+          const carnassial = new THREE.Mesh(carnassialGeo, teethMat);
+          carnassial.position.set(side * (w * 0.42), open * size * 0.15 - size * 0.03, d * 0.18);
+          carnassial.name = `carnassial_${side}`;
+          group.add(carnassial);
+        }
+        break;
+      }
+      case 'omnivore':
+      default: {
+        // Mix of incisors, canines, molars (original behavior)
+        const incisors = Math.floor(tc * 0.3);
+        const canines = 2;
+        // Incisors (front)
+        for (let i = 0; i < incisors; i++) {
+          const toothGeo = new THREE.BoxGeometry(w * 0.12, size * 0.04, size * 0.03);
+          const tooth = new THREE.Mesh(toothGeo, teethMat);
+          const x = (i / (incisors - 1 || 1) - 0.5) * w * 0.6;
+          tooth.position.set(x, open * size * 0.15 - size * 0.04, d * 0.4);
+          tooth.name = `upperIncisor_${i}`;
+          group.add(tooth);
+        }
+        // Canines
+        for (const side of [-1, 1]) {
+          const toothGeo = new THREE.ConeGeometry(w * 0.04, size * 0.06, 6);
+          const tooth = new THREE.Mesh(toothGeo, teethMat);
+          tooth.position.set(side * w * 0.35, open * size * 0.15 - size * 0.05, d * 0.35);
+          tooth.name = `upperCanine_${side}`;
+          group.add(tooth);
+        }
+        // Molars (back)
+        const molars = tc - incisors - canines;
+        for (let i = 0; i < molars; i++) {
+          for (const side of [-1, 1]) {
+            const toothGeo = new THREE.BoxGeometry(w * 0.1, size * 0.03, size * 0.06);
+            const tooth = new THREE.Mesh(toothGeo, teethMat);
+            const x = side * (w * 0.4 + i * w * 0.08);
+            tooth.position.set(x, open * size * 0.15 - size * 0.03, d * 0.2);
+            tooth.name = `upperMolar_${side}_${i}`;
+            group.add(tooth);
+          }
+        }
+        break;
       }
     }
+  }
 
-    // Lower teeth (simpler)
+  /**
+   * Build lower teeth (simpler than upper)
+   */
+  private buildLowerTeeth(group: THREE.Group, config: MouthConfig, teethMat: THREE.MeshStandardMaterial): void {
+    const { size, jawWidth, toothCount } = config;
+    const w = jawWidth ?? size * 0.5;
+    const tc = toothCount ?? 8;
+    const open = config.openAmount ?? 0.2;
+
     for (let i = 0; i < tc; i++) {
       const x = ((i / (tc - 1 || 1)) - 0.5) * w * 0.8;
       const toothGeo = new THREE.BoxGeometry(w * 0.08, size * 0.03, size * 0.025);
       const tooth = new THREE.Mesh(toothGeo, teethMat);
-      tooth.position.set(x, -open * size * 0.15 + size * 0.03, d * 0.35);
+      tooth.position.set(x, open * size * 0.15 + size * 0.03, (config.jawDepth ?? size * 0.3) * 0.35);
       tooth.name = `lowerTooth_${i}`;
       group.add(tooth);
     }
+  }
 
-    // Lips
+  /**
+   * Build tongue geometry
+   */
+  private buildTongue(group: THREE.Group, config: MouthConfig): void {
+    const { size, jawWidth, tongueLength } = config;
+    const w = jawWidth ?? size * 0.5;
+    const tl = tongueLength ?? size * 0.4;
+    const d = config.jawDepth ?? size * 0.3;
+
+    // Main tongue body
+    const tongueShape = new THREE.Shape();
+    tongueShape.moveTo(0, 0);
+    tongueShape.bezierCurveTo(-w * 0.15, tl * 0.3, -w * 0.08, tl * 0.8, 0, tl);
+    tongueShape.bezierCurveTo(w * 0.08, tl * 0.8, w * 0.15, tl * 0.3, 0, 0);
+
+    const tongueGeo = new THREE.ExtrudeGeometry(tongueShape, {
+      depth: size * 0.015,
+      bevelEnabled: true,
+      bevelThickness: size * 0.005,
+      bevelSize: size * 0.005,
+      bevelSegments: 2,
+    });
+    const tongueMat = new THREE.MeshStandardMaterial({ color: 0xcc4444, roughness: 0.8 });
+    const tongue = new THREE.Mesh(tongueGeo, tongueMat);
+    tongue.position.set(0, -size * 0.01, d * 0.1);
+    tongue.rotation.x = Math.PI / 2;
+    tongue.name = 'tongue';
+    group.add(tongue);
+
+    // Tongue midline groove
+    const grooveGeo = new THREE.BoxGeometry(w * 0.03, size * 0.003, tl * 0.6);
+    const grooveMat = new THREE.MeshStandardMaterial({ color: 0xaa3333, roughness: 0.9 });
+    const groove = new THREE.Mesh(grooveGeo, grooveMat);
+    groove.position.set(0, size * 0.012, d * 0.2);
+    groove.name = 'tongueGroove';
+    group.add(groove);
+  }
+
+  /**
+   * Build lip geometry that wraps around teeth
+   */
+  private buildLips(group: THREE.Group, config: MouthConfig): void {
+    const { size, jawWidth, lipColor } = config;
+    const w = jawWidth ?? size * 0.5;
+    const d = config.jawDepth ?? size * 0.3;
+    const open = config.openAmount ?? 0.2;
+    const color = lipColor ?? new THREE.Color(config.color).offsetHSL(0, 0, 0.1).getHex();
+
+    const lipMat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
+
+    // Upper lip
     const lipGeo = new THREE.TorusGeometry(w * 0.35, size * 0.015, 6, 12, Math.PI);
     const upperLip = new THREE.Mesh(lipGeo, lipMat);
     upperLip.position.set(0, open * size * 0.15, d * 0.35);
@@ -166,24 +390,17 @@ export class MouthGenerator {
     upperLip.name = 'upperLip';
     group.add(upperLip);
 
+    // Lower lip
     const lowerLip = new THREE.Mesh(lipGeo.clone(), lipMat);
     lowerLip.position.set(0, -open * size * 0.15, d * 0.35);
     lowerLip.name = 'lowerLip';
     group.add(lowerLip);
-
-    // Tongue
-    const tongueGeo = new THREE.BoxGeometry(w * 0.25, size * 0.015, d * 0.6);
-    const tongueMat = new THREE.MeshStandardMaterial({ color: 0xcc4444, roughness: 0.8 });
-    const tongue = new THREE.Mesh(tongueGeo, tongueMat);
-    tongue.position.set(0, 0, d * 0.1);
-    tongue.name = 'tongue';
-    group.add(tongue);
   }
 
   /**
    * Beak for birds
    */
-  private buildBeak(group: THREE.Group, config: MouthConfig): void {
+  private buildBeak(group: THREE.Group, config: MouthConfig, joints: Record<string, Joint>): void {
     const { size, color, jawWidth, jawDepth, openAmount } = config;
     const w = jawWidth ?? size * 0.3;
     const d = jawDepth ?? size * 0.4;
@@ -225,11 +442,14 @@ export class MouthGenerator {
       bevelSize: size * 0.005,
       bevelSegments: 2,
     });
+    const lowerBeakGroup = new THREE.Group();
+    lowerBeakGroup.name = 'lowerBeakGroup';
     const lowerBeak = new THREE.Mesh(lowerBeakGeo, beakMat);
     lowerBeak.position.y = -open * size * 0.1;
     lowerBeak.rotation.x = Math.PI / 2;
     lowerBeak.name = 'lowerBeak';
-    group.add(lowerBeak);
+    lowerBeakGroup.add(lowerBeak);
+    group.add(lowerBeakGroup);
 
     // Nostril (cere)
     const cereMat = new THREE.MeshStandardMaterial({
@@ -255,13 +475,24 @@ export class MouthGenerator {
     hook.rotation.x = 0.3;
     hook.name = 'hook';
     group.add(hook);
+
+    // Jaw joint for beak open/close
+    joints['lowerBeak'] = {
+      name: 'lowerBeak',
+      position: new THREE.Vector3(0, 0, 0),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(0, 0, 0),
+        max: new THREE.Vector3(0, -0.5, 0),
+      },
+    };
   }
 
   /**
    * Mandibles for insects (pincer-like)
    */
-  private buildMandible(group: THREE.Group, config: MouthConfig): void {
-    const { size } = config;
+  private buildMandible(group: THREE.Group, config: MouthConfig, joints: Record<string, Joint>): void {
+    const { size, color } = config;
     const mat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.5 });
 
     // Labrum (upper lip)
@@ -273,8 +504,9 @@ export class MouthGenerator {
 
     // Two mandibles (pincers)
     for (const side of [-1, 1]) {
+      const sideName = side === -1 ? 'L' : 'R';
       const mandibleGroup = new THREE.Group();
-      mandibleGroup.name = `mandible_${side}`;
+      mandibleGroup.name = `mandible_${sideName}`;
 
       // Mandible base
       const baseGeo = new THREE.CylinderGeometry(size * 0.04, size * 0.05, size * 0.08, 6);
@@ -311,6 +543,17 @@ export class MouthGenerator {
       mandibleGroup.position.set(side * size * 0.12, -size * 0.02, size * 0.05);
       mandibleGroup.rotation.y = side * 0.2;
       group.add(mandibleGroup);
+
+      // Joint for mandible animation
+      joints[`mandible_${sideName}`] = {
+        name: `mandible_${sideName}`,
+        position: mandibleGroup.position.clone(),
+        rotation: new THREE.Euler(0, side * 0.2, 0),
+        bounds: {
+          min: new THREE.Vector3(0, -0.3, 0),
+          max: new THREE.Vector3(0, 0.3, 0),
+        },
+      };
     }
 
     // Maxillae (inner mouthparts)
@@ -336,7 +579,7 @@ export class MouthGenerator {
   /**
    * Snout (pig, dog, etc.)
    */
-  private buildSnout(group: THREE.Group, config: MouthConfig): void {
+  private buildSnout(group: THREE.Group, config: MouthConfig, joints: Record<string, Joint>): void {
     const { size, color } = config;
     const skinColor = new THREE.Color(color).offsetHSL(0, -0.1, 0.15);
     const snoutMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8 });
@@ -366,12 +609,22 @@ export class MouthGenerator {
     mouth.position.set(0, -size * 0.05, size * 0.25);
     mouth.name = 'mouthOpening';
     group.add(mouth);
+
+    joints['snout'] = {
+      name: 'snout',
+      position: new THREE.Vector3(0, 0, size * 0.15),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(-0.1, -0.2, -0.1),
+        max: new THREE.Vector3(0.1, 0.2, 0.1),
+      },
+    };
   }
 
   /**
    * Filter mouth (flamingo, baleen whale)
    */
-  private buildFilterMouth(group: THREE.Group, config: MouthConfig): void {
+  private buildFilterMouth(group: THREE.Group, config: MouthConfig, joints: Record<string, Joint>): void {
     const { size, color, jawWidth } = config;
     const w = jawWidth ?? size * 0.4;
 
@@ -405,12 +658,22 @@ export class MouthGenerator {
       plate.name = `filterPlate_${i}`;
       group.add(plate);
     }
+
+    joints['filterJaw'] = {
+      name: 'filterJaw',
+      position: new THREE.Vector3(0, -size * 0.03, 0),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(0, 0, 0),
+        max: new THREE.Vector3(0, -0.6, 0),
+      },
+    };
   }
 
   /**
    * Tube mouth (butterfly proboscis, hummingbird)
    */
-  private buildTubeMouth(group: THREE.Group, config: MouthConfig): void {
+  private buildTubeMouth(group: THREE.Group, config: MouthConfig, joints: Record<string, Joint>): void {
     const { size, color } = config;
     const tubeRadius = size * 0.03;
 
@@ -446,6 +709,16 @@ export class MouthGenerator {
       palp.name = `palp_${side}`;
       group.add(palp);
     }
+
+    joints['proboscis'] = {
+      name: 'proboscis',
+      position: new THREE.Vector3(0, 0, 0),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(-0.5, -0.5, -0.5),
+        max: new THREE.Vector3(0.5, 0.5, 0.5),
+      },
+    };
   }
 }
 

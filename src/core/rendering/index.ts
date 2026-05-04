@@ -14,6 +14,14 @@ export * as shaders from './shaders';
 // Screen-space post-processing passes
 export { SSGIPass, type SSGIConfig } from './postprocess/SSGIPass';
 export { SSAOPass, type SSAOConfig } from './postprocess/SSAOPass';
+export { OpticalFlowPass, type OpticalFlowConfig } from './postprocess/OpticalFlowPass';
+
+// Volumetric rendering
+export { VolumetricPass, type VolumetricFogParams, type VolumetricSmokeParams, type VolumetricAtmosphereParams, type VolumetricPassConfig } from './postprocess/VolumetricPass';
+export { VolumetricRenderer, type FogVolumeParams, type SmokeVolumeParams, type AtmosphereVolumeParams } from './VolumetricRenderer';
+
+// Velocity buffer for optical flow ground truth
+export { VelocityBuffer, type ObjectVelocityData, type CameraVelocityData } from './VelocityBuffer';
 
 // Shadow system
 export { PCSSShadow, type PCSSConfig } from './shadows/PCSSShadow';

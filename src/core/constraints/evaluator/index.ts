@@ -44,6 +44,16 @@ export {
   defaultHandler
 } from './node-impl/index';
 
+// BVH Spatial Query Engine
+export {
+  BVHQueryEngine,
+  getDefaultBVHEngine,
+  setDefaultBVHEngine,
+  resetDefaultBVHEngine,
+  type ClosestPointResult,
+  type RaycastResult as BVHRaycastResult,
+} from './bvh-queries';
+
 // Geometry relation evaluators
 export {
   evaluateDistance,
@@ -56,6 +66,8 @@ export {
   evaluateAccessibleFrom,
   evaluateVisible,
   evaluateHidden,
+  evaluateHasLineOfSight,
+  evaluateContains,
   geometryNodeImpls
 } from './node-impl/trimesh-geometry';
 
@@ -72,4 +84,7 @@ export {
   reflectional_asymmetry,
   clearance_cost,
   path_obstruction_cost,
+  accessibility_cost_bvh,
+  clearance_cost_bvh,
+  path_obstruction_cost_bvh,
 } from './GeometryCosts';

@@ -25,9 +25,15 @@
  *  - reflectional_asymmetry: Asymmetry about a plane
  *  - clearance_cost: Insufficient clearance along a direction
  *  - path_obstruction_cost: Obstacles blocking a path
+ *
+ * BVH-enhanced cost functions:
+ *  - accessibility_cost_bvh: BVH-raycasting based accessibility cost
+ *  - clearance_cost_bvh: BVH-raycasting based clearance cost
+ *  - path_obstruction_cost_bvh: BVH-raycasting based path obstruction cost
  */
 
 import * as THREE from 'three';
+import { BVHQueryEngine, getDefaultBVHEngine, type RaycastResult } from './bvh-queries';
 
 // ============================================================================
 // Basic Distance & Geometry
@@ -555,4 +561,176 @@ export function path_obstruction_cost(
 
   // Normalize by number of samples for consistent scaling
   return totalCost / (numSamples + 1);
+}
+
+// ============================================================================
+// BVH-Enhanced Cost Functions
+// ============================================================================
+
+/**
+ * BVH-raycasting based accessibility cost.
+ *
+ * Uses actual BVH raycasting against mesh obstacles instead of
+ * point-based approximations. Casts rays from sample directions on a sphere
+ * around the position and checks for actual mesh intersections within
+ * the clearance distance.
+ *
+ * This provides significantly more accurate accessibility measurements
+ * than the point-based `accessibility_cost`, especially for objects with
+ * non-convex or irregular shapes.
+ *
+ * @param position - The position to evaluate
+ * @param obstacleObjects - Array of THREE.Object3D obstacles with mesh geometry
+ * @param engine - BVHQueryEngine instance (uses default if not provided)
+ * @param clearanceDistance - Minimum clearance distance (default 1.5)
+ * @returns Cost in [0, ∞). 0 = fully accessible, higher = more blocked
+ */
+export function accessibility_cost_bvh(
+  position: THREE.Vector3,
+  obstacleObjects: THREE.Object3D[],
+  engine?: BVHQueryEngine,
+  clearanceDistance: number = 1.5
+): number {
+  if (obstacleObjects.length === 0) return 0;
+
+  const bvhEngine = engine ?? getDefaultBVHEngine();
+
+  // Sample directions on a sphere (using Fibonacci sphere for uniform coverage)
+  const numDirections = 16;
+  let blockedCount = 0;
+
+  const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+  for (let i = 0; i < numDirections; i++) {
+    const theta = 2 * Math.PI * i / goldenRatio;
+    const phi = Math.acos(1 - 2 * (i + 0.5) / numDirections);
+
+    const dir = new THREE.Vector3(
+      Math.sin(phi) * Math.cos(theta),
+      Math.sin(phi) * Math.sin(theta),
+      Math.cos(phi)
+    ).normalize();
+
+    // Use BVH raycasting to check for obstacles in this direction
+    const hits = bvhEngine.raycast(position, dir, clearanceDistance, obstacleObjects);
+
+    if (hits.length > 0 && hits[0].distance < clearanceDistance) {
+      blockedCount++;
+    }
+  }
+
+  // Cost is proportional to fraction of blocked directions
+  return (blockedCount / numDirections) * 10; // Scale factor for penalty
+}
+
+/**
+ * BVH-raycasting based clearance cost.
+ *
+ * Uses actual BVH raycasting to measure how much clearance exists in a
+ * given direction from a position. More accurate than the point-based
+ * `clearance_cost` because it uses actual mesh geometry for intersection
+ * tests instead of approximating obstacles as spheres.
+ *
+ * @param position - The position to evaluate
+ * @param direction - Direction to check clearance (must be normalized)
+ * @param obstacleObjects - Array of THREE.Object3D obstacles with mesh geometry
+ * @param minClearance - Minimum required clearance distance
+ * @param engine - BVHQueryEngine instance (uses default if not provided)
+ * @returns Cost for insufficient clearance. 0 = enough clearance.
+ */
+export function clearance_cost_bvh(
+  position: THREE.Vector3,
+  direction: THREE.Vector3,
+  obstacleObjects: THREE.Object3D[],
+  minClearance: number,
+  engine?: BVHQueryEngine
+): number {
+  if (obstacleObjects.length === 0) return 0;
+
+  const bvhEngine = engine ?? getDefaultBVHEngine();
+  const dir = direction.clone().normalize();
+
+  // Cast a ray in the given direction
+  const hits = bvhEngine.raycast(position, dir, minClearance * 2, obstacleObjects);
+
+  if (hits.length === 0) return 0; // No obstacles found — full clearance
+
+  // Find the nearest hit
+  const nearestHit = hits[0];
+  const clearanceDist = nearestHit.distance;
+
+  // Cost is the deficit: how much less clearance we have than required
+  if (clearanceDist < minClearance) {
+    const deficit = minClearance - clearanceDist;
+    return deficit * deficit;
+  }
+
+  return 0;
+}
+
+/**
+ * BVH-raycasting based path obstruction cost.
+ *
+ * Uses actual BVH raycasting along the path between two points
+ * instead of sampling point-to-obstacle distances. This produces
+ * more accurate obstruction measurements, especially for paths
+ * that pass near but don't intersect obstacle bounding spheres.
+ *
+ * Algorithm:
+ *  1. Cast rays along the path from `from` to `to`
+ *  2. For each ray segment, check for intersections with obstacle meshes
+ *  3. Cost = sum of penetration penalties weighted by obstruction severity
+ *
+ * @param from - Start position
+ * @param to - End position
+ * @param obstacleObjects - Array of THREE.Object3D obstacles with mesh geometry
+ * @param engine - BVHQueryEngine instance (uses default if not provided)
+ * @param segmentLength - Length of each ray segment for sampling (default 0.5)
+ * @returns Obstruction cost. 0 = clear path.
+ */
+export function path_obstruction_cost_bvh(
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  obstacleObjects: THREE.Object3D[],
+  engine?: BVHQueryEngine,
+  segmentLength: number = 0.5
+): number {
+  if (obstacleObjects.length === 0) return 0;
+
+  const pathLength = from.distanceTo(to);
+  if (pathLength < 1e-6) return 0;
+
+  const bvhEngine = engine ?? getDefaultBVHEngine();
+  const pathDirection = to.clone().sub(from).normalize();
+  const numSegments = Math.max(2, Math.ceil(pathLength / segmentLength));
+
+  let totalCost = 0;
+
+  for (let i = 0; i <= numSegments; i++) {
+    const t = i / numSegments;
+    const segmentStart = from.clone().lerp(to, t);
+
+    // Cast a ray from this segment point toward the destination
+    // This checks if any obstacle blocks the path from this point forward
+    const remainingDist = pathLength * (1 - t);
+    const hits = bvhEngine.raycast(
+      segmentStart,
+      pathDirection,
+      Math.min(segmentLength, remainingDist),
+      obstacleObjects
+    );
+
+    if (hits.length > 0) {
+      // Obstacle found along the path at this segment
+      for (const hit of hits) {
+        // Penalty proportional to how close the hit is to the path center
+        // and how close it is to the segment start
+        const proximity = 1.0 - (hit.distance / segmentLength);
+        totalCost += proximity * proximity;
+      }
+    }
+  }
+
+  // Normalize by number of segments for consistent scaling
+  return totalCost / (numSegments + 1);
 }

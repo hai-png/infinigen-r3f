@@ -6,6 +6,7 @@
  *   - Depth (linear Z, Float32)
  *   - Normal (camera-space normals, RGB = XYZ)
  *   - Flow (optical flow from motion vectors, RG = XY)
+ *   - Optical Flow (per-object velocity buffers, Float32)
  *   - Object Segmentation (unique color per object)
  *   - Instance Segmentation (unique color per instance)
  *   - Material Segmentation (unique color per material type)
@@ -17,6 +18,8 @@
 
 import * as THREE from 'three';
 import { createCanvas } from '@/assets/utils/CanvasUtils';
+import { OpticalFlowPass, type OpticalFlowConfig } from '../../core/rendering/postprocess/OpticalFlowPass';
+import { VelocityBuffer, type CameraVelocityData } from '../../core/rendering/VelocityBuffer';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +39,7 @@ export type GTChannel =
   | 'depth'
   | 'normal'
   | 'flow'
+  | 'optical_flow'
   | 'object_segmentation'
   | 'instance_segmentation'
   | 'material_segmentation';
@@ -44,6 +48,8 @@ export interface GTRenderResult {
   depth?: Float32Array;
   normal?: Float32Array;
   flow?: Float32Array;
+  /** Per-fragment optical flow (2 channels per pixel: dx, dy) from VelocityBuffer */
+  opticalFlow?: Float32Array;
   objectSegmentation?: Uint8Array;
   instanceSegmentation?: Uint8Array;
   materialSegmentation?: Uint8Array;
@@ -52,6 +58,21 @@ export interface GTRenderResult {
   objectMap: Map<number, string>;
   instanceMap: Map<number, string>;
   materialMap: Map<number, string>;
+}
+
+/**
+ * Options for optical flow rendering.
+ * Passed to GroundTruthRenderer.render() when the 'optical_flow' channel is requested.
+ */
+export interface OpticalFlowRenderOptions {
+  /** VelocityBuffer with per-object previous/current transforms */
+  velocityBuffer?: VelocityBuffer;
+  /** Flow scale multiplier (default 1.0) */
+  flowScale?: number;
+  /** Render forward flow (true) or backward flow (false) */
+  forwardFlow?: boolean;
+  /** Export format: 'png' for 8-bit visualization, 'exr' for float precision */
+  exportFormat?: 'png' | 'exr';
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +194,12 @@ export class GroundTruthRenderer {
   private instanceIdMap = new Map<number, string>();
   private materialIdMap = new Map<number, string>();
 
+  /** Optical flow rendering pass (lazily created) */
+  private opticalFlowPass: OpticalFlowPass | null = null;
+
+  /** Internal velocity buffer for tracking object transforms */
+  private velocityBuffer: VelocityBuffer;
+
   constructor(renderer: THREE.WebGLRenderer, config: Partial<GTRenderConfig> = {}) {
     this.renderer = renderer;
     this.config = {
@@ -188,6 +215,7 @@ export class GroundTruthRenderer {
       useMRT: config.useMRT ?? true,
     };
 
+    this.velocityBuffer = new VelocityBuffer();
     this.checkMRTOsupport();
   }
 
@@ -223,12 +251,34 @@ export class GroundTruthRenderer {
   // Main Render
   // -----------------------------------------------------------------------
 
-  render(scene: THREE.Scene, camera: THREE.Camera): GTRenderResult {
-    if (this.mrtSupported && this.config.useMRT) {
-      return this.renderMRT(scene, camera);
-    } else {
-      return this.renderFallback(scene, camera);
+  render(
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    opticalFlowOptions?: OpticalFlowRenderOptions,
+  ): GTRenderResult {
+    // Update velocity buffer for this frame
+    if (this.config.channels.includes('optical_flow') || this.config.channels.includes('flow')) {
+      const objects: THREE.Object3D[] = [];
+      scene.traverse((obj) => objects.push(obj));
+      this.velocityBuffer.updateFrame(objects);
+      this.velocityBuffer.updateCamera(camera);
     }
+
+    const result = this.mrtSupported && this.config.useMRT
+      ? this.renderMRT(scene, camera)
+      : this.renderFallback(scene, camera);
+
+    // Optical flow pass (uses OpticalFlowPass with VelocityBuffer)
+    if (this.config.channels.includes('optical_flow')) {
+      result.opticalFlow = this.renderOpticalFlow(
+        scene,
+        camera,
+        opticalFlowOptions?.velocityBuffer ?? this.velocityBuffer,
+        opticalFlowOptions,
+      );
+    }
+
+    return result;
   }
 
   // -----------------------------------------------------------------------
@@ -410,7 +460,7 @@ export class GroundTruthRenderer {
       }
     }
 
-    // Flow (zero for static fallback)
+    // Flow (zero for static fallback without velocity data)
     if (channels.includes('flow')) {
       result.flow = new Float32Array(width * height * 2);
     }
@@ -578,6 +628,108 @@ export class GroundTruthRenderer {
     rt.dispose();
 
     return { object: objectResult, instance: instanceResult, material: materialResult };
+  }
+
+  // -----------------------------------------------------------------------
+  // Optical Flow Rendering
+  // -----------------------------------------------------------------------
+
+  /**
+   * Render optical flow using the OpticalFlowPass.
+   *
+   * @param scene          - The scene to render
+   * @param camera         - The current frame's camera
+   * @param velocityBuffer - VelocityBuffer with per-object transforms
+   * @param options        - Optional configuration for flow rendering
+   * @returns Float32Array with 2 channels per pixel (dx, dy)
+   */
+  private renderOpticalFlow(
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    velocityBuffer: VelocityBuffer,
+    options?: OpticalFlowRenderOptions,
+  ): Float32Array {
+    const { width, height } = this.config;
+
+    // Lazily create the optical flow pass
+    if (!this.opticalFlowPass) {
+      this.opticalFlowPass = new OpticalFlowPass(width, height, {
+        flowScale: options?.flowScale ?? 1.0,
+        forwardFlow: options?.forwardFlow ?? true,
+        usePerObjectPass: true,
+        resolution: 1.0,
+      });
+    }
+
+    // Update config if options provided
+    if (options) {
+      this.opticalFlowPass.setConfig({
+        flowScale: options.flowScale ?? 1.0,
+        forwardFlow: options.forwardFlow ?? true,
+      });
+    }
+
+    // Set camera velocity data
+    const cameraData = velocityBuffer.getCameraData();
+    if (cameraData) {
+      this.opticalFlowPass.setCameraData(cameraData);
+    }
+
+    // Set per-object velocities
+    this.opticalFlowPass.setObjectVelocities(velocityBuffer.getVelocityMap());
+
+    // Render the optical flow pass
+    this.opticalFlowPass.render(this.renderer, scene, camera, velocityBuffer);
+
+    // Read back the flow data
+    const flowRGBA = this.opticalFlowPass.readFlowData(this.renderer);
+
+    // Extract just the 2-channel flow (R, G) from RGBA
+    const flow = new Float32Array(width * height * 2);
+    for (let i = 0; i < width * height; i++) {
+      flow[i * 2] = flowRGBA[i * 4];       // dx
+      flow[i * 2 + 1] = flowRGBA[i * 4 + 1]; // dy
+    }
+
+    return flow;
+  }
+
+  /**
+   * Get the internal VelocityBuffer for external frame tracking.
+   * Use this to update transforms between frames.
+   */
+  getVelocityBuffer(): VelocityBuffer {
+    return this.velocityBuffer;
+  }
+
+  /**
+   * Get the OpticalFlowPass (if created) for direct access.
+   */
+  getOpticalFlowPass(): OpticalFlowPass | null {
+    return this.opticalFlowPass;
+  }
+
+  /**
+   * Export optical flow as EXR data (floating-point precision).
+   *
+   * @param result - The GT render result containing opticalFlow data
+   * @returns ArrayBuffer with EXR-encoded flow data
+   */
+  static flowToEXR(result: GTRenderResult): ArrayBuffer | null {
+    if (!result.opticalFlow) return null;
+
+    const { width, height, opticalFlow } = result;
+    // Convert 2-channel flow to 4-channel RGBA for EXR encoding
+    const rgba = new Float32Array(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+      rgba[i * 4] = opticalFlow[i * 2];       // R = flow_x
+      rgba[i * 4 + 1] = opticalFlow[i * 2 + 1]; // G = flow_y
+      rgba[i * 4 + 2] = 0.0;                    // B = 0
+      rgba[i * 4 + 3] = 1.0;                    // A = 1
+    }
+
+    // Return as raw float buffer (for downstream EXR encoder)
+    return rgba.buffer as ArrayBuffer;
   }
 
   // -----------------------------------------------------------------------
@@ -764,6 +916,26 @@ export class GroundTruthRenderer {
       }
       ctx.putImageData(imgData, 0, 0);
       pngs.set('flow', canvas.toDataURL('image/png'));
+    }
+
+    // Optical Flow → HSV colorized PNG (same colorization as flow)
+    if (result.opticalFlow) {
+      const imgData = ctx.createImageData(width, height);
+      for (let i = 0; i < width * height; i++) {
+        const fx = result.opticalFlow[i * 2];
+        const fy = result.opticalFlow[i * 2 + 1];
+        const magnitude = Math.sqrt(fx * fx + fy * fy);
+        const angle = Math.atan2(fy, fx);
+        const h = (angle / Math.PI + 1) / 2;
+        // Use higher sensitivity for optical flow (velocity-based)
+        const rgb = hslToRgb(h, Math.min(1, magnitude * 20), 0.5);
+        imgData.data[i * 4] = rgb[0];
+        imgData.data[i * 4 + 1] = rgb[1];
+        imgData.data[i * 4 + 2] = rgb[2];
+        imgData.data[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(imgData, 0, 0);
+      pngs.set('optical_flow', canvas.toDataURL('image/png'));
     }
 
     return pngs;

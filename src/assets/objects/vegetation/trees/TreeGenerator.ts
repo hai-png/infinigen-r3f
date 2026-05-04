@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { NoiseUtils } from '@/core/util/math/noise';
 import { SeededRandom } from '../../../../core/util/math/index';
 import { LeafGeometry, LeafCluster, LeafType, ClusterConfig } from './LeafGeometry';
+import { SpaceColonization, type SpaceColonizationConfig, type TreeSkeleton } from '../SpaceColonization';
+import { TreeSkeletonMeshBuilder, type SkeletonMeshConfig, DEFAULT_SKELETON_MESH_CONFIG } from '../TreeSkeletonMeshBuilder';
+import { TreeGenome, TREE_SPECIES_PRESETS, genomeToSpaceColonizationConfig, getBarkColor, getLeafColor } from '../TreeGenome';
 
 /**
  * Tree species configuration with biological parameters
@@ -128,6 +131,39 @@ export const TreeSpeciesPresets: Record<string, TreeSpeciesConfig> = {
     leafCount: 400,
   },
 };
+
+/**
+ * Configuration for Space Colonization tree generation.
+ * Maps tree species presets to SpaceColonizationConfig parameters.
+ */
+export interface SpaceColonizationTreeConfig {
+  /** Tree genome species name or a custom genome */
+  species: string | TreeGenome;
+  /** Random seed for deterministic generation (default 42) */
+  seed: number;
+  /** Optional overrides for the SpaceColonizationConfig derived from the genome */
+  spaceColonizationOverrides?: Partial<SpaceColonizationConfig>;
+  /** Optional overrides for the SkeletonMeshConfig */
+  meshConfigOverrides?: Partial<SkeletonMeshConfig>;
+  /** Season for leaf coloring (default 'summer') */
+  season?: 'spring' | 'summer' | 'autumn' | 'winter';
+}
+
+/**
+ * Result of Space Colonization tree generation.
+ */
+export interface SpaceColonizationTreeResult {
+  /** The branch/trunk geometry with 'generation' vertex attribute */
+  branchGeometry: THREE.BufferGeometry;
+  /** Bark material */
+  barkMaterial: THREE.MeshStandardMaterial;
+  /** The raw skeleton from SpaceColonization (for further processing) */
+  skeleton: TreeSkeleton;
+  /** Leaf positions (terminal vertices) for foliage placement */
+  leafPositions: THREE.Vector3[];
+  /** Bounding box of the tree */
+  boundingBox: THREE.Box3;
+}
 
 /**
  * Generated tree instance data
@@ -626,6 +662,187 @@ export class TreeGenerator {
     }
 
     geometry.computeVertexNormals();
+  }
+
+  // --------------------------------------------------------------------------
+  // Space Colonization Integration
+  // --------------------------------------------------------------------------
+
+  /**
+   * Generate a tree using the SpaceColonization algorithm for organic shapes.
+   *
+   * This method creates a tree skeleton using the space colonization algorithm
+   * and then converts it into a smooth Three.js mesh using TreeSkeletonMeshBuilder.
+   * The result provides more naturalistic branching than the cylinder-based
+   * generateTree() method.
+   *
+   * @param config Configuration for the SC tree generation
+   * @returns A group containing the branch mesh and optional leaf positions
+   */
+  generateWithSpaceColonization(
+    config: SpaceColonizationTreeConfig
+  ): THREE.Group {
+    const { seed, season = 'summer' } = config;
+
+    // Resolve the genome from species name or custom genome
+    const genome: TreeGenome = typeof config.species === 'string'
+      ? (TREE_SPECIES_PRESETS[config.species]?.genome ?? TREE_SPECIES_PRESETS.broadleaf.genome)
+      : config.species;
+
+    // Derive SpaceColonizationConfig from the genome
+    const scConfig = genomeToSpaceColonizationConfig(genome, seed);
+
+    // Apply any overrides
+    const finalScConfig: Partial<SpaceColonizationConfig> = {
+      ...scConfig,
+      ...config.spaceColonizationOverrides,
+    };
+
+    // Step 1: Generate the tree skeleton via Space Colonization
+    const sc = new SpaceColonization(finalScConfig);
+    const skeleton = sc.generate();
+
+    // Step 2: Build the mesh geometry from the skeleton
+    const builder = new TreeSkeletonMeshBuilder();
+    const branchGeometry = builder.buildFromSkeleton(
+      skeleton,
+      config.meshConfigOverrides
+    );
+
+    // Step 3: Create bark material from genome colors
+    const barkColor = getBarkColor(genome);
+    const barkMaterial = new THREE.MeshStandardMaterial({
+      color: barkColor,
+      roughness: 0.7 + genome.barkRoughness * 0.3,
+      metalness: 0.0,
+    });
+
+    // Step 4: Assemble the tree group
+    const treeGroup = new THREE.Group();
+
+    const branchMesh = new THREE.Mesh(branchGeometry, barkMaterial);
+    branchMesh.castShadow = true;
+    branchMesh.receiveShadow = true;
+    treeGroup.add(branchMesh);
+
+    // Step 5: Optionally add foliage at terminal vertices
+    const leafPositions: THREE.Vector3[] = skeleton.terminalIndices
+      .filter(idx => skeleton.vertices[idx].generation >= 1)
+      .map(idx => skeleton.vertices[idx].position.clone());
+
+    if (leafPositions.length > 0) {
+      const leafColor = getLeafColor(genome, season);
+      const foliageGeo = this.createFoliageFromPositions(
+        leafPositions,
+        genome.leafSize,
+        seed
+      );
+
+      if (foliageGeo.attributes.position.count > 0) {
+        const leafMaterial = new THREE.MeshStandardMaterial({
+          color: leafColor,
+          roughness: 0.6,
+          metalness: 0.0,
+          side: THREE.DoubleSide,
+        });
+        const foliageMesh = new THREE.Mesh(foliageGeo, leafMaterial);
+        foliageMesh.castShadow = true;
+        foliageMesh.receiveShadow = true;
+        treeGroup.add(foliageMesh);
+      }
+    }
+
+    return treeGroup;
+  }
+
+  /**
+   * Generate a SpaceColonizationTreeResult with detailed output for
+   * advanced use cases where the caller needs the raw skeleton data.
+   *
+   * @param config Configuration for the SC tree generation
+   * @returns Detailed result with geometry, materials, skeleton, and leaf positions
+   */
+  generateWithSpaceColonizationDetailed(
+    config: SpaceColonizationTreeConfig
+  ): SpaceColonizationTreeResult {
+    const { seed, season = 'summer' } = config;
+
+    const genome: TreeGenome = typeof config.species === 'string'
+      ? (TREE_SPECIES_PRESETS[config.species]?.genome ?? TREE_SPECIES_PRESETS.broadleaf.genome)
+      : config.species;
+
+    const scConfig = genomeToSpaceColonizationConfig(genome, seed);
+    const finalScConfig: Partial<SpaceColonizationConfig> = {
+      ...scConfig,
+      ...config.spaceColonizationOverrides,
+    };
+
+    const sc = new SpaceColonization(finalScConfig);
+    const skeleton = sc.generate();
+
+    const builder = new TreeSkeletonMeshBuilder();
+    const branchGeometry = builder.buildFromSkeleton(
+      skeleton,
+      config.meshConfigOverrides
+    );
+
+    const barkColor = getBarkColor(genome);
+    const barkMaterial = new THREE.MeshStandardMaterial({
+      color: barkColor,
+      roughness: 0.7 + genome.barkRoughness * 0.3,
+      metalness: 0.0,
+    });
+
+    const leafPositions = skeleton.terminalIndices
+      .filter(idx => skeleton.vertices[idx].generation >= 1)
+      .map(idx => skeleton.vertices[idx].position.clone());
+
+    const boundingBox = new THREE.Box3().setFromPoints(
+      skeleton.vertices.map(v => v.position)
+    );
+
+    return {
+      branchGeometry,
+      barkMaterial,
+      skeleton,
+      leafPositions,
+      boundingBox,
+    };
+  }
+
+  /**
+   * Create simple foliage geometry at given leaf positions.
+   * Uses small sphere approximations scaled by leafSize.
+   */
+  private createFoliageFromPositions(
+    positions: THREE.Vector3[],
+    leafSize: number,
+    seed: number
+  ): THREE.BufferGeometry {
+    if (positions.length === 0) {
+      return new THREE.BufferGeometry();
+    }
+
+    const rng = new SeededRandom(seed + 9999);
+    const geometries: THREE.BufferGeometry[] = [];
+    const leafRadius = Math.max(0.05, leafSize * 1.5);
+
+    for (const pos of positions) {
+      // Create a small sphere at each leaf position
+      const leafGeo = new THREE.SphereGeometry(leafRadius, 4, 3);
+      leafGeo.translate(
+        pos.x + rng.uniform(-leafRadius, leafRadius),
+        pos.y + rng.uniform(-leafRadius * 0.5, leafRadius * 0.5),
+        pos.z + rng.uniform(-leafRadius, leafRadius)
+      );
+      geometries.push(leafGeo);
+    }
+
+    if (geometries.length === 0) {
+      return new THREE.BufferGeometry();
+    }
+
+    return this.mergeGeometries(geometries);
   }
 
   /**

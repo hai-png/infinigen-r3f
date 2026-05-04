@@ -196,6 +196,20 @@ export {
   createRelation as createSpatialRelation,
 } from './SpatialRelationAlgebra';
 
+// Tag-Based Relation Algebra (semantic tag reasoning)
+// Note: These provide tag-based algebraic reasoning, complementing the spatial
+// SpatialRelationAlgebra. We use aliases to avoid naming conflicts with the
+// existing GeometryRelation from ./relations and TagSet from ../tags.
+export {
+  TagSet as AlgebraTagSet,
+  EMPTY_TAG_SET,
+  GeometryRelation as TagGeometryRelation,
+  TagImplicationGraph,
+  RelationEvaluator,
+  relationFromTags,
+  createStandardImplicationGraph,
+} from './tag-algebra';
+
 // Room-Specific Constraints
 export {
   objectsInRoom,

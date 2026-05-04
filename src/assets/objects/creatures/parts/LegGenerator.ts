@@ -1,32 +1,68 @@
 /**
- * LegGenerator - Procedural jointed legs with upper/lower segments, feet/claws
- * Supports different leg types: insect, mammal, bird, reptile
+ * LegGenerator - Procedural jointed legs with deep detail
+ *
+ * Supports:
+ * - Surface muscle bulge profiles (thigh/calf curves)
+ * - Joint objects at hip, knee, ankle positions for rigging
+ * - IKParams for foot targeting via the NURBS-to-armature pipeline
+ * - Leg types: quadruped front, quadruped back, bird, insect, reptile
+ * - Each leg returns proper Joint and IKParams data
+ *
+ * Phase 2: Returns Joint and IKParams data for the NURBS-to-armature pipeline.
  */
+
 import * as THREE from 'three';
+import { SeededRandom } from '../../../../core/util/MathUtils';
+import type { Joint } from './HeadDetailGenerator';
+import type { IKParams } from '../rigging/NURBSToArmature';
+
+// ── Types ────────────────────────────────────────────────────────────
 
 export type LegType = 'insect' | 'mammal' | 'bird' | 'reptile';
+export type LegSubType = 'quadruped_front' | 'quadruped_back' | 'bird' | 'insect';
+export type FootType = 'claw' | 'hoof' | 'webbed' | 'pad' | 'tarsus';
 
 export interface LegConfig {
   type: LegType;
+  subType?: LegSubType;
   count: number;
   size: number;
-  upperRatio: number;  // ratio of upper segment length to total
-  footType: 'claw' | 'hoof' | 'webbed' | 'pad' | 'tarsus';
-  jointAngle: number;  // angle at the knee/elbow joint
-  spread: number;      // how far apart the legs are
+  upperRatio: number;
+  footType: FootType;
+  jointAngle: number;
+  spread: number;
   color?: number;
+  muscleBulge?: number; // 0-1, how pronounced the muscle profiles are
 }
+
+export interface LegResult {
+  group: THREE.Group;
+  joints: Record<string, Joint>;
+  ikParams: IKParams[];
+}
+
+// ── Leg Generator ────────────────────────────────────────────────────
 
 export class LegGenerator {
   private seed: number;
+  private rng: SeededRandom;
 
   constructor(seed?: number) {
     this.seed = seed ?? 42;
+    this.rng = new SeededRandom(this.seed);
   }
 
   generate(type: string, count: number, size: number): THREE.Group;
   generate(config: Partial<LegConfig>): THREE.Group;
   generate(typeOrConfig: string | Partial<LegConfig>, count?: number, size?: number): THREE.Group {
+    const result = this.generateWithJoints(typeOrConfig, count, size);
+    return result.group;
+  }
+
+  /**
+   * Generate legs with full joint and IK data for rigging.
+   */
+  generateWithJoints(typeOrConfig: string | Partial<LegConfig>, count?: number, size?: number): LegResult {
     let config: LegConfig;
 
     if (typeof typeOrConfig === 'string') {
@@ -39,6 +75,7 @@ export class LegGenerator {
         jointAngle: 0.4,
         spread: 0.15,
         color: 0x8B4513,
+        muscleBulge: 0.5,
       };
     } else {
       config = {
@@ -50,12 +87,16 @@ export class LegGenerator {
         jointAngle: 0.4,
         spread: 0.15,
         color: 0x8B4513,
+        muscleBulge: 0.5,
         ...typeOrConfig,
       };
     }
 
     const legs = new THREE.Group();
     legs.name = 'legs';
+
+    const allJoints: Record<string, Joint> = {};
+    const allIKParams: IKParams[] = [];
 
     const legCount = config.count;
     for (let i = 0; i < legCount; i++) {
@@ -64,19 +105,41 @@ export class LegGenerator {
       const totalPairs = Math.ceil(legCount / 2);
       const zOffset = (pair / (totalPairs - 1 || 1) - 0.5) * config.size * 0.4;
 
-      const leg = this.createJointedLeg(config, side, zOffset);
-      leg.name = `leg_${i}`;
-      legs.add(leg);
+      // Determine leg sub-type
+      let subType: LegSubType;
+      if (config.type === 'bird') {
+        subType = 'bird';
+      } else if (config.type === 'insect') {
+        subType = 'insect';
+      } else if (config.type === 'mammal' && config.count >= 4) {
+        subType = pair === 0 ? 'quadruped_front' : 'quadruped_back';
+      } else {
+        subType = 'quadruped_front';
+      }
+
+      const legResult = this.createJointedLeg(config, side, zOffset, i, subType);
+      legResult.group.name = `leg_${i}`;
+      legs.add(legResult.group);
+
+      // Merge joints and IK params
+      Object.assign(allJoints, legResult.joints);
+      allIKParams.push(...legResult.ikParams);
     }
 
-    return legs;
+    return { group: legs, joints: allJoints, ikParams: allIKParams };
   }
 
-  private createJointedLeg(config: LegConfig, side: number, zOffset: number): THREE.Group {
+  private createJointedLeg(
+    config: LegConfig, side: number, zOffset: number, index: number, subType: LegSubType,
+  ): LegResult {
     const group = new THREE.Group();
     const s = config.size;
     const upperLen = s * config.upperRatio;
     const lowerLen = s * (1 - config.upperRatio);
+    const bulge = config.muscleBulge ?? 0.5;
+
+    const joints: Record<string, Joint> = {};
+    const ikParams: IKParams[] = [];
 
     const legMat = new THREE.MeshStandardMaterial({
       color: config.color ?? 0x8B4513,
@@ -86,88 +149,106 @@ export class LegGenerator {
     // Position the leg root
     group.position.set(side * s * config.spread, 0, zOffset);
 
+    const sideName = side === -1 ? 'L' : 'R';
+    const legPrefix = `leg_${index}`;
+
+    // Hip joint at t=0
+    joints[`${legPrefix}_hip`] = {
+      name: `${legPrefix}_hip`,
+      position: new THREE.Vector3(side * s * config.spread, 0, zOffset),
+      rotation: new THREE.Euler(0, 0, side * 0.15),
+      bounds: {
+        min: new THREE.Vector3(-0.5, -0.3, -0.5),
+        max: new THREE.Vector3(0.5, 0.8, 0.5),
+      },
+    };
+
     switch (config.type) {
       case 'insect':
-        this.buildInsectLeg(group, s, upperLen, lowerLen, side, legMat, config);
+        this.buildInsectLeg(group, s, upperLen, lowerLen, side, legMat, config, index);
         break;
       case 'mammal':
-        this.buildMammalLeg(group, s, upperLen, lowerLen, side, legMat, config);
+        this.buildMammalLeg(group, s, upperLen, lowerLen, side, legMat, config, index, subType, bulge, joints);
         break;
       case 'bird':
-        this.buildBirdLeg(group, s, upperLen, lowerLen, side, legMat, config);
+        this.buildBirdLeg(group, s, upperLen, lowerLen, side, legMat, config, index, joints);
         break;
       case 'reptile':
-        this.buildReptileLeg(group, s, upperLen, lowerLen, side, legMat, config);
+        this.buildReptileLeg(group, s, upperLen, lowerLen, side, legMat, config, index);
         break;
       default:
-        this.buildMammalLeg(group, s, upperLen, lowerLen, side, legMat, config);
+        this.buildMammalLeg(group, s, upperLen, lowerLen, side, legMat, config, index, subType, bulge, joints);
     }
 
-    return group;
+    // Knee joint at t=0.5
+    joints[`${legPrefix}_knee`] = {
+      name: `${legPrefix}_knee`,
+      position: new THREE.Vector3(side * s * 0.03, -upperLen, 0),
+      rotation: new THREE.Euler(0, 0, side * -0.1),
+      bounds: {
+        min: new THREE.Vector3(-0.3, -1.0, -0.3),
+        max: new THREE.Vector3(0.3, 0.3, 0.3),
+      },
+    };
+
+    // Ankle joint at foot position
+    joints[`${legPrefix}_ankle`] = {
+      name: `${legPrefix}_ankle`,
+      position: new THREE.Vector3(side * s * 0.05, -upperLen - lowerLen, s * 0.05),
+      rotation: new THREE.Euler(0, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(-0.3, -0.3, -0.3),
+        max: new THREE.Vector3(0.3, 0.3, 0.3),
+      },
+    };
+
+    // IK for foot targeting
+    ikParams.push({
+      targetJoint: `${legPrefix}_ankle`,
+      chainLength: 3, // hip → knee → ankle
+    });
+
+    return { group, joints, ikParams };
   }
 
   /**
-   * Insect leg: coxa + femur + tibia + tarsus segments, splayed outward
-   */
-  private buildInsectLeg(
-    group: THREE.Group, s: number, upperLen: number, lowerLen: number,
-    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig
-  ): void {
-    const tarsusLen = s * 0.15;
-
-    // Coxa (hip joint) - short, thick
-    const coxaGeo = new THREE.CylinderGeometry(s * 0.03, s * 0.025, s * 0.06, 6);
-    const coxa = new THREE.Mesh(coxaGeo, mat);
-    coxa.position.set(side * s * 0.02, -s * 0.03, 0);
-    coxa.rotation.z = side * 0.5;
-    coxa.rotation.x = side * 0.3;
-    coxa.name = 'coxa';
-    group.add(coxa);
-
-    // Femur (upper leg) - thicker
-    const femurGeo = new THREE.CylinderGeometry(s * 0.02, s * 0.025, upperLen, 6);
-    const femur = new THREE.Mesh(femurGeo, mat);
-    femur.position.set(side * s * 0.06, -s * 0.06 - upperLen * 0.4, 0);
-    femur.rotation.z = side * 1.0; // Splayed outward
-    femur.name = 'femur';
-    group.add(femur);
-
-    // Tibia (lower leg) - thinner
-    const tibiaGeo = new THREE.CylinderGeometry(s * 0.01, s * 0.018, lowerLen, 6);
-    const tibia = new THREE.Mesh(tibiaGeo, mat);
-    tibia.position.set(side * s * 0.06, -s * 0.06 - upperLen * 0.8 - lowerLen * 0.4, 0);
-    tibia.rotation.z = side * -0.3; // Back inward
-    tibia.name = 'tibia';
-    group.add(tibia);
-
-    // Tarsus (foot) with claws
-    this.buildTarsus(group, s, tarsusLen, side, mat, config);
-  }
-
-  /**
-   * Mammal leg: upper + lower + paw/hoof
+   * Mammal leg with muscle bulge profiles
    */
   private buildMammalLeg(
     group: THREE.Group, s: number, upperLen: number, lowerLen: number,
-    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig
+    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig,
+    index: number, subType: LegSubType, bulge: number,
+    joints: Record<string, Joint>,
   ): void {
-    // Upper leg (femur/humerus)
-    const upperGeo = new THREE.CylinderGeometry(s * 0.04, s * 0.05, upperLen, 8);
+    // Upper leg with muscle bulge
+    const upperGeo = this.createMuscleProfileGeometry(
+      s * 0.04,   // top radius (hip)
+      s * 0.05 * (1 + bulge * 0.3), // mid bulge (thigh)
+      s * 0.04,   // bottom radius (knee)
+      upperLen,
+      8,
+    );
     const upper = new THREE.Mesh(upperGeo, mat);
     upper.position.set(0, -upperLen * 0.5, 0);
-    upper.rotation.z = side * 0.15; // Slight outward angle
+    upper.rotation.z = side * 0.15;
     upper.name = 'upperLeg';
     group.add(upper);
 
-    // Joint (knee/elbow) sphere
+    // Knee joint sphere
     const jointGeo = new THREE.SphereGeometry(s * 0.05, 8, 8);
     const joint = new THREE.Mesh(jointGeo, mat);
     joint.position.set(side * s * 0.03, -upperLen, 0);
     joint.name = 'knee';
     group.add(joint);
 
-    // Lower leg (tibia/radius) - slight forward angle
-    const lowerGeo = new THREE.CylinderGeometry(s * 0.03, s * 0.04, lowerLen, 8);
+    // Lower leg with calf muscle
+    const lowerGeo = this.createMuscleProfileGeometry(
+      s * 0.03 * (1 + bulge * 0.15), // top (below knee)
+      s * 0.035 * (1 + bulge * 0.1),  // mid (calf)
+      s * 0.025,                       // bottom (ankle)
+      lowerLen,
+      8,
+    );
     const lower = new THREE.Mesh(lowerGeo, mat);
     lower.position.set(side * s * 0.05, -upperLen - lowerLen * 0.5, s * 0.03);
     lower.rotation.z = side * -0.1;
@@ -177,14 +258,100 @@ export class LegGenerator {
 
     // Foot
     this.buildFoot(group, s, side, -upperLen - lowerLen, mat, config);
+
+    // Quadruped-specific adjustments
+    if (subType === 'quadruped_back') {
+      // Hind legs are thicker and more angled
+      upper.scale.set(1.15, 1.0, 1.15);
+      lower.rotation.z = side * -0.15;
+    }
   }
 
   /**
-   * Bird leg: thin, scaly, with toes
+   * Create a leg segment geometry with muscle bulge profile
+   * Uses a lathe-like approach to create a profile that bulges at the midpoint
+   */
+  private createMuscleProfileGeometry(
+    topRadius: number,
+    midBulgeRadius: number,
+    bottomRadius: number,
+    length: number,
+    radialSegments: number = 8,
+  ): THREE.BufferGeometry {
+    // Create profile points for a lathe geometry
+    const profilePoints: THREE.Vector2[] = [];
+    const profileSteps = 8;
+
+    for (let i = 0; i <= profileSteps; i++) {
+      const t = i / profileSteps;
+      const y = -length * 0.5 + t * length;
+
+      // Interpolate radius: top → mid → bottom with smooth bulge
+      let radius: number;
+      if (t < 0.5) {
+        // Top to mid: smooth interpolation with bulge
+        const st = t * 2; // 0 to 1
+        const bulgeFactor = Math.sin(st * Math.PI);
+        radius = THREE.MathUtils.lerp(topRadius, midBulgeRadius, st) +
+                 (midBulgeRadius - topRadius) * bulgeFactor * 0.5;
+      } else {
+        // Mid to bottom: taper
+        const st = (t - 0.5) * 2; // 0 to 1
+        radius = THREE.MathUtils.lerp(midBulgeRadius, bottomRadius, st * st);
+      }
+
+      radius = Math.max(0.001, radius);
+      profilePoints.push(new THREE.Vector2(radius, y));
+    }
+
+    return new THREE.LatheGeometry(profilePoints, radialSegments);
+  }
+
+  /**
+   * Insect leg
+   */
+  private buildInsectLeg(
+    group: THREE.Group, s: number, upperLen: number, lowerLen: number,
+    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig, index: number,
+  ): void {
+    const tarsusLen = s * 0.15;
+
+    // Coxa (hip joint)
+    const coxaGeo = new THREE.CylinderGeometry(s * 0.03, s * 0.025, s * 0.06, 6);
+    const coxa = new THREE.Mesh(coxaGeo, mat);
+    coxa.position.set(side * s * 0.02, -s * 0.03, 0);
+    coxa.rotation.z = side * 0.5;
+    coxa.rotation.x = side * 0.3;
+    coxa.name = 'coxa';
+    group.add(coxa);
+
+    // Femur
+    const femurGeo = new THREE.CylinderGeometry(s * 0.02, s * 0.025, upperLen, 6);
+    const femur = new THREE.Mesh(femurGeo, mat);
+    femur.position.set(side * s * 0.06, -s * 0.06 - upperLen * 0.4, 0);
+    femur.rotation.z = side * 1.0;
+    femur.name = 'femur';
+    group.add(femur);
+
+    // Tibia
+    const tibiaGeo = new THREE.CylinderGeometry(s * 0.01, s * 0.018, lowerLen, 6);
+    const tibia = new THREE.Mesh(tibiaGeo, mat);
+    tibia.position.set(side * s * 0.06, -s * 0.06 - upperLen * 0.8 - lowerLen * 0.4, 0);
+    tibia.rotation.z = side * -0.3;
+    tibia.name = 'tibia';
+    group.add(tibia);
+
+    // Tarsus
+    this.buildTarsus(group, s, tarsusLen, side, mat, config);
+  }
+
+  /**
+   * Bird leg
    */
   private buildBirdLeg(
     group: THREE.Group, s: number, upperLen: number, lowerLen: number,
-    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig
+    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig,
+    index: number, joints: Record<string, Joint>,
   ): void {
     const legMat = new THREE.MeshStandardMaterial({ color: 0xcc8833, roughness: 0.5 });
 
@@ -242,14 +409,25 @@ export class LegGenerator {
       claw.name = `claw_${t}`;
       group.add(claw);
     }
+
+    // Bird-specific ankle joint
+    joints[`leg_${index}_ankle`] = {
+      name: `leg_${index}_ankle`,
+      position: new THREE.Vector3(side * s * 0.02, -upperLen * 0.7 - lowerLen * 0.9, s * 0.08),
+      rotation: new THREE.Euler(Math.PI / 2, 0, 0),
+      bounds: {
+        min: new THREE.Vector3(-0.2, -0.3, -0.2),
+        max: new THREE.Vector3(0.2, 0.3, 0.2),
+      },
+    };
   }
 
   /**
-   * Reptile leg: splayed, with claws
+   * Reptile leg
    */
   private buildReptileLeg(
     group: THREE.Group, s: number, upperLen: number, lowerLen: number,
-    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig
+    side: number, mat: THREE.MeshStandardMaterial, config: LegConfig, index: number,
   ): void {
     const scaleMat = new THREE.MeshStandardMaterial({
       color: config.color ?? 0x4a6a3a, roughness: 0.6,
@@ -259,7 +437,7 @@ export class LegGenerator {
     const upperGeo = new THREE.CylinderGeometry(s * 0.03, s * 0.04, upperLen, 6);
     const upper = new THREE.Mesh(upperGeo, scaleMat);
     upper.position.set(side * s * 0.04, -upperLen * 0.4, 0);
-    upper.rotation.z = side * 0.7; // Strong outward splay
+    upper.rotation.z = side * 0.7;
     upper.name = 'upperLeg';
     group.add(upper);
 
@@ -338,7 +516,6 @@ export class LegGenerator {
         break;
       }
       case 'webbed': {
-        // Webbed foot (duck/frog)
         const webGeo = new THREE.CircleGeometry(s * 0.06, 8);
         const webMat = new THREE.MeshStandardMaterial({
           color: 0xcc8833, roughness: 0.5, side: THREE.DoubleSide,
@@ -351,7 +528,6 @@ export class LegGenerator {
         break;
       }
       case 'pad': {
-        // Paw pad
         const padGeo = new THREE.SphereGeometry(s * 0.04, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
         const padMat = new THREE.MeshStandardMaterial({ color: 0x2a1a1a, roughness: 0.9 });
         const pad = new THREE.Mesh(padGeo, padMat);

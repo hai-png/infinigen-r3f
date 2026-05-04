@@ -13,6 +13,8 @@
 import * as THREE from 'three';
 import type { NodeInstance, NodeLink, NodeDefinition } from '../core/types';
 import { SocketType, areSocketsCompatible, getDefaultValueForType } from '../core/types';
+import * as CoreExecutors from './CoreNodeExecutors';
+import * as ExtExecutors from './ExtendedNodeExecutors';
 
 // ============================================================================
 // Types
@@ -474,6 +476,174 @@ export class NodeEvaluator {
     }
     if (nodeType === 'ShaderNodeRGB' || nodeType === 'rgb') {
       return this.executeRGB(inputs, node.settings);
+    }
+
+    // =========================================================================
+    // Core Geometry Node Executors (from CoreNodeExecutors.ts)
+    // =========================================================================
+
+    // Geometry Distribution
+    if (nodeType === 'DistributePointsOnFaces' || nodeType === 'DistributePointsOnFacesNode' || nodeType === 'distribute_points_on_faces') {
+      return CoreExecutors.executeDistributePointsOnFaces(inputs);
+    }
+    if (nodeType === 'InstanceOnPoints' || nodeType === 'InstanceOnPointsNode' || nodeType === 'instance_on_points') {
+      return CoreExecutors.executeInstanceOnPoints(inputs);
+    }
+    if (nodeType === 'RealizeInstances' || nodeType === 'RealizeInstancesNode' || nodeType === 'realize_instances') {
+      return CoreExecutors.executeRealizeInstances(inputs);
+    }
+
+    // Geometry Sampling
+    if (nodeType === 'Proximity' || nodeType === 'ProximityNode' || nodeType === 'GeometryNodeProximity') {
+      return CoreExecutors.executeProximity(inputs);
+    }
+    if (nodeType === 'Raycast' || nodeType === 'RaycastNode' || nodeType === 'GeometryNodeRaycast') {
+      return CoreExecutors.executeRaycast(inputs);
+    }
+    if (nodeType === 'SampleNearestSurface' || nodeType === 'SampleNearestSurfaceNode' || nodeType === 'sample_nearest_surface') {
+      return CoreExecutors.executeSampleNearestSurface(inputs);
+    }
+
+    // Geometry Operations
+    if (nodeType === 'ConvexHull' || nodeType === 'ConvexHullNode' || nodeType === 'convex_hull') {
+      return CoreExecutors.executeConvexHull(inputs);
+    }
+    if (nodeType === 'MergeByDistance' || nodeType === 'MergeByDistanceNode' || nodeType === 'merge_by_distance') {
+      return CoreExecutors.executeMergeByDistance(inputs);
+    }
+    if (nodeType === 'SmoothByAngle' || nodeType === 'smooth_by_angle') {
+      return CoreExecutors.executeSmoothByAngle(inputs);
+    }
+    if (nodeType === 'EdgeSplit' || nodeType === 'edge_split') {
+      return CoreExecutors.executeEdgeSplit(inputs);
+    }
+
+    // Curve Operations
+    if (nodeType === 'CurveToMesh' || nodeType === 'CurveToMeshNode' || nodeType === 'curve_to_mesh') {
+      return CoreExecutors.executeCurveToMesh(inputs);
+    }
+    if (nodeType === 'ResampleCurve' || nodeType === 'ResampleCurveNode' || nodeType === 'curve_resample' || nodeType === 'resample_curve') {
+      return CoreExecutors.executeCurveResample(inputs);
+    }
+    if (nodeType === 'FillCurve' || nodeType === 'FillCurveNode' || nodeType === 'fill_curve') {
+      return CoreExecutors.executeFillCurve(inputs);
+    }
+    if (nodeType === 'TrimCurve' || nodeType === 'TrimCurveNode' || nodeType === 'trim_curve') {
+      return CoreExecutors.executeTrimCurve(inputs);
+    }
+
+    // Mesh Analysis
+    if (nodeType === 'MeshBoolean' || nodeType === 'Boolean' || nodeType === 'BooleanUnionNode' || nodeType === 'BooleanIntersectNode' || nodeType === 'BooleanDifferenceNode' || nodeType === 'mesh_boolean') {
+      return CoreExecutors.executeMeshBoolean(inputs);
+    }
+    if (nodeType === 'MeshToCurve' || nodeType === 'MeshToCurveNode' || nodeType === 'mesh_to_curve') {
+      return CoreExecutors.executeMeshToCurve(inputs);
+    }
+    if (nodeType === 'FaceSetBoundaries' || nodeType === 'face_set_boundaries') {
+      return CoreExecutors.executeFaceSetBoundaries(inputs);
+    }
+
+    // Attribute
+    if (nodeType === 'StoreNamedAttribute' || nodeType === 'StoreNamedAttributeNode' || nodeType === 'store_named_attribute') {
+      return CoreExecutors.executeStoreNamedAttribute(inputs);
+    }
+    if (nodeType === 'NamedAttribute' || nodeType === 'NamedAttributeNode' || nodeType === 'named_attribute') {
+      return CoreExecutors.executeNamedAttribute(inputs);
+    }
+    if (nodeType === 'AttributeStatistic' || nodeType === 'AttributeStatisticNode' || nodeType === 'attribute_statistic') {
+      return CoreExecutors.executeAttributeStatistic(inputs);
+    }
+
+    // =========================================================================
+    // Extended Node Executors (from ExtendedNodeExecutors.ts)
+    // =========================================================================
+
+    // Curve Nodes
+    if (nodeType === 'curve_line' || nodeType === 'GeometryNodeCurveLine') {
+      return ExtExecutors.executeCurveLine(inputs);
+    }
+    if (nodeType === 'quadratic_bezier' || nodeType === 'GeometryNodeQuadraticBezier') {
+      return ExtExecutors.executeQuadraticBezier(inputs);
+    }
+    if (nodeType === 'bezier_segment' || nodeType === 'GeometryNodeBezierSegment') {
+      return ExtExecutors.executeBezierSegment(inputs);
+    }
+    if (nodeType === 'curve_length' || nodeType === 'GeometryNodeCurveLength') {
+      return ExtExecutors.executeCurveLength(inputs);
+    }
+    if (nodeType === 'sample_curve' || nodeType === 'GeometryNodeSampleCurve') {
+      return ExtExecutors.executeSampleCurve(inputs);
+    }
+
+    // Attribute Nodes
+    if (nodeType === 'AttributeTransfer' || nodeType === 'GeometryNodeAttributeTransfer' || nodeType === 'attribute_transfer') {
+      return ExtExecutors.executeAttributeTransfer(inputs);
+    }
+
+    // Input/Output Nodes
+    if (nodeType === 'CollectionInfo' || nodeType === 'GeometryNodeCollectionInfo' || nodeType === 'collection_info') {
+      return ExtExecutors.executeCollectionInfo(inputs);
+    }
+    if (nodeType === 'SelfObject' || nodeType === 'GeometryNodeSelfObject' || nodeType === 'self_object') {
+      return ExtExecutors.executeSelfObject(inputs);
+    }
+    if (nodeType === 'input_vector' || nodeType === 'GeometryNodeInputVector' || nodeType === 'NodeInputVector') {
+      return ExtExecutors.executeInputVector(inputs, node.settings);
+    }
+    if (nodeType === 'input_color' || nodeType === 'GeometryNodeInputColor' || nodeType === 'NodeInputColor') {
+      return ExtExecutors.executeInputColor(inputs, node.settings);
+    }
+    if (nodeType === 'input_int' || nodeType === 'GeometryNodeInputInt' || nodeType === 'NodeInputInt') {
+      return ExtExecutors.executeInputInt(inputs, node.settings);
+    }
+    if (nodeType === 'input_float' || nodeType === 'GeometryNodeInputFloat' || nodeType === 'NodeInputFloat') {
+      return ExtExecutors.executeInputFloat(inputs, node.settings);
+    }
+    if (nodeType === 'input_bool' || nodeType === 'GeometryNodeInputBool' || nodeType === 'NodeInputBool') {
+      return ExtExecutors.executeInputBool(inputs, node.settings);
+    }
+
+    // Utility Nodes
+    if (nodeType === 'clamp' || nodeType === 'ShaderNodeClamp' || nodeType === 'GeometryNodeClamp') {
+      return ExtExecutors.executeClamp(inputs);
+    }
+    if (nodeType === 'map_range' || nodeType === 'ShaderNodeMapRange' || nodeType === 'GeometryNodeMapRange') {
+      return ExtExecutors.executeMapRange(inputs);
+    }
+    if (nodeType === 'float_to_int' || nodeType === 'GeometryNodeFloatToInt' || nodeType === 'ShaderNodeFloatToInt') {
+      return ExtExecutors.executeFloatToInt(inputs);
+    }
+    if (nodeType === 'rotate_euler' || nodeType === 'GeometryNodeRotateEuler' || nodeType === 'RotateEuler') {
+      return ExtExecutors.executeRotateEuler(inputs);
+    }
+    if (nodeType === 'rotate_vector' || nodeType === 'GeometryNodeRotateVector' || nodeType === 'RotateVector') {
+      return ExtExecutors.executeRotateVector(inputs);
+    }
+    if (nodeType === 'align_euler_to_vector' || nodeType === 'GeometryNodeAlignEulerToVector' || nodeType === 'AlignEulerToVector') {
+      return ExtExecutors.executeAlignEulerToVector(inputs);
+    }
+    if (nodeType === 'switch' || nodeType === 'GeometryNodeSwitch' || nodeType === 'ShaderNodeSwitch') {
+      return ExtExecutors.executeSwitch(inputs);
+    }
+    if (nodeType === 'random_value' || nodeType === 'GeometryNodeRandomValue' || nodeType === 'FunctionNodeRandomValue') {
+      return ExtExecutors.executeRandomValue(inputs);
+    }
+
+    // Geometry Utility Nodes
+    if (nodeType === 'bounding_box' || nodeType === 'GeometryNodeBoundBox' || nodeType === 'GeometryNodeBoundingBox') {
+      return ExtExecutors.executeBoundingBox(inputs);
+    }
+    if (nodeType === 'geometry_proximity' || nodeType === 'GeometryNodeProximity') {
+      return ExtExecutors.executeGeometryProximity(inputs);
+    }
+    if (nodeType === 'GeometryNodeRaycast') {
+      return ExtExecutors.executeRaycastEnhanced(inputs);
+    }
+    if (nodeType === 'GeometryNodeSampleNearestSurface') {
+      return ExtExecutors.executeSampleNearestSurfaceEnhanced(inputs);
+    }
+    if (nodeType === 'mesh_to_points' || nodeType === 'GeometryNodeMeshToPoints' || nodeType === 'MeshToPointsNode') {
+      return ExtExecutors.executeMeshToPoints(inputs);
     }
 
     // Output nodes - pass through

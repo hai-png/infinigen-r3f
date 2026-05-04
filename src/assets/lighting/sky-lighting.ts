@@ -1,11 +1,19 @@
 /**
  * Sky Lighting - Sky and atmospheric lighting setup
- * 
+ *
  * Provides sky lighting configuration and setup utilities
  * for outdoor scene rendering.
+ *
+ * The primary sky solution is now the Nishita-backed {@link SkyLightingSystem}
+ * (re-exported below). The legacy `setupSkyLighting` function remains for
+ * backward compatibility.
  */
 
 import * as THREE from 'three';
+
+// Re-export the Nishita-integrated SkyLightingSystem as the default sky solution
+export { SkyLightingSystem } from './SkyLightingSystem';
+export type { SkyLightingSystemConfig } from './SkyLightingSystem';
 
 export interface SkyConfig {
   turbidity: number;
@@ -81,3 +89,8 @@ export function setupSkyLighting(
 
   return { sunLight, ambientLight };
 }
+
+/**
+ * @deprecated Use {@link SkyLightingSystem} instead for physically-based sky rendering.
+ */
+export const LegacySkyLighting = { setupSkyLighting, DEFAULT_SKY_CONFIG };
