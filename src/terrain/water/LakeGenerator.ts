@@ -8,6 +8,13 @@
  * - Reflection/refraction setup
  * 
  * Ported from: infinigen/terrain/water/lake_generator.py
+ *
+ * @deprecated Use `LakeGeneratorV2` from `./LakeGeneratorV2` instead, which provides:
+ *   - Depression detection via watershed / pit-filling algorithm
+ *   - Automatic water-level determination per depression
+ *   - Depth-based attenuationColor for path-traced volumetric tinting
+ *   - Path-traced material support with transmission
+ *   This V1 generator will be removed in a future release.
  */
 
 import * as THREE from 'three';
@@ -86,6 +93,9 @@ export interface PlungePool {
   erosion: Float32Array;
 }
 
+/**
+ * @deprecated Use `import { LakeGeneratorV2 } from './LakeGeneratorV2'` instead.
+ */
 export class LakeGenerator {
   private config: LakeConfig;
   private noise: NoiseUtils;

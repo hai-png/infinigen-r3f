@@ -1,25 +1,13 @@
-import * as THREE from 'three';
+/**
+ * @deprecated This module is deprecated. Import from '../ObjectRegistry' instead.
+ *
+ * The ObjectRegistry and RegistrableObject have been consolidated into the canonical
+ * ObjectRegistry module at src/assets/objects/ObjectRegistry.ts.
+ *
+ * - ObjectRegistry  → import { ObjectRegistry } from '../ObjectRegistry'
+ * - RegistrableObject → import { RegistrableObject } from '../ObjectRegistry'
+ *   (or use ClassObjectRegistry for class-constructor registration)
+ */
 
-export interface RegistrableObject {
-  new(...args: any[]): THREE.Object3D;
-  type: string;
-}
-
-export class ObjectRegistry {
-  private static registry: Map<string, RegistrableObject> = new Map();
-
-  static register(obj: RegistrableObject) {
-    if (this.registry.has(obj.type)) {
-      throw new Error(`Object type ${obj.type} is already registered`);
-    }
-    this.registry.set(obj.type, obj);
-  }
-
-  static get(type: string): RegistrableObject | undefined {
-    return this.registry.get(type);
-  }
-
-  static getAll(): RegistrableObject[] {
-    return Array.from(this.registry.values());
-  }
-}
+export { ObjectRegistry, ClassObjectRegistry } from '../ObjectRegistry';
+export type { RegistrableObject } from '../ObjectRegistry';

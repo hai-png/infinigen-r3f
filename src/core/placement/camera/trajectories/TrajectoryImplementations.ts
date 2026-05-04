@@ -570,13 +570,10 @@ export function createTrajectory(
   }
 }
 
-export default {
-  OrbitShot,
-  PanTilt,
-  DollyShot,
-  TrackingShot,
-  CraneShot,
-  HandheldSim,
-  GoToProposals,
-  createTrajectory,
-};
+/**
+ * Default export – OrbitShot, the primary trajectory implementation.
+ *
+ * Previously this file exported a bag-of-symbols object as default.  All
+ * symbols remain available as named exports.
+ */
+export default OrbitShot;

@@ -111,8 +111,9 @@ export async function createFogVolume(config: Partial<FogVolumeConfig> = {}): Pr
       opacity: fullConfig.opacity ?? 0.15,
       transparent: true,
     });
-  } catch {
-    // Fallback: use semi-transparent MeshStandardMaterial
+  } catch (err) {
+    // Silently fall back - FogVolumeMaterial not available, using semi-transparent MeshStandardMaterial
+    if (process.env.NODE_ENV === 'development') console.debug('[FogVolumeSystem] FogVolumeMaterial fallback:', err);
     material = new THREE.MeshStandardMaterial({
       color: fullConfig.color,
       transparent: true,

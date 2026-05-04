@@ -774,4 +774,9 @@ export class VerletClothSimulation {
 // Exports
 // ============================================================================
 
-export default VerletClothSimulation;
+/**
+ * Filename-matching alias for backward compat.
+ * `import VerletCloth from './VerletCloth'` and `import { VerletCloth } from './VerletCloth'` both work.
+ */
+export { VerletClothSimulation as VerletCloth };
+export default VerletCloth;

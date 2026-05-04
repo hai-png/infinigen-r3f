@@ -19,6 +19,7 @@ import {
   AssetEvent,
   AssetEventType
 } from './AssetTypes';
+import { Logger } from '@/core/util/Logger';
 
 /**
  * Main asset library class for managing all scene assets
@@ -92,7 +93,7 @@ export class AssetLibrary {
     tags: string[] = []
   ): void {
     if (this.generators.has(id)) {
-      console.warn(`Generator ${id} already registered, overwriting`);
+      Logger.warn('AssetLibrary', `Generator ${id} already registered, overwriting`);
     }
 
     this.generators.set(id, generator as IProceduralGenerator<any>);
@@ -121,7 +122,7 @@ export class AssetLibrary {
   public getGenerator<TParams>(id: string): IProceduralGenerator<TParams> | null {
     const generator = this.generators.get(id);
     if (!generator) {
-      console.warn(`Generator ${id} not found`);
+      Logger.warn('AssetLibrary', `Generator ${id} not found`);
       return null;
     }
     return generator as IProceduralGenerator<TParams>;
@@ -167,7 +168,7 @@ export class AssetLibrary {
     tags: string[] = []
   ): void {
     if (this.materials.has(id)) {
-      console.warn(`Material ${id} already registered, overwriting`);
+      Logger.warn('AssetLibrary', `Material ${id} already registered, overwriting`);
     }
 
     this.materials.set(id, material);
@@ -221,7 +222,7 @@ export class AssetLibrary {
    */
   public registerBiome(id: string, biome: IBiome): void {
     if (this.biomes.has(id)) {
-      console.warn(`Biome ${id} already registered, overwriting`);
+      Logger.warn('AssetLibrary', `Biome ${id} already registered, overwriting`);
     }
 
     this.biomes.set(id, biome);
@@ -464,15 +465,15 @@ export class AssetLibrary {
    */
   public printStats(): void {
     const stats = this.getStats();
-    console.log('=== Asset Library Statistics ===');
-    console.log(`Generators: ${stats.totalGenerators}`);
-    console.log(`Materials: ${stats.totalMaterials}`);
-    console.log(`Biomes: ${stats.totalBiomes}`);
-    console.log(`Loaded Assets: ${stats.loadedAssets}`);
-    console.log(`Cache Hits: ${stats.cacheHits}`);
-    console.log(`Cache Misses: ${stats.cacheMisses}`);
-    console.log(`Memory Usage: ${(stats.memoryUsage / 1024 / 1024).toFixed(2)} MB`);
-    console.log('================================');
+    Logger.debug('AssetLibrary', '=== Asset Library Statistics ===');
+    Logger.debug('AssetLibrary', `Generators: ${stats.totalGenerators}`);
+    Logger.debug('AssetLibrary', `Materials: ${stats.totalMaterials}`);
+    Logger.debug('AssetLibrary', `Biomes: ${stats.totalBiomes}`);
+    Logger.debug('AssetLibrary', `Loaded Assets: ${stats.loadedAssets}`);
+    Logger.debug('AssetLibrary', `Cache Hits: ${stats.cacheHits}`);
+    Logger.debug('AssetLibrary', `Cache Misses: ${stats.cacheMisses}`);
+    Logger.debug('AssetLibrary', `Memory Usage: ${(stats.memoryUsage / 1024 / 1024).toFixed(2)} MB`);
+    Logger.debug('AssetLibrary', '================================');
   }
 
   // ============================================================================

@@ -2,6 +2,10 @@
  * Procedural Window Generator for Infinigen R3F
  * Generates various window types: casement, doubleHung, awning, picture, sliding, bay
  * FIX: Each window type now produces distinct geometry
+ *
+ * @deprecated Use `articulated/WindowGenerator` instead, which extends ArticulatedObjectBase
+ *           and provides joint metadata + MJCF/URDF export. This architectural version
+ *           will be removed in a future release.
  */
 
 import {
@@ -26,6 +30,10 @@ export interface WindowParams extends BaseGeneratorConfig {
   sillDepth: number;
 }
 
+/**
+ * @deprecated Use `import { WindowGenerator } from '../articulated/WindowGenerator'` instead.
+ *           The articulated version includes physics joint definitions and MJCF export.
+ */
 export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
   public getDefaultConfig(): WindowParams {
     return {

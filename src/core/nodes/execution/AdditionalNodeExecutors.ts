@@ -6,13 +6,14 @@
  * had no executor (pass-through only). These are among the most-used remaining
  * node types in Infinigen's procedural generation pipeline.
  *
- * Each executor is a standalone function that takes `inputs: Record<string, any>`
+ * Each executor is a standalone function that takes `inputs: NodeInputs`
  * and returns a structured output object matching the socket names of the node.
  *
  * Uses seeded random for all randomness — no Math.random().
  */
 
 import * as THREE from 'three';
+import type { NodeInputs, NodeOutput, Vector3Like, ColorLike, NodeExecutorFunction } from './ExecutorTypes';
 
 // ============================================================================
 // Seeded Random Utility (matches CoreNodeExecutors.ts / ExtendedNodeExecutors.ts)
@@ -30,11 +31,12 @@ function seededRandom(seed: number): () => number {
 // Helper: normalize a vector-like input to {x, y, z}
 // ============================================================================
 
-function normalizeVec(v: any): { x: number; y: number; z: number } {
+function normalizeVec(v: unknown): Vector3Like {
   if (!v) return { x: 0, y: 0, z: 0 };
   if (v instanceof THREE.Vector3) return { x: v.x, y: v.y, z: v.z };
-  if (Array.isArray(v)) return { x: v[0] ?? 0, y: v[1] ?? 0, z: v[2] ?? 0 };
-  return { x: v.x ?? 0, y: v.y ?? 0, z: v.z ?? 0 };
+  if (Array.isArray(v)) return { x: (v as number[])[0] ?? 0, y: (v as number[])[1] ?? 0, z: (v as number[])[2] ?? 0 };
+  const obj = v as Record<string, unknown>;
+  return { x: (obj.x as number) ?? 0, y: (obj.y as number) ?? 0, z: (obj.z as number) ?? 0 };
 }
 
 // ============================================================================
@@ -58,11 +60,11 @@ function hashFloat(x: number, y: number, z: number, seed: number): number {
  * Inputs: Geometry, From (origin mode: generated/object/camera/window/normal/reflection)
  * Outputs: Vector (coordinate as 3D vector)
  */
-export function executeTextureCoordinate(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const from = inputs.From ?? inputs.from ?? inputs.mode ?? 'generated';
-  const position = inputs.Position ?? inputs.position ?? { x: 0, y: 0, z: 0 };
-  const normal = inputs.Normal ?? inputs.normal ?? { x: 0, y: 1, z: 0 };
+export function executeTextureCoordinate(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const from = (inputs.From ?? inputs.from ?? inputs.mode ?? 'generated') as string;
+  const position = normalizeVec(inputs.Position ?? inputs.position ?? { x: 0, y: 0, z: 0 });
+  const normal = normalizeVec(inputs.Normal ?? inputs.normal ?? { x: 0, y: 1, z: 0 });
 
   const pos = normalizeVec(position);
   const nrm = normalizeVec(normal);
@@ -118,12 +120,12 @@ export function executeTextureCoordinate(inputs: Record<string, any>): any {
  * Inputs: Vector, Location, Rotation, Scale, Min, Max, UseClamp
  * Outputs: Vector
  */
-export function executeMapping(inputs: Record<string, any>): any {
+export function executeMapping(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
   const location = normalizeVec(inputs.Location ?? inputs.location ?? inputs.Translation ?? inputs.translation ?? { x: 0, y: 0, z: 0 });
   const rotation = normalizeVec(inputs.Rotation ?? inputs.rotation ?? inputs.Euler ?? inputs.euler ?? { x: 0, y: 0, z: 0 });
   const scale = normalizeVec(inputs.Scale ?? inputs.scale ?? { x: 1, y: 1, z: 1 });
-  const useClamp = inputs.UseClamp ?? inputs.useClamp ?? false;
+  const useClamp = (inputs.UseClamp ?? inputs.useClamp ?? false) as boolean;
   const min = normalizeVec(inputs.Min ?? inputs.min ?? { x: 0, y: 0, z: 0 });
   const max = normalizeVec(inputs.Max ?? inputs.max ?? { x: 1, y: 1, z: 1 });
 
@@ -154,10 +156,10 @@ export function executeMapping(inputs: Record<string, any>): any {
  * Inputs: Geometry, UVMap (name), From (source mode)
  * Outputs: Vector (UV coordinate as 3D)
  */
-export function executeUVMap(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const uvMapName = inputs.UVMap ?? inputs.uvMap ?? inputs.Name ?? inputs.name ?? 'uv';
-  const from = inputs.From ?? inputs.from ?? 'uv';
+export function executeUVMap(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const uvMapName = (inputs.UVMap ?? inputs.uvMap ?? inputs.Name ?? inputs.name ?? 'uv') as string;
+  const from = (inputs.From ?? inputs.from ?? 'uv') as string;
 
   if (!geometry) {
     return { Vector: { x: 0, y: 0, z: 0 } };
@@ -196,8 +198,8 @@ export function executeUVMap(inputs: Record<string, any>): any {
  * Inputs: Geometry
  * Outputs: Position (vector or array)
  */
-export function executeGeometryNodeInputPosition(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
+export function executeGeometryNodeInputPosition(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
 
   if (!geometry || !geometry.getAttribute('position')) {
     return { Position: { x: 0, y: 0, z: 0 } };
@@ -227,8 +229,8 @@ export function executeGeometryNodeInputPosition(inputs: Record<string, any>): a
  * Inputs: Geometry
  * Outputs: Normal (vector or array)
  */
-export function executeGeometryNodeInputNormal(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
+export function executeGeometryNodeInputNormal(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
 
   if (!geometry) {
     return { Normal: { x: 0, y: 1, z: 0 } };
@@ -263,9 +265,9 @@ export function executeGeometryNodeInputNormal(inputs: Record<string, any>): any
  * Inputs: Geometry, DirectionType
  * Outputs: Tangent (vector or array)
  */
-export function executeGeometryNodeInputTangent(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const directionType = inputs.DirectionType ?? inputs.directionType ?? 'normal'; // 'normal' | 'uv'
+export function executeGeometryNodeInputTangent(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const directionType = (inputs.DirectionType ?? inputs.directionType ?? 'normal') as string; // 'normal' | 'uv'
 
   if (!geometry || !geometry.getAttribute('position')) {
     return { Tangent: { x: 1, y: 0, z: 0 } };
@@ -348,10 +350,10 @@ export function executeGeometryNodeInputTangent(inputs: Record<string, any>): an
  * Inputs: Geometry, Level, SubdivisionType
  * Outputs: Geometry
  */
-export function executeSubdivideMesh(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const level = inputs.Level ?? inputs.level ?? 1;
-  const subType = inputs.SubdivisionType ?? inputs.subdivisionType ?? 'simple'; // 'simple' | 'loop'
+export function executeSubdivideMesh(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const level = (inputs.Level ?? inputs.level ?? 1) as number;
+  const subType = (inputs.SubdivisionType ?? inputs.subdivisionType ?? 'simple') as string; // 'simple' | 'loop'
 
   if (!geometry || !geometry.getAttribute('position')) return { Geometry: geometry };
 
@@ -420,10 +422,10 @@ export function executeSubdivideMesh(inputs: Record<string, any>): any {
  * Inputs: Geometry, Ratio (0..1 target ratio), Method
  * Outputs: Geometry
  */
-export function executeDecimateMesh(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const ratio = inputs.Ratio ?? inputs.ratio ?? 0.5;
-  const method = inputs.Method ?? inputs.method ?? 'edge_collapse';
+export function executeDecimateMesh(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const ratio = (inputs.Ratio ?? inputs.ratio ?? 0.5) as number;
+  const method = (inputs.Method ?? inputs.method ?? 'edge_collapse') as string;
 
   if (!geometry || !geometry.getAttribute('position')) return { Geometry: geometry };
 
@@ -478,11 +480,11 @@ export function executeDecimateMesh(inputs: Record<string, any>): any {
  * Inputs: Geometry, Offset, Selection, Individual
  * Outputs: Geometry
  */
-export function executeExtrudeFaces(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const offset = inputs.Offset ?? inputs.offset ?? inputs.distance ?? 0.5;
-  const selection = inputs.Selection ?? inputs.selection ?? null;
-  const individual = inputs.Individual ?? inputs.individual ?? true;
+export function executeExtrudeFaces(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const offset = (inputs.Offset ?? inputs.offset ?? inputs.distance ?? 0.5) as number;
+  const selection = (inputs.Selection ?? inputs.selection ?? null) as unknown[] | null;
+  const individual = (inputs.Individual ?? inputs.individual ?? true) as boolean;
 
   if (!geometry || !geometry.getAttribute('position') || !geometry.getIndex()) {
     return { Geometry: geometry ?? new THREE.BufferGeometry() };
@@ -562,10 +564,10 @@ export function executeExtrudeFaces(inputs: Record<string, any>): any {
  * Inputs: Geometry, Distance, Selection, Individual
  * Outputs: Geometry
  */
-export function executeInsetFaces(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const distance = inputs.Distance ?? inputs.distance ?? inputs.thickness ?? 0.1;
-  const selection = inputs.Selection ?? inputs.selection ?? null;
+export function executeInsetFaces(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const distance = (inputs.Distance ?? inputs.distance ?? inputs.thickness ?? 0.1) as number;
+  const selection = (inputs.Selection ?? inputs.selection ?? null) as unknown[] | null;
 
   if (!geometry || !geometry.getAttribute('position') || !geometry.getIndex()) {
     return { Geometry: geometry ?? new THREE.BufferGeometry() };
@@ -630,9 +632,9 @@ export function executeInsetFaces(inputs: Record<string, any>): any {
  * Inputs: Geometry, Selection
  * Outputs: Geometry
  */
-export function executeFlipFaces(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const selection = inputs.Selection ?? inputs.selection ?? null;
+export function executeFlipFaces(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const selection = (inputs.Selection ?? inputs.selection ?? null) as unknown[] | null;
 
   if (!geometry || !geometry.getAttribute('position')) return { Geometry: geometry };
 
@@ -675,8 +677,8 @@ export function executeFlipFaces(inputs: Record<string, any>): any {
  * Inputs: Geometry, Rotation (Euler), Space, Selection
  * Outputs: Geometry
  */
-export function executeRotateMesh(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
+export function executeRotateMesh(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
   const rotation = normalizeVec(inputs.Rotation ?? inputs.rotation ?? inputs.Euler ?? inputs.euler ?? { x: 0, y: 0, z: 0 });
 
   if (!geometry || !geometry.getAttribute('position')) return { Geometry: geometry };
@@ -712,8 +714,8 @@ export function executeRotateMesh(inputs: Record<string, any>): any {
  * Inputs: Geometry, Scale (vector or uniform), Center, Selection
  * Outputs: Geometry
  */
-export function executeScaleMesh(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
+export function executeScaleMesh(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
   const scale = normalizeVec(inputs.Scale ?? inputs.scale ?? { x: 1, y: 1, z: 1 });
   const center = normalizeVec(inputs.Center ?? inputs.center ?? inputs.Origin ?? inputs.origin ?? { x: 0, y: 0, z: 0 });
 
@@ -749,8 +751,8 @@ export function executeScaleMesh(inputs: Record<string, any>): any {
  * Inputs: Geometry, Translation, Selection
  * Outputs: Geometry
  */
-export function executeTranslateMesh(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
+export function executeTranslateMesh(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
   const translation = normalizeVec(inputs.Translation ?? inputs.translation ?? inputs.Offset ?? inputs.offset ?? { x: 0, y: 0, z: 0 });
 
   if (!geometry || !geometry.getAttribute('position')) return { Geometry: geometry };
@@ -776,16 +778,16 @@ export function executeTranslateMesh(inputs: Record<string, any>): any {
  * Inputs: Vector, Color1, Color2, Mortar, Scale, MortarSize, Offset, Bias, Seed
  * Outputs: Color, Fac
  */
-export function executeBrickTexture(inputs: Record<string, any>): any {
+export function executeBrickTexture(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
-  const color1 = inputs.Color1 ?? inputs.color1 ?? { r: 0.8, g: 0.6, b: 0.4 };
-  const color2 = inputs.Color2 ?? inputs.color2 ?? { r: 0.6, g: 0.4, b: 0.2 };
-  const mortarColor = inputs.Mortar ?? inputs.mortar ?? inputs.MortarColor ?? inputs.mortarColor ?? { r: 0.5, g: 0.5, b: 0.5 };
-  const scale = inputs.Scale ?? inputs.scale ?? 5.0;
-  const mortarSize = inputs.MortarSize ?? inputs.mortarSize ?? 0.02;
-  const offset = inputs.Offset ?? inputs.offset ?? 0.5;
-  const bias = inputs.Bias ?? inputs.bias ?? 0.0;
-  const seed = inputs.Seed ?? inputs.seed ?? 0;
+  const color1 = (inputs.Color1 ?? inputs.color1 ?? { r: 0.8, g: 0.6, b: 0.4 }) as ColorLike;
+  const color2 = (inputs.Color2 ?? inputs.color2 ?? { r: 0.6, g: 0.4, b: 0.2 }) as ColorLike;
+  const mortarColor = (inputs.Mortar ?? inputs.mortar ?? inputs.MortarColor ?? inputs.mortarColor ?? { r: 0.5, g: 0.5, b: 0.5 }) as ColorLike;
+  const scale = (inputs.Scale ?? inputs.scale ?? 5.0) as number;
+  const mortarSize = (inputs.MortarSize ?? inputs.mortarSize ?? 0.02) as number;
+  const offset = (inputs.Offset ?? inputs.offset ?? 0.5) as number;
+  const bias = (inputs.Bias ?? inputs.bias ?? 0.0) as number;
+  const seed = (inputs.Seed ?? inputs.seed ?? 0) as number;
 
   const random = seededRandom(seed);
 
@@ -839,11 +841,11 @@ export function executeBrickTexture(inputs: Record<string, any>): any {
  * Inputs: Vector, Color1, Color2, Scale
  * Outputs: Color, Fac
  */
-export function executeCheckerTexture(inputs: Record<string, any>): any {
+export function executeCheckerTexture(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
-  const color1 = inputs.Color1 ?? inputs.color1 ?? { r: 0.8, g: 0.8, b: 0.8 };
-  const color2 = inputs.Color2 ?? inputs.color2 ?? { r: 0.2, g: 0.2, b: 0.2 };
-  const scale = inputs.Scale ?? inputs.scale ?? 5.0;
+  const color1 = (inputs.Color1 ?? inputs.color1 ?? { r: 0.8, g: 0.8, b: 0.8 }) as ColorLike;
+  const color2 = (inputs.Color2 ?? inputs.color2 ?? { r: 0.2, g: 0.2, b: 0.2 }) as ColorLike;
+  const scale = (inputs.Scale ?? inputs.scale ?? 5.0) as number;
 
   const sx = vector.x * scale;
   const sy = vector.y * scale;
@@ -870,9 +872,9 @@ export function executeCheckerTexture(inputs: Record<string, any>): any {
  * Inputs: Vector, GradientType, ColorRamp (optional)
  * Outputs: Color, Fac
  */
-export function executeGradientTexture(inputs: Record<string, any>): any {
+export function executeGradientTexture(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
-  const gradientType = inputs.GradientType ?? inputs.gradientType ?? inputs.type ?? 'linear';
+  const gradientType = (inputs.GradientType ?? inputs.gradientType ?? inputs.type ?? 'linear') as string;
 
   let t: number;
 
@@ -920,11 +922,11 @@ export function executeGradientTexture(inputs: Record<string, any>): any {
  * Inputs: Vector, Scale, Depth, Distortion
  * Outputs: Color, Fac
  */
-export function executeMagicTexture(inputs: Record<string, any>): any {
+export function executeMagicTexture(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
-  const scale = inputs.Scale ?? inputs.scale ?? 5.0;
-  const depth = inputs.Depth ?? inputs.depth ?? 2;
-  const distortion = inputs.Distortion ?? inputs.distortion ?? 1.0;
+  const scale = (inputs.Scale ?? inputs.scale ?? 5.0) as number;
+  const depth = (inputs.Depth ?? inputs.depth ?? 2) as number;
+  const distortion = (inputs.Distortion ?? inputs.distortion ?? 1.0) as number;
 
   const x = vector.x * scale;
   const y = vector.y * scale;
@@ -959,14 +961,14 @@ export function executeMagicTexture(inputs: Record<string, any>): any {
  * Inputs: Vector, Scale, Distortion, Detail, DetailScale, WaveType, Direction, BandsDirection
  * Outputs: Color, Fac
  */
-export function executeWaveTexture(inputs: Record<string, any>): any {
+export function executeWaveTexture(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
-  const scale = inputs.Scale ?? inputs.scale ?? 5.0;
-  const distortion = inputs.Distortion ?? inputs.distortion ?? 0.0;
-  const detail = inputs.Detail ?? inputs.detail ?? 2.0;
-  const detailScale = inputs.DetailScale ?? inputs.detailScale ?? 1.0;
-  const waveType = inputs.WaveType ?? inputs.waveType ?? 'bands'; // 'bands' | 'rings'
-  const bandsDirection = inputs.BandsDirection ?? inputs.bandsDirection ?? 'x'; // 'x' | 'y' | 'z' | 'diagonal'
+  const scale = (inputs.Scale ?? inputs.scale ?? 5.0) as number;
+  const distortion = (inputs.Distortion ?? inputs.distortion ?? 0.0) as number;
+  const detail = (inputs.Detail ?? inputs.detail ?? 2.0) as number;
+  const detailScale = (inputs.DetailScale ?? inputs.detailScale ?? 1.0) as number;
+  const waveType = (inputs.WaveType ?? inputs.waveType ?? 'bands') as string; // 'bands' | 'rings'
+  const bandsDirection = (inputs.BandsDirection ?? inputs.bandsDirection ?? 'x') as string; // 'x' | 'y' | 'z' | 'diagonal'
 
   const x = vector.x * scale;
   const y = vector.y * scale;
@@ -1016,9 +1018,9 @@ export function executeWaveTexture(inputs: Record<string, any>): any {
  * Inputs: Vector, Seed
  * Outputs: Value, Color
  */
-export function executeWhiteNoiseTexture(inputs: Record<string, any>): any {
+export function executeWhiteNoiseTexture(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? { x: 0, y: 0, z: 0 });
-  const seed = inputs.Seed ?? inputs.seed ?? 0;
+  const seed = (inputs.Seed ?? inputs.seed ?? 0) as number;
 
   // Use hash function for deterministic random based on position
   const v1 = hashFloat(vector.x, vector.y, vector.z, seed);
@@ -1040,10 +1042,10 @@ export function executeWhiteNoiseTexture(inputs: Record<string, any>): any {
  * Inputs: Factor, ColorRamp (stops array), Interpolation
  * Outputs: Color, Alpha
  */
-export function executeColorRamp(inputs: Record<string, any>): any {
-  const factor = inputs.Factor ?? inputs.factor ?? inputs.Value ?? inputs.value ?? 0.5;
-  const colorRamp = inputs.ColorRamp ?? inputs.colorRamp ?? inputs.Stops ?? inputs.stops ?? null;
-  const interpolation = inputs.Interpolation ?? inputs.interpolation ?? 'linear'; // 'linear' | 'constant' | 'ease' | 'cardinal' | 'b_spline'
+export function executeColorRamp(inputs: NodeInputs): NodeOutput {
+  const factor = (inputs.Factor ?? inputs.factor ?? inputs.Value ?? inputs.value ?? 0.5) as number;
+  const colorRamp = (inputs.ColorRamp ?? inputs.colorRamp ?? inputs.Stops ?? inputs.stops ?? null) as unknown[] | null;
+  const interpolation = (inputs.Interpolation ?? inputs.interpolation ?? 'linear') as string; // 'linear' | 'constant' | 'ease' | 'cardinal' | 'b_spline'
 
   // Default gradient: black to white
   if (!colorRamp || !Array.isArray(colorRamp) || colorRamp.length === 0) {
@@ -1053,12 +1055,15 @@ export function executeColorRamp(inputs: Record<string, any>): any {
 
   // Sort stops by position
   const stops = [...colorRamp]
-    .map((s: any) => ({
-      position: typeof s === 'object' ? (s.position ?? s.pos ?? s.t ?? 0) : 0,
-      color: typeof s === 'object' ? (s.color ?? { r: s.r ?? 0, g: s.g ?? 0, b: s.b ?? 0 }) : { r: s, g: s, b: s },
-      alpha: typeof s === 'object' ? (s.alpha ?? 1.0) : 1.0,
-    }))
-    .sort((a: any, b: any) => a.position - b.position);
+    .map((s: unknown) => {
+      const obj = s as Record<string, unknown>;
+      return {
+        position: typeof s === 'object' && s !== null ? (obj.position ?? obj.pos ?? obj.t ?? 0) as number : 0,
+        color: typeof s === 'object' && s !== null ? (obj.color ?? { r: obj.r ?? 0, g: obj.g ?? 0, b: obj.b ?? 0 }) as ColorLike : { r: s as number, g: s as number, b: s as number },
+        alpha: typeof s === 'object' && s !== null ? (obj.alpha ?? 1.0) as number : 1.0,
+      };
+    })
+    .sort((a: { position: number }, b: { position: number }) => a.position - b.position);
 
   if (stops.length === 0) {
     return { Color: { r: 0, g: 0, b: 0 }, Alpha: 1.0 };
@@ -1121,17 +1126,17 @@ export function executeColorRamp(inputs: Record<string, any>): any {
  * Inputs: Color, CurveR, CurveG, CurveB, Fac
  * Outputs: Color
  */
-export function executeCurves(inputs: Record<string, any>): any {
-  const color = inputs.Color ?? inputs.color ?? inputs.Fac ?? inputs.fac ?? { r: 0.5, g: 0.5, b: 0.5 };
-  const curveR = inputs.CurveR ?? inputs.curveR ?? inputs.CurveRed ?? null;
-  const curveG = inputs.CurveG ?? inputs.curveG ?? inputs.CurveGreen ?? null;
-  const curveB = inputs.CurveB ?? inputs.curveB ?? inputs.CurveBlue ?? null;
-  const fac = inputs.Fac ?? inputs.fac ?? 1.0;
+export function executeCurves(inputs: NodeInputs): NodeOutput {
+  const color = (inputs.Color ?? inputs.color ?? inputs.Fac ?? inputs.fac ?? { r: 0.5, g: 0.5, b: 0.5 }) as ColorLike;
+  const curveR = (inputs.CurveR ?? inputs.curveR ?? inputs.CurveRed ?? null) as unknown;
+  const curveG = (inputs.CurveG ?? inputs.curveG ?? inputs.CurveGreen ?? null) as unknown;
+  const curveB = (inputs.CurveB ?? inputs.curveB ?? inputs.CurveBlue ?? null) as unknown;
+  const fac = (inputs.Fac ?? inputs.fac ?? 1.0) as number;
 
-  const evaluateCurve = (t: number, points: any): number => {
+  const evaluateCurve = (t: number, points: unknown[]): number => {
     if (!points || !Array.isArray(points) || points.length === 0) return t;
     // Points are [{x, y}, ...] — x is input, y is output
-    const sorted = [...points].sort((a: any, b: any) => (a.x ?? 0) - (b.x ?? 0));
+    const sorted = [...points].sort((a: unknown, b: unknown) => ((a as Record<string, number>).x ?? 0) - ((b as Record<string, number>).x ?? 0));
     const tx = Math.max(0, Math.min(1, t));
 
     // Find surrounding points
@@ -1177,9 +1182,9 @@ export function executeCurves(inputs: Record<string, any>): any {
  * Inputs: Color, Mode
  * Outputs: Red, Green, Blue, Alpha
  */
-export function executeSeparateColor(inputs: Record<string, any>): any {
-  const color = inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 };
-  const mode = inputs.Mode ?? inputs.mode ?? inputs.ColorSpace ?? inputs.colorSpace ?? 'rgb';
+export function executeSeparateColor(inputs: NodeInputs): NodeOutput {
+  const color = (inputs.Color ?? inputs.color ?? { r: 0.5, g: 0.5, b: 0.5 }) as ColorLike;
+  const mode = (inputs.Mode ?? inputs.mode ?? inputs.ColorSpace ?? inputs.colorSpace ?? 'rgb') as string;
 
   const r = color.r ?? 0;
   const g = color.g ?? 0;
@@ -1217,12 +1222,12 @@ export function executeSeparateColor(inputs: Record<string, any>): any {
  * Inputs: Red, Green, Blue, Alpha, Mode
  * Outputs: Color
  */
-export function executeCombineColor(inputs: Record<string, any>): any {
-  const red = inputs.Red ?? inputs.red ?? inputs.R ?? inputs.r ?? 0;
-  const green = inputs.Green ?? inputs.green ?? inputs.G ?? inputs.g ?? 0;
-  const blue = inputs.Blue ?? inputs.blue ?? inputs.B ?? inputs.b ?? 0;
-  const alpha = inputs.Alpha ?? inputs.alpha ?? inputs.A ?? inputs.a ?? 1.0;
-  const mode = inputs.Mode ?? inputs.mode ?? inputs.ColorSpace ?? inputs.colorSpace ?? 'rgb';
+export function executeCombineColor(inputs: NodeInputs): NodeOutput {
+  const red = (inputs.Red ?? inputs.red ?? inputs.R ?? inputs.r ?? 0) as number;
+  const green = (inputs.Green ?? inputs.green ?? inputs.G ?? inputs.g ?? 0) as number;
+  const blue = (inputs.Blue ?? inputs.blue ?? inputs.B ?? inputs.b ?? 0) as number;
+  const alpha = (inputs.Alpha ?? inputs.alpha ?? inputs.A ?? inputs.a ?? 1.0) as number;
+  const mode = (inputs.Mode ?? inputs.mode ?? inputs.ColorSpace ?? inputs.colorSpace ?? 'rgb') as string;
 
   if (mode === 'hsv') {
     // HSV to RGB
@@ -1250,10 +1255,10 @@ export function executeCombineColor(inputs: Record<string, any>): any {
  * Inputs: Boolean1, Boolean2, Operation
  * Outputs: Boolean
  */
-export function executeBooleanMath(inputs: Record<string, any>): any {
-  const a = inputs.Boolean1 ?? inputs.boolean1 ?? inputs.A ?? inputs.a ?? inputs.Boolean ?? inputs.boolean ?? false;
-  const b = inputs.Boolean2 ?? inputs.boolean2 ?? inputs.B ?? inputs.b ?? false;
-  const operation = inputs.Operation ?? inputs.operation ?? 'and';
+export function executeBooleanMath(inputs: NodeInputs): NodeOutput {
+  const a = (inputs.Boolean1 ?? inputs.boolean1 ?? inputs.A ?? inputs.a ?? inputs.Boolean ?? inputs.boolean ?? false) as boolean;
+  const b = (inputs.Boolean2 ?? inputs.boolean2 ?? inputs.B ?? inputs.b ?? false) as boolean;
+  const operation = (inputs.Operation ?? inputs.operation ?? 'and') as string;
 
   const ba = Boolean(a);
   const bb = Boolean(b);
@@ -1293,11 +1298,11 @@ export function executeBooleanMath(inputs: Record<string, any>): any {
  * Inputs: A, B, Operation, Epsilon (for equal)
  * Outputs: Boolean
  */
-export function executeFloatCompare(inputs: Record<string, any>): any {
-  const a = inputs.A ?? inputs.a ?? inputs.Value1 ?? inputs.value1 ?? 0.0;
-  const b = inputs.B ?? inputs.b ?? inputs.Value2 ?? inputs.value2 ?? 0.0;
-  const operation = inputs.Operation ?? inputs.operation ?? 'less_than';
-  const epsilon = inputs.Epsilon ?? inputs.epsilon ?? 0.001;
+export function executeFloatCompare(inputs: NodeInputs): NodeOutput {
+  const a = (inputs.A ?? inputs.a ?? inputs.Value1 ?? inputs.value1 ?? 0.0) as number;
+  const b = (inputs.B ?? inputs.b ?? inputs.Value2 ?? inputs.value2 ?? 0.0) as number;
+  const operation = (inputs.Operation ?? inputs.operation ?? 'less_than') as string;
+  const epsilon = (inputs.Epsilon ?? inputs.epsilon ?? 0.001) as number;
 
   const fa = typeof a === 'number' ? a : 0;
   const fb = typeof b === 'number' ? b : 0;
@@ -1331,14 +1336,14 @@ export function executeFloatCompare(inputs: Record<string, any>): any {
  * Inputs: Vector, FromMin, FromMax, ToMin, ToMax, Clamp, InterpolationType
  * Outputs: Vector
  */
-export function executeMapRangeVector(inputs: Record<string, any>): any {
+export function executeMapRangeVector(inputs: NodeInputs): NodeOutput {
   const vector = normalizeVec(inputs.Vector ?? inputs.vector ?? inputs.Value ?? inputs.value ?? { x: 0, y: 0, z: 0 });
   const fromMin = normalizeVec(inputs.FromMin ?? inputs.fromMin ?? { x: 0, y: 0, z: 0 });
   const fromMax = normalizeVec(inputs.FromMax ?? inputs.fromMax ?? { x: 1, y: 1, z: 1 });
   const toMin = normalizeVec(inputs.ToMin ?? inputs.toMin ?? { x: 0, y: 0, z: 0 });
   const toMax = normalizeVec(inputs.ToMax ?? inputs.toMax ?? { x: 1, y: 1, z: 1 });
-  const shouldClamp = inputs.Clamp ?? inputs.clamp ?? true;
-  const interpolationType = inputs.InterpolationType ?? inputs.interpolationType ?? 'linear';
+  const shouldClamp = (inputs.Clamp ?? inputs.clamp ?? true) as boolean;
+  const interpolationType = (inputs.InterpolationType ?? inputs.interpolationType ?? 'linear') as string;
 
   const mapComponent = (val: number, fMin: number, fMax: number, tMin: number, tMax: number): number => {
     const fromRange = fMax - fMin;
@@ -1390,15 +1395,15 @@ export function executeMapRangeVector(inputs: Record<string, any>): any {
  * Inputs: Rotation (quaternion {x,y,z,w} or axis+angle), Mode
  * Outputs: Euler
  */
-export function executeRotationToEuler(inputs: Record<string, any>): any {
-  const rotation = inputs.Rotation ?? inputs.rotation ?? inputs.Quaternion ?? inputs.quaternion ?? null;
-  const mode = inputs.Mode ?? inputs.mode ?? 'quaternion'; // 'quaternion' | 'axis_angle'
+export function executeRotationToEuler(inputs: NodeInputs): NodeOutput {
+  const rotation = (inputs.Rotation ?? inputs.rotation ?? inputs.Quaternion ?? inputs.quaternion ?? null) as unknown;
+  const mode = (inputs.Mode ?? inputs.mode ?? 'quaternion') as string; // 'quaternion' | 'axis_angle'
 
   let quat: THREE.Quaternion;
 
   if (mode === 'axis_angle') {
     const axis = normalizeVec(inputs.Axis ?? inputs.axis ?? { x: 0, y: 0, z: 1 });
-    const angle = inputs.Angle ?? inputs.angle ?? 0;
+    const angle = (inputs.Angle ?? inputs.angle ?? 0) as number;
     quat = new THREE.Quaternion().setFromAxisAngle(
       new THREE.Vector3(axis.x, axis.y, axis.z).normalize(),
       angle,
@@ -1426,9 +1431,9 @@ export function executeRotationToEuler(inputs: Record<string, any>): any {
  * Inputs: Euler (rotation vector), OutputMode
  * Outputs: Rotation (quaternion {x,y,z,w} or axis+angle)
  */
-export function executeEulerToRotation(inputs: Record<string, any>): any {
+export function executeEulerToRotation(inputs: NodeInputs): NodeOutput {
   const euler = normalizeVec(inputs.Euler ?? inputs.euler ?? inputs.Rotation ?? inputs.rotation ?? { x: 0, y: 0, z: 0 });
-  const outputMode = inputs.OutputMode ?? inputs.outputMode ?? inputs.Mode ?? inputs.mode ?? 'quaternion'; // 'quaternion' | 'axis_angle'
+  const outputMode = (inputs.OutputMode ?? inputs.outputMode ?? inputs.Mode ?? inputs.mode ?? 'quaternion') as string; // 'quaternion' | 'axis_angle'
 
   const eulerObj = new THREE.Euler(euler.x, euler.y, euler.z, 'XYZ');
   const quat = new THREE.Quaternion().setFromEuler(eulerObj);
@@ -1457,16 +1462,16 @@ export function executeEulerToRotation(inputs: Record<string, any>): any {
  * Inputs: Geometry, Value, GroupIndex, ResultType
  * Outputs: Leading, Trailing, Total
  */
-export function executeAccumulateField(inputs: Record<string, any>): any {
-  const geometry: THREE.BufferGeometry | null = inputs.Geometry ?? inputs.geometry ?? null;
-  const value = inputs.Value ?? inputs.value ?? inputs.Attribute ?? inputs.attribute ?? 1.0;
-  const groupIndex = inputs.GroupIndex ?? inputs.groupIndex ?? 0;
-  const resultType = inputs.ResultType ?? inputs.resultType ?? 'total'; // 'total' | 'average' | 'min' | 'max'
+export function executeAccumulateField(inputs: NodeInputs): NodeOutput {
+  const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
+  const value = (inputs.Value ?? inputs.value ?? inputs.Attribute ?? inputs.attribute ?? 1.0) as number;
+  const groupIndex = (inputs.GroupIndex ?? inputs.groupIndex ?? 0) as number;
+  const resultType = (inputs.ResultType ?? inputs.resultType ?? 'total') as string; // 'total' | 'average' | 'min' | 'max'
 
   // Collect values from geometry attribute or direct input
   let values: number[];
   if (Array.isArray(value)) {
-    values = value.map((v: any) => typeof v === 'number' ? v : 0);
+    values = (value as unknown[]).map((v: unknown) => typeof v === 'number' ? v : 0);
   } else if (geometry && typeof value === 'string') {
     const attr = geometry.getAttribute(value);
     if (attr) {
@@ -1552,7 +1557,7 @@ export function executeAccumulateField(inputs: Record<string, any>): any {
 /**
  * Type definition for a node executor function.
  */
-export type NodeExecutorFunction = (inputs: Record<string, any>, geometry?: THREE.BufferGeometry, context?: any) => any;
+export type NodeExecutorFunction = (inputs: NodeInputs, geometry?: THREE.BufferGeometry, context?: Record<string, unknown>) => NodeOutput;
 
 /**
  * AdditionalNodeExecutors registry — maps node type names to executor functions.

@@ -14,6 +14,7 @@ import {
   NishitaSkyHelper,
   createNishitaSkyTexture,
   type NishitaSkyConfig,
+  type NishitaSkyConfigInput,
 } from '../weather/NishitaSky';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ import {
  */
 export interface SkyLightingSystemConfig {
   /** Nishita atmospheric parameters (passed through to NishitaSkyHelper) */
-  nishita: Partial<NishitaSkyConfig>;
+  nishita: NishitaSkyConfigInput;
 
   /** Intensity of the directional sun light. Default: 1.5 */
   sunIntensity: number;
@@ -41,6 +42,19 @@ export interface SkyLightingSystemConfig {
 
   /** Whether to use Nishita sky. If false, uses legacy fallback. Default: true */
   useNishita: boolean;
+
+  /** Whether to add a HemisphereLight for sky/ground fill. Default: false.
+   *  Merged from the legacy SkyLighting.ts module. When enabled, a
+   *  HemisphereLight with sky-appropriate colours is added alongside the
+   *  DirectionalLight and AmbientLight. */
+  useHemisphereLight: boolean;
+
+  /** Ground colour for the HemisphereLight. Default: 0x3d5c3d (muted green).
+   *  Only used when useHemisphereLight is true. */
+  hemisphereGroundColor: number;
+
+  /** Hemisphere light intensity. Default: 0.6 */
+  hemisphereIntensity: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +68,9 @@ const DEFAULT_SKY_LIGHTING_CONFIG: SkyLightingSystemConfig = {
   shadowMapSize: 2048,
   shadowsEnabled: true,
   useNishita: true,
+  useHemisphereLight: false,
+  hemisphereGroundColor: 0x3d5c3d,
+  hemisphereIntensity: 0.6,
 };
 
 // ---------------------------------------------------------------------------
@@ -147,6 +164,7 @@ export class SkyLightingSystem {
   // ---- Lights --------------------------------------------------------------
   private sunLight: THREE.DirectionalLight;
   private ambientLight: THREE.AmbientLight;
+  private hemisphereLight: THREE.HemisphereLight | null = null;
 
   // ---- Fallback gradient sky -----------------------------------------------
   private fallbackSkyMesh: THREE.Mesh | null = null;
@@ -182,13 +200,22 @@ export class SkyLightingSystem {
     // Create ambient light
     this.ambientLight = new THREE.AmbientLight(0x87ceeb, this.config.ambientIntensity);
 
+    // Optionally create hemisphere light (merged from legacy SkyLighting.ts)
+    if (this.config.useHemisphereLight) {
+      this.hemisphereLight = new THREE.HemisphereLight(
+        0x87ceeb,
+        this.config.hemisphereGroundColor,
+        this.config.hemisphereIntensity,
+      );
+    }
+
     // Apply initial sun position from nishita config if present
     const nishitaCfg = this.config.nishita;
-    if (nishitaCfg.sun_elevation !== undefined) {
-      this.currentElevation = nishitaCfg.sun_elevation;
+    if (nishitaCfg.sunElevation !== undefined) {
+      this.currentElevation = nishitaCfg.sunElevation;
     }
-    if (nishitaCfg.sun_azimuth !== undefined) {
-      this.currentAzimuth = nishitaCfg.sun_azimuth;
+    if (nishitaCfg.sunAzimuth !== undefined) {
+      this.currentAzimuth = nishitaCfg.sunAzimuth;
     }
     this.updateSunFromAngles();
   }
@@ -213,6 +240,9 @@ export class SkyLightingSystem {
     // Add lights to the scene immediately (they work regardless of sky mode)
     scene.add(this.sunLight);
     scene.add(this.ambientLight);
+    if (this.hemisphereLight) {
+      scene.add(this.hemisphereLight);
+    }
 
     if (this.config.useNishita) {
       try {
@@ -225,8 +255,8 @@ export class SkyLightingSystem {
 
         // Sync sun direction from Nishita config
         const nishitaConfig = this.nishitaHelper.getConfig();
-        this.currentElevation = nishitaConfig.sun_elevation;
-        this.currentAzimuth = nishitaConfig.sun_azimuth;
+        this.currentElevation = nishitaConfig.sunElevation;
+        this.currentAzimuth = nishitaConfig.sunAzimuth;
         this.updateSunFromAngles();
 
         console.info('[SkyLightingSystem] Nishita sky attached successfully');
@@ -253,6 +283,9 @@ export class SkyLightingSystem {
     if (this.scene) {
       this.scene.remove(this.sunLight);
       this.scene.remove(this.ambientLight);
+      if (this.hemisphereLight) {
+        this.scene.remove(this.hemisphereLight);
+      }
 
       // Clear environment/background if we set them
       if (this.usingFallback) {
@@ -282,33 +315,35 @@ export class SkyLightingSystem {
 
       // Re-read the actual elevation/azimuth after Nishita processes it
       const nishitaConfig = this.nishitaHelper.getConfig();
-      this.currentElevation = nishitaConfig.sun_elevation;
-      this.currentAzimuth = nishitaConfig.sun_azimuth;
+      this.currentElevation = nishitaConfig.sunElevation;
+      this.currentAzimuth = nishitaConfig.sunAzimuth;
     }
 
     this.updateSunFromAngles();
     this.updateFallbackColors();
+    this.updateHemisphereColors();
   }
 
   /**
    * Update atmospheric / Nishita parameters and rebuild the sky texture.
    */
-  async updateParams(params: Partial<NishitaSkyConfig>): Promise<void> {
+  async updateParams(params: NishitaSkyConfigInput): Promise<void> {
     if (this.nishitaHelper && this.nishitaReady) {
       await this.nishitaHelper.updateParams(params);
 
       const nishitaConfig = this.nishitaHelper.getConfig();
-      this.currentElevation = nishitaConfig.sun_elevation;
-      this.currentAzimuth = nishitaConfig.sun_azimuth;
+      this.currentElevation = nishitaConfig.sunElevation;
+      this.currentAzimuth = nishitaConfig.sunAzimuth;
     } else {
       // Merge into config for future Nishita init
       this.config.nishita = { ...this.config.nishita, ...params };
-      if (params.sun_elevation !== undefined) this.currentElevation = params.sun_elevation;
-      if (params.sun_azimuth !== undefined) this.currentAzimuth = params.sun_azimuth;
+      if (params.sunElevation !== undefined) this.currentElevation = params.sunElevation;
+      if (params.sunAzimuth !== undefined) this.currentAzimuth = params.sunAzimuth;
     }
 
     this.updateSunFromAngles();
     this.updateFallbackColors();
+    this.updateHemisphereColors();
   }
 
   /**
@@ -323,8 +358,8 @@ export class SkyLightingSystem {
 
       // Keep sun light in sync after animation
       const nishitaConfig = this.nishitaHelper.getConfig();
-      this.currentElevation = nishitaConfig.sun_elevation;
-      this.currentAzimuth = nishitaConfig.sun_azimuth;
+      this.currentElevation = nishitaConfig.sunElevation;
+      this.currentAzimuth = nishitaConfig.sunAzimuth;
       this.updateSunFromAngles();
     }
   }
@@ -397,6 +432,13 @@ export class SkyLightingSystem {
   }
 
   /**
+   * Get the hemisphere light instance, if enabled.
+   */
+  getHemisphereLight(): THREE.HemisphereLight | null {
+    return this.hemisphereLight;
+  }
+
+  /**
    * Start or stop automatic sun animation.
    */
   setAnimating(animate: boolean, speed?: number): void {
@@ -450,6 +492,35 @@ export class SkyLightingSystem {
 
     // Ambient intensity also fades at night
     this.ambientLight.intensity = this.config.ambientIntensity * THREE.MathUtils.lerp(0.15, 1.0, horizonFade);
+
+    // Update hemisphere light if present
+    this.updateHemisphereColors();
+  }
+
+  /**
+   * Update hemisphere light colours to match current sun elevation.
+   * Merged from the legacy SkyLighting.ts module's HemisphereLight logic.
+   */
+  private updateHemisphereColors(): void {
+    if (!this.hemisphereLight) return;
+
+    const t = THREE.MathUtils.clamp(this.currentElevation / 90, 0, 1);
+
+    // Sky colour follows the ambient computation
+    const skyColor = computeAmbientColor(this.currentElevation);
+    this.hemisphereLight.color.copy(skyColor);
+
+    // Ground colour warms slightly during golden hour
+    const groundColor = new THREE.Color(
+      THREE.MathUtils.lerp(0.24, 0.4, t),
+      THREE.MathUtils.lerp(0.36, 0.35, t),
+      THREE.MathUtils.lerp(0.24, 0.25, t),
+    );
+    this.hemisphereLight.groundColor.copy(groundColor);
+
+    // Intensity fades at night
+    const horizonFade = THREE.MathUtils.smoothstep(this.currentElevation, -5, 15);
+    this.hemisphereLight.intensity = this.config.hemisphereIntensity * THREE.MathUtils.lerp(0.15, 1.0, horizonFade);
   }
 
   // -------------------------------------------------------------------------
@@ -554,3 +625,70 @@ export class SkyLightingSystem {
 }
 
 export default SkyLightingSystem;
+
+// ---------------------------------------------------------------------------
+// Convenience function (merged from legacy sky-lighting.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Convenience function to quickly set up sky lighting on a scene.
+ *
+ * Creates a SkyLightingSystem, attaches it to the scene, and optionally
+ * sets the time of day. This replaces the legacy `setupSkyLighting()`
+ * function from `./sky-lighting.ts`.
+ *
+ * @example
+ * ```ts
+ * const { system, sunLight, ambientLight } = await createSkyLighting(scene, {
+ *   hour: 14,
+ *   sunIntensity: 2.0,
+ * });
+ * ```
+ *
+ * @param scene - The THREE.Scene to attach lighting to
+ * @param options - Optional configuration
+ * @returns The SkyLightingSystem instance and light references
+ */
+export async function createSkyLighting(
+  scene: THREE.Scene,
+  options: {
+    /** Time of day in hours (0-24). If set, calls setTimeOfDay after attach */
+    hour?: number;
+    /** Sun intensity override */
+    sunIntensity?: number;
+    /** Ambient intensity override */
+    ambientIntensity?: number;
+    /** Whether to enable Nishita sky. Default: true */
+    useNishita?: boolean;
+    /** Whether to add a HemisphereLight. Default: false */
+    useHemisphereLight?: boolean;
+    /** Shadow map resolution. Default: 2048 */
+    shadowMapSize?: number;
+  } = {}
+): Promise<{
+  system: SkyLightingSystem;
+  sunLight: THREE.DirectionalLight;
+  ambientLight: THREE.AmbientLight;
+  hemisphereLight: THREE.HemisphereLight | null;
+}> {
+  const system = new SkyLightingSystem({
+    sunIntensity: options.sunIntensity,
+    ambientIntensity: options.ambientIntensity,
+    useNishita: options.useNishita ?? true,
+    useHemisphereLight: options.useHemisphereLight ?? false,
+    shadowMapSize: options.shadowMapSize,
+  });
+
+  await system.attach(scene);
+
+  if (options.hour !== undefined) {
+    await system.setTimeOfDay(options.hour);
+  }
+
+  return {
+    system,
+    sunLight: system.getSunLight(),
+    ambientLight: system.getAmbientLight(),
+    hemisphereLight: system.getHemisphereLight(),
+  };
+}

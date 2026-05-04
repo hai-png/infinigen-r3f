@@ -22,26 +22,74 @@ import * as THREE from 'three';
 
 /**
  * Configuration for the Nishita sky model.
+ * All properties use camelCase following TypeScript conventions.
  */
 export interface NishitaSkyConfig {
   /** Sun elevation in degrees (0 = horizon, 90 = zenith). Default: 45 */
-  sun_elevation: number;
+  sunElevation: number;
   /** Sun azimuth in degrees (0 = north, clockwise). Default: 180 */
-  sun_azimuth: number;
+  sunAzimuth: number;
   /** Sun intensity multiplier. Default: 1.0 */
-  sun_intensity: number;
+  sunIntensity: number;
   /** Air density (Rayleigh scattering strength). Default: 1.0 */
-  air_density: number;
+  airDensity: number;
   /** Dust density (Mie scattering strength). Default: 1.0 */
-  dust_density: number;
+  dustDensity: number;
   /** Ozone density (absorption strength). Default: 1.0 */
-  ozone_density: number;
+  ozoneDensity: number;
   /** Resolution of the equirectangular environment map. Default: 1024 */
   resolution: number;
   /** Whether to animate sun position automatically. Default: false */
   animate: boolean;
   /** Animation speed (hours per second) when animate is true. Default: 0.1 */
   animationSpeed: number;
+}
+
+/**
+ * Backward-compatible input type that accepts both camelCase and deprecated snake_case
+ * property names. The snake_case forms are deprecated and will be removed in a future version.
+ *
+ * @example
+ * ```ts
+ * // Preferred (camelCase)
+ * createNishitaSkyTexture({ sunElevation: 60, airDensity: 1.2 });
+ *
+ * // Deprecated but still accepted (snake_case)
+ * createNishitaSkyTexture({ sun_elevation: 60, air_density: 1.2 });
+ * ```
+ */
+export type NishitaSkyConfigInput = Partial<NishitaSkyConfig> & {
+  /** @deprecated Use sunElevation instead */
+  sun_elevation?: number;
+  /** @deprecated Use sunAzimuth instead */
+  sun_azimuth?: number;
+  /** @deprecated Use sunIntensity instead */
+  sun_intensity?: number;
+  /** @deprecated Use airDensity instead */
+  air_density?: number;
+  /** @deprecated Use dustDensity instead */
+  dust_density?: number;
+  /** @deprecated Use ozoneDensity instead */
+  ozone_density?: number;
+};
+
+/**
+ * Normalize a NishitaSkyConfigInput (which may contain deprecated snake_case
+ * properties) into a Partial<NishitaSkyConfig> with only camelCase keys.
+ * CamelCase takes precedence when both forms are provided.
+ */
+function normalizeConfigInput(input: NishitaSkyConfigInput): Partial<NishitaSkyConfig> {
+  return {
+    sunElevation: input.sunElevation ?? input.sun_elevation,
+    sunAzimuth: input.sunAzimuth ?? input.sun_azimuth,
+    sunIntensity: input.sunIntensity ?? input.sun_intensity,
+    airDensity: input.airDensity ?? input.air_density,
+    dustDensity: input.dustDensity ?? input.dust_density,
+    ozoneDensity: input.ozoneDensity ?? input.ozone_density,
+    resolution: input.resolution,
+    animate: input.animate,
+    animationSpeed: input.animationSpeed,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -94,12 +142,12 @@ const LIGHT_STEPS = 8;
 // ---------------------------------------------------------------------------
 
 const DEFAULT_CONFIG: NishitaSkyConfig = {
-  sun_elevation: 45,
-  sun_azimuth: 180,
-  sun_intensity: 1.0,
-  air_density: 1.0,
-  dust_density: 1.0,
-  ozone_density: 1.0,
+  sunElevation: 45,
+  sunAzimuth: 180,
+  sunIntensity: 1.0,
+  airDensity: 1.0,
+  dustDensity: 1.0,
+  ozoneDensity: 1.0,
   resolution: 1024,
   animate: false,
   animationSpeed: 0.1,
@@ -191,9 +239,9 @@ function computeNishitaSkyColor(
     const altitudeClamped = Math.max(altitude, 0);
 
     // Densities
-    const rayDensity = atmosphericDensity(altitudeClamped, RAYLEIGH_SCALE_HEIGHT) * config.air_density;
-    const mieDensity = atmosphericDensity(altitudeClamped, MIE_SCALE_HEIGHT) * config.dust_density;
-    const ozDensity = ozoneDensity(altitudeClamped) * config.ozone_density;
+    const rayDensity = atmosphericDensity(altitudeClamped, RAYLEIGH_SCALE_HEIGHT) * config.airDensity;
+    const mieDensity = atmosphericDensity(altitudeClamped, MIE_SCALE_HEIGHT) * config.dustDensity;
+    const ozDensity = ozoneDensity(altitudeClamped) * config.ozoneDensity;
 
     // Accumulate optical depth along primary ray
     const rayleighStep = RAYLEIGH_COEFFICIENTS.clone().multiplyScalar(rayDensity * stepSize);
@@ -216,9 +264,9 @@ function computeNishitaSkyColor(
       const lightSamplePos = samplePos.clone().addScaledVector(sunDirNorm, lt);
       const lightAltitude = Math.max(lightSamplePos.length() - EARTH_RADIUS, 0);
 
-      const lRayDensity = atmosphericDensity(lightAltitude, RAYLEIGH_SCALE_HEIGHT) * config.air_density;
-      const lMieDensity = atmosphericDensity(lightAltitude, MIE_SCALE_HEIGHT) * config.dust_density;
-      const lOzDensity = ozoneDensity(lightAltitude) * config.ozone_density;
+      const lRayDensity = atmosphericDensity(lightAltitude, RAYLEIGH_SCALE_HEIGHT) * config.airDensity;
+      const lMieDensity = atmosphericDensity(lightAltitude, MIE_SCALE_HEIGHT) * config.dustDensity;
+      const lOzDensity = ozoneDensity(lightAltitude) * config.ozoneDensity;
 
       lightRayleighOD.addScaledVector(RAYLEIGH_COEFFICIENTS, lRayDensity * lightStepSize);
       lightMieOD += MIE_COEFFICIENT * lMieDensity * lightStepSize;
@@ -252,7 +300,7 @@ function computeNishitaSkyColor(
 
   // Combine Rayleigh and Mie contributions
   const result = rayleighAccum.add(mieAccum);
-  result.multiplyScalar(config.sun_intensity * 20.0);
+  result.multiplyScalar(config.sunIntensity * 20.0);
 
   // Tone mapping (simple Reinhard)
   result.x = result.x / (1.0 + result.x);
@@ -315,7 +363,7 @@ function createFallbackDataTexture(config: NishitaSkyConfig): THREE.DataTexture 
   const height = width / 2;
   const data = new Float32Array(width * height * 4);
 
-  const sunDir = computeSunDirection(config.sun_elevation, config.sun_azimuth);
+  const sunDir = computeSunDirection(config.sunElevation, config.sunAzimuth);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -370,9 +418,10 @@ function createFallbackDataTexture(config: NishitaSkyConfig): THREE.DataTexture 
  * @returns Environment texture suitable for scene.environment / scene.background
  */
 export async function createNishitaSkyTexture(
-  config: Partial<NishitaSkyConfig> = {}
+  config: NishitaSkyConfigInput = {}
 ): Promise<THREE.Texture> {
-  const fullConfig: NishitaSkyConfig = { ...DEFAULT_CONFIG, ...config };
+  const normalized = normalizeConfigInput(config);
+  const fullConfig: NishitaSkyConfig = { ...DEFAULT_CONFIG, ...normalized };
 
   // Try to use ProceduralEquirectTexture for GPU-based generation
   const ProceduralEquirectTexture = await loadProceduralEquirectTexture();
@@ -393,7 +442,7 @@ export async function createNishitaSkyTexture(
         _coord: THREE.Vector2,
         outColor: THREE.Color
       ) => {
-        const sunDir = computeSunDirection(fullConfig.sun_elevation, fullConfig.sun_azimuth);
+        const sunDir = computeSunDirection(fullConfig.sunElevation, fullConfig.sunAzimuth);
 
         const theta = uv.x * 2.0 * Math.PI;
         const phi = uv.y * Math.PI;
@@ -441,9 +490,10 @@ export class NishitaSkyHelper {
   private currentTimeHours: number = 12;
   private isAnimating: boolean = false;
 
-  constructor(config: Partial<NishitaSkyConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.currentTimeHours = this.config.sun_elevation;
+  constructor(config: NishitaSkyConfigInput = {}) {
+    const normalized = normalizeConfigInput(config);
+    this.config = { ...DEFAULT_CONFIG, ...normalized };
+    this.currentTimeHours = this.config.sunElevation;
   }
 
   /**
@@ -477,8 +527,8 @@ export class NishitaSkyHelper {
    * @param azimuth - Sun azimuth in degrees
    */
   async setSunPosition(elevation: number, azimuth: number): Promise<void> {
-    this.config.sun_elevation = elevation;
-    this.config.sun_azimuth = azimuth;
+    this.config.sunElevation = elevation;
+    this.config.sunAzimuth = azimuth;
     await this.rebuildTexture();
     this.applyTexture();
   }
@@ -507,8 +557,9 @@ export class NishitaSkyHelper {
   /**
    * Update atmospheric parameters.
    */
-  async updateParams(params: Partial<NishitaSkyConfig>): Promise<void> {
-    this.config = { ...this.config, ...params };
+  async updateParams(params: NishitaSkyConfigInput): Promise<void> {
+    const normalized = normalizeConfigInput(params);
+    this.config = { ...this.config, ...normalized };
     await this.rebuildTexture();
     this.applyTexture();
   }
@@ -588,4 +639,10 @@ export class NishitaSkyHelper {
   }
 }
 
-export default NishitaSkyHelper;
+/**
+ * Filename-matching alias for backward compat.
+ * `import NishitaSky from './NishitaSky'` and
+ * `import { NishitaSky } from './NishitaSky'` both work.
+ */
+export { NishitaSkyHelper as NishitaSky };
+export default NishitaSky;

@@ -167,7 +167,9 @@ export class UnderwaterEffects {
       this.causticOverlay.renderOrder = 9999;
       this.causticOverlay.visible = false;
       return this.causticOverlay;
-    } catch {
+    } catch (err) {
+      // Expected fallback in rendering pipeline
+      if (process.env.NODE_ENV === 'development') console.debug('[UnderwaterEffects] caustic overlay creation fallback:', err);
       return null;
     }
   }
@@ -319,7 +321,9 @@ export class UnderwaterEffects {
       texture.repeat.set(2, 2);
 
       return texture;
-    } catch {
+    } catch (err) {
+      // Expected fallback in rendering pipeline
+      if (process.env.NODE_ENV === 'development') console.debug('[UnderwaterEffects] caustic texture creation fallback:', err);
       return null;
     }
   }

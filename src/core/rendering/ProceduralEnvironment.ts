@@ -210,9 +210,9 @@ export async function createProceduralEnvironment(
 
     texture.update();
     return texture;
-  } catch {
-    // Fallback: generate DataTexture manually
-    console.warn('[ProceduralEnvironment] ProceduralEquirectTexture not available, using DataTexture fallback');
+  } catch (err) {
+    // Silently fall back - ProceduralEquirectTexture not available, using DataTexture fallback
+    console.warn('[ProceduralEnvironment] ProceduralEquirectTexture not available, using DataTexture fallback:', err);
     return createFallbackEnvironment(fullParams, sunDirection, resolution);
   }
 }
@@ -281,8 +281,9 @@ export async function createBlurredEnvironment(
     const blurred = generator.generate(sourceTexture, blurAmount);
     generator.dispose();
     return blurred;
-  } catch {
-    console.warn('[ProceduralEnvironment] BlurredEnvMapGenerator not available');
+  } catch (err) {
+    // Silently fall back - BlurredEnvMapGenerator not available
+    console.warn('[ProceduralEnvironment] BlurredEnvMapGenerator not available:', err);
     return null;
   }
 }
@@ -324,8 +325,9 @@ export async function createStudioEnvironment(
     texture.exponent = fullConfig.exponent;
     texture.update();
     return texture;
-  } catch {
-    // Fallback
+  } catch (err) {
+    // Silently fall back - GradientEquirectTexture not available, using DataTexture
+    if (process.env.NODE_ENV === 'development') console.debug('[ProceduralEnvironment] createStudioEnvironment fallback:', err);
     return createGradientDataTexture(fullConfig);
   }
 }
@@ -369,7 +371,9 @@ function getOrCreateTempRenderer(): THREE.WebGLRenderer | null {
   if (!tempRenderer) {
     try {
       tempRenderer = new THREE.WebGLRenderer({ alpha: true });
-    } catch {
+    } catch (err) {
+      // Silently fall back - WebGLRenderer creation may fail in headless environments
+      if (process.env.NODE_ENV === 'development') console.debug('[ProceduralEnvironment] tempRenderer creation fallback:', err);
       return null;
     }
   }

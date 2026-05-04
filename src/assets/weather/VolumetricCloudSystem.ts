@@ -607,8 +607,9 @@ export class VolumetricCloudSystem {
       } else {
         throw new Error('FogVolumeMaterial not available');
       }
-    } catch {
-      // Fallback: semi-transparent material for rasterized rendering
+    } catch (err) {
+      // Silently fall back - cloud material creation failed, using semi-transparent material
+      if (process.env.NODE_ENV === 'development') console.debug('[VolumetricCloudSystem] cloud material fallback:', err);
       material = new THREE.MeshStandardMaterial({
         color: this.config.cloudColor,
         transparent: true,

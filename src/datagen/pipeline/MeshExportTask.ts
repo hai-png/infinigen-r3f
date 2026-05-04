@@ -11,6 +11,7 @@
 
 import { Scene, Object3D, Mesh, BufferGeometry } from 'three';
 import { taskRegistry, TaskFunction, TaskResult, TaskMetadata } from './TaskRegistry';
+import { Logger } from '@/core/util/Logger';
 
 /**
  * Supported export formats
@@ -128,7 +129,7 @@ export function triangulateGeometry(geometry: BufferGeometry): BufferGeometry {
     }
     
     // TODO: Implement full quad/ngon to triangle conversion
-    console.warn('Full triangulation not yet implemented, assuming triangles');
+    Logger.warn('MeshExport', 'Full triangulation not yet implemented, assuming triangles');
     return geometry;
   }
   
@@ -154,7 +155,7 @@ export function triangulateScene(scene: Scene): number {
     }
   });
   
-  console.log(`[MeshExport] Triangulated ${count} meshes`);
+  Logger.debug('MeshExport', `Triangulated ${count} meshes`);
   return count;
 }
 
@@ -266,7 +267,7 @@ async function exportFrameMeshes(
     objectsToExport.push(mesh);
   });
   
-  console.log(`[MeshExport] Exporting ${objectsToExport.length} meshes for frame ${frame}`);
+  Logger.info('MeshExport', `Exporting ${objectsToExport.length} meshes for frame ${frame}`);
   
   // Export each mesh
   for (const obj of objectsToExport) {
@@ -287,7 +288,7 @@ async function exportFrameMeshes(
       // Placeholder for actual export
       if (fs && typeof process !== 'undefined') {
         // Would write actual file here
-        console.log(`[MeshExport] Would export ${mesh.name} to ${outputPath}`);
+        Logger.debug('MeshExport', `Would export ${mesh.name} to ${outputPath}`);
       }
       
       exportedMeshes.push({
@@ -322,7 +323,7 @@ async function exportFrameMeshes(
     if (fs && typeof process !== 'undefined') {
       try {
         fs.writeFileSync(polycountFile, JSON.stringify(polycountData, null, 2));
-        console.log(`[MeshExport] Saved polycounts to ${polycountFile}`);
+        Logger.info('MeshExport', `Saved polycounts to ${polycountFile}`);
       } catch (error) {
         warnings.push(`Failed to save polycounts: ${error}`);
       }
@@ -376,7 +377,7 @@ export const saveMeshesTask: TaskFunction<MeshExportConfig> = async (
     }
     
     // Export static objects first (from source frame)
-    console.log('[MeshExport] Exporting static objects');
+    Logger.info('MeshExport', 'Exporting static objects');
     const staticResult = await exportFrameMeshes(scene, config, pointTrajectorySrcFrame);
     warnings.push(...staticResult.warnings);
     
@@ -389,7 +390,7 @@ export const saveMeshesTask: TaskFunction<MeshExportConfig> = async (
     config.staticOnly = false;
     
     for (const frame of frames) {
-      console.log(`[MeshExport] Processing frame ${frame}`);
+      Logger.info('MeshExport', `Processing frame ${frame}`);
       
       // Update scene for frame (would integrate with animation system)
       // scene.frame = frame;
@@ -475,7 +476,7 @@ export const saveMeshesTaskMetadata: TaskMetadata = {
 export function registerSaveMeshesTask(): void {
   if (!taskRegistry.has('saveMeshes')) {
     taskRegistry.register('saveMeshes', saveMeshesTask, saveMeshesTaskMetadata);
-    console.log('[SaveMeshesTask] Registered with TaskRegistry');
+    Logger.debug('MeshExport', 'Registered with TaskRegistry');
   }
 }
 

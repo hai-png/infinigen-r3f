@@ -382,7 +382,9 @@ export class FloorGenerator extends BaseObjectGenerator<FloorParams> {
       tex.wrapS = tex.wrapT = RepeatWrapping;
       tex.repeat.set(4, 4);
       return tex;
-    } catch {
+    } catch (err) {
+      // Silently fall back - floor texture generation may fail
+      if (process.env.NODE_ENV === 'development') console.debug('[FloorGenerator] texture generation fallback:', err);
       return null;
     }
   }

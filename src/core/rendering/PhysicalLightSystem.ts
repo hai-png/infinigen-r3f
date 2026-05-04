@@ -135,14 +135,16 @@ export async function createPhysicalSpotLight(
         const loader = new IESLoader();
         const iesTexture = await loader.loadAsync(fullConfig.iesProfile);
         (light as any).iesMap = iesTexture;
-      } catch {
-        console.warn('[PhysicalLightSystem] IES profile loading not available');
+      } catch (err) {
+        // Silently fall back - IES profile loading may not be available in all environments
+        console.warn('[PhysicalLightSystem] IES profile loading not available:', err);
       }
     }
 
     return light;
-  } catch {
-    // Fallback to standard SpotLight
+  } catch (err) {
+    // Silently fall back - PhysicalSpotLight not available, using standard SpotLight
+    if (process.env.NODE_ENV === 'development') console.debug('[PhysicalLightSystem] PhysicalSpotLight fallback:', err);
     const light = new THREE.SpotLight(
       fullConfig.color,
       fullConfig.intensity,
@@ -201,8 +203,9 @@ export async function createShapedAreaLight(
     }
 
     return light;
-  } catch {
-    // Fallback to RectAreaLight
+  } catch (err) {
+    // Silently fall back - ShapedAreaLight not available, using standard RectAreaLight
+    if (process.env.NODE_ENV === 'development') console.debug('[PhysicalLightSystem] ShapedAreaLight fallback:', err);
     const light = new THREE.RectAreaLight(
       fullConfig.color,
       fullConfig.intensity,
@@ -412,8 +415,9 @@ export async function upgradeSceneLights(scene: THREE.Scene): Promise<number> {
           parent.add(physicalLight);
           upgradedCount++;
         }
-      } catch {
-        // PhysicalSpotLight not available, keep as-is
+      } catch (err) {
+        // Silently fall back - PhysicalSpotLight not available in this environment
+        if (process.env.NODE_ENV === 'development') console.debug('[PhysicalLightSystem] upgradeSceneLights fallback:', err);
       }
     }
   }

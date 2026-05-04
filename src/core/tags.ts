@@ -425,21 +425,11 @@ function setDifference<T>(set1: Set<T>, set2: Set<T>): Set<T> {
   return result;
 }
 
-export default {
-  Tag,
-  StringTag,
-  Semantics,
-  Subpart,
-  FromGeneratorTag,
-  NegatedTag,
-  VariableTag,
-  SpecificObjectTag,
-  decomposeTags,
-  hasContradiction,
-  implies,
-  satisfies,
-  tagDifference,
-  toTag,
-  tagToString,
-  toTagSet,
-};
+/**
+ * Default export – the base Tag class.
+ *
+ * Previously this file exported a bag-of-symbols object as default, which was
+ * inconsistent with the rest of the codebase where the default matches the
+ * primary named export.  Individual symbols are available as named exports.
+ */
+export default Tag;

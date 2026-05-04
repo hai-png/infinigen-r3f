@@ -346,13 +346,10 @@ export class GTPositionEncodeMaterial extends ShaderMaterial {
   }
 }
 
-export default {
-  OPTICAL_FLOW_VERTEX_SHADER,
-  OPTICAL_FLOW_FRAGMENT_SHADER,
-  COMPOSITE_VERTEX_SHADER,
-  COMPOSITE_FLOW_FRAGMENT_SHADER,
-  POSITION_ENCODE_VERTEX_SHADER,
-  POSITION_ENCODE_FRAGMENT_SHADER,
-  GTOpticalFlowMaterial,
-  GTPositionEncodeMaterial,
-};
+/**
+ * Default export – GTOpticalFlowMaterial, the primary class in this module.
+ *
+ * Previously this file exported a bag-of-symbols object as default.  All
+ * symbols remain available as named exports.
+ */
+export default GTOpticalFlowMaterial;

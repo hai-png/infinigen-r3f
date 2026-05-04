@@ -960,4 +960,9 @@ export class CSGFractureSystem {
 // Exports
 // ============================================================================
 
-export default CSGFractureSystem;
+/**
+ * Filename-matching alias for backward compat.
+ * `import CSGFracture from './CSGFracture'` and `import { CSGFracture } from './CSGFracture'` both work.
+ */
+export { CSGFractureSystem as CSGFracture };
+export default CSGFracture;

@@ -579,19 +579,10 @@ function stringToHash(str: string): number {
   return Math.abs(hash);
 }
 
-export default {
-  GTFlatShadingMaterial,
-  GTDepthMaterial,
-  GTNormalMaterial,
-  GTPositionMaterial,
-  GTUVMaterial,
-  GTInstanceIdMaterial,
-  GTMaterialIdMaterial,
-  GTAlbedoMaterial,
-  GTRoughnessMaterial,
-  GTMetalnessMaterial,
-  GTEmissionMaterial,
-  createGTMaterial,
-  applyGTMaterialsToScene,
-  restoreOriginalMaterials,
-};
+/**
+ * Default export – GTFlatShadingMaterial, the primary ground-truth material.
+ *
+ * Previously this file exported a bag-of-symbols object as default.  All
+ * symbols remain available as named exports.
+ */
+export default GTFlatShadingMaterial;

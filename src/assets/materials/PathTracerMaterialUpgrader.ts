@@ -556,7 +556,9 @@ async function checkPathTracerAvailable(): Promise<boolean> {
   try {
     await import('three-gpu-pathtracer');
     pathTracerAvailable = true;
-  } catch {
+  } catch (err) {
+    // Silently fall back - three-gpu-pathtracer not available
+    if (process.env.NODE_ENV === 'development') console.debug('[PathTracerMaterialUpgrader] three-gpu-pathtracer import fallback:', err);
     pathTracerAvailable = false;
   }
   return pathTracerAvailable;

@@ -515,4 +515,10 @@ export class WhitewaterSystem {
   }
 }
 
-export default WhitewaterSystem;
+/**
+ * Filename-matching alias for backward compat.
+ * `import WhitewaterGenerator from './WhitewaterGenerator'` and
+ * `import { WhitewaterGenerator } from './WhitewaterGenerator'` both work.
+ */
+export { WhitewaterSystem as WhitewaterGenerator };
+export default WhitewaterGenerator;

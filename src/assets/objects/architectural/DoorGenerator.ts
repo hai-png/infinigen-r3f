@@ -1,6 +1,10 @@
 /**
  * Procedural Door Generator for Infinigen R3F
  * FIX: All geometries are now properly wrapped in Mesh with MeshStandardMaterial
+ *
+ * @deprecated Use `articulated/DoorGenerator` instead, which extends ArticulatedObjectBase
+ *           and provides joint metadata + MJCF/URDF export. This architectural version
+ *           will be removed in a future release.
  */
 
 import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, MeshStandardMaterial, Color } from 'three';
@@ -21,6 +25,10 @@ export interface DoorParams extends BaseGeneratorConfig {
   materialType: 'wood' | 'metal' | 'glass' | 'composite';
 }
 
+/**
+ * @deprecated Use `import { DoorGenerator } from '../articulated/DoorGenerator'` instead.
+ *           The articulated version includes physics joint definitions and MJCF export.
+ */
 export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
   public getDefaultConfig(): DoorParams {
     return {

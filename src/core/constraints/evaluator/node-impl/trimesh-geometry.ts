@@ -600,6 +600,7 @@ export function evaluateFacing(
       }
     } catch (e) {
       // Ignore BVH failure for facing check — orientation alone is acceptable
+      if (process.env.NODE_ENV === 'development') console.debug('[TrimeshGeometry] evaluateFacing BVH fallback:', e);
     }
   }
 
@@ -662,6 +663,7 @@ export function evaluateAccessibleFrom(
       }
     } catch (e) {
       // Fall through to distance-only result
+      if (process.env.NODE_ENV === 'development') console.debug('[TrimeshGeometry] evaluateAccessible BVH fallback:', e);
     }
   }
 
@@ -736,6 +738,7 @@ export function evaluateVisible(
       }
     } catch (e) {
       // Fall through — distance and angle check is acceptable
+      if (process.env.NODE_ENV === 'development') console.debug('[TrimeshGeometry] evaluateVisible BVH fallback:', e);
     }
   }
 
@@ -797,6 +800,7 @@ export function evaluateHasLineOfSight(
     return hasLOS ? 0 : 1;
   } catch (e) {
     // Fallback: simple distance check
+    if (process.env.NODE_ENV === 'development') console.debug('[TrimeshGeometry] evaluateLineOfSight BVH fallback:', e);
     const distance = pos1.distanceTo(pos2);
     return distance > 10 ? 1 : 0;
   }

@@ -747,8 +747,9 @@ export class TerrainSurfaceShaderPipeline {
     for (const b of buffers) {
       try {
         if (b && typeof b.destroy === 'function') b.destroy();
-      } catch {
+      } catch (err) {
         // Silently ignore cleanup errors
+        if (process.env.NODE_ENV === 'development') console.debug('[TerrainSurfaceShaderPipeline] GPU buffer destroy fallback:', err);
       }
     }
   }

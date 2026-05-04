@@ -9,6 +9,13 @@
  * - Delta creation at endpoints
  * 
  * Ported from: infinigen/terrain/water/river_network.py
+ *
+ * @deprecated Use `RiverNetworkV2` from `./RiverNetworkV2` instead, which provides:
+ *   - Gradient-descent path finding (more natural than D8 steepest-slope)
+ *   - CSG river-bed carving (produces carved channel geometry)
+ *   - Flow-aligned UV mapping for animated flow textures
+ *   - Path-traced water material support via transmission
+ *   This V1 generator will be removed in a future release.
  */
 
 import * as THREE from 'three';
@@ -43,6 +50,9 @@ export interface RiverPoint {
   flowRate: number;
 }
 
+/**
+ * @deprecated Use `import { RiverNetworkV2 } from './RiverNetworkV2'` instead.
+ */
 export class RiverNetwork {
   private config: RiverConfig;
   private noise: NoiseUtils;

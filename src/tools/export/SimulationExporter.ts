@@ -122,7 +122,9 @@ export class SimulationExporter {
       if (HybridBridge.isConnected()) {
         try {
           xml = await this.bridge.exportMjcf(config);
-        } catch {
+        } catch (err) {
+          // Silently fall back - Python bridge failed, using JS fallback
+          if (process.env.NODE_ENV === 'development') console.debug('[SimulationExporter] Python bridge MJCF fallback:', err);
           warnings.push('Python bridge failed, using JS fallback');
         }
       }

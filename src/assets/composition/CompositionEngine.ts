@@ -529,7 +529,9 @@ export class CompositionEngine {
         return result;
       }
       return 0;
-    } catch {
+    } catch (err) {
+      // Silently fall back - constraint evaluation failed
+      if (process.env.NODE_ENV === 'development') console.debug('[CompositionEngine] evaluateConstraint fallback:', err);
       return 0;
     }
   }

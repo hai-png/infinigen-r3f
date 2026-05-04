@@ -311,8 +311,9 @@ export class NatureSceneComposer {
       const data = generator.generate();
       this.result.terrain = data;
       return data;
-    } catch {
-      // During SSR or other failure, return null
+    } catch (err) {
+      // Silently fall back - terrain generation may fail during SSR or other failure
+      if (process.env.NODE_ENV === 'development') console.debug('[NatureSceneComposer] terrain generation fallback:', err);
       return null;
     }
   }

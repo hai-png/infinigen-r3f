@@ -393,7 +393,9 @@ function IvyOnRock({ usePBR }: { usePBR: boolean }) {
             metalness: 0.0,
           });
         }
-      } catch {
+      } catch (err) {
+        // Silently fall back - rock material generation failed, using simple material
+        if (process.env.NODE_ENV === 'development') console.debug('[InfinigenScene] rock material fallback:', err);
         rockMat = new THREE.MeshStandardMaterial({
           color: 0x808080,
           roughness: 0.9,

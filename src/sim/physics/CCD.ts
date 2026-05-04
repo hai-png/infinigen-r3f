@@ -462,4 +462,9 @@ export class ContinuousCollisionDetector {
   }
 }
 
-export default ContinuousCollisionDetector;
+/**
+ * Filename-matching alias for backward compat.
+ * `import CCD from './CCD'` and `import { CCD } from './CCD'` both work.
+ */
+export { ContinuousCollisionDetector as CCD };
+export default CCD;

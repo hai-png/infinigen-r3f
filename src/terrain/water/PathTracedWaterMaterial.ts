@@ -124,7 +124,9 @@ async function isPathTracerAvailable(): Promise<boolean> {
   try {
     await import('three-gpu-pathtracer');
     pathTracerAvailable = true;
-  } catch {
+  } catch (err) {
+    // Expected fallback in rendering pipeline
+    if (process.env.NODE_ENV === 'development') console.debug('[PathTracedWaterMaterial] three-gpu-pathtracer import fallback:', err);
     pathTracerAvailable = false;
   }
   return pathTracerAvailable;

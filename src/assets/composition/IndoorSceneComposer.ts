@@ -655,8 +655,9 @@ export class IndoorSceneComposer {
       const stats = solver.optimize();
       this.result.solverStats = stats;
       this.result.score = Math.max(0, 1 - stats.finalEnergy / 100);
-    } catch {
-      // Solver may fail in SSR or with empty domain; that's OK
+    } catch (err) {
+      // Silently fall back - solver may fail in SSR or with empty domain
+      if (process.env.NODE_ENV === 'development') console.debug('[IndoorSceneComposer] solver fallback:', err);
       this.result.score = 0.5;
     }
   }
@@ -1114,8 +1115,9 @@ export class IndoorSceneComposer {
 
       // Set score from solver energy
       this.result.score = Math.max(0, 1 - floorPlan.energy / 50);
-    } catch {
-      // Fallback to template-based generation if procedural fails
+    } catch (err) {
+      // Silently fall back - procedural generation failed, using template-based fallback
+      if (process.env.NODE_ENV === 'development') console.debug('[IndoorSceneComposer] procedural composition fallback:', err);
       this.composeFullHouse(['living_room', 'bedroom', 'kitchen', 'bathroom', 'office']);
     }
 

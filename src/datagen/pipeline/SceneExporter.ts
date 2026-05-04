@@ -1,74 +1,89 @@
 /**
- * SceneExporter - Multi-format 3D scene export for InfiniGen R3F
- * 
- * Supports exporting generated scenes to various formats:
- * - glTF/GLB (Web-optimized with Draco compression)
- * - OBJ + MTL (Universal compatibility)
- * - STL (3D printing)
- * - PLY (Point cloud data)
- * - USD/USDZ (Apple AR and professional workflows)
- * 
- * Features:
- * - LOD (Level of Detail) generation
- * - Texture packing and optimization
- * - Material conversion between renderers
- * - Metadata embedding (generation parameters, timestamps)
- * - Batch export with progress tracking
- * 
- * @see https://github.com/princeton-vl/infinigen/blob/main/infinigen/core/utilities/io.py
+ * SceneExporter — Pipeline-specific scene export wrapper
+ *
+ * This module provides the pipeline-oriented SceneExporter API that stores
+ * a scene reference and supports quality/compression/LOD settings.
+ *
+ * All actual export logic is delegated to the canonical SceneExporter in
+ * `@/tools/export/SceneExporter`. This file adds:
+ *   - Pipeline-specific API (scene stored in constructor, `export()` method)
+ *   - LOD generation (`generateLODs`)
+ *   - Texture packing (`packTextures`)
+ *   - Browser download helper (`download`)
+ *   - Draco encoder initialization
+ *   - Legacy `ExportResult` shape conversion (URL-based, with size/vertex counts)
+ *
+ * Backward-compatible re-exports of types are provided so existing imports
+ * from this path continue to work.
+ *
+ * @see /src/tools/export/SceneExporter.ts for the canonical implementation
  */
 
 import * as THREE from 'three';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
-import { DRACOEncoder } from 'three/examples/jsm/libs/draco/draco_encoder';
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
+// Re-export canonical types for backward compatibility
+export type {
+  ExportFormat,
+  ExportScope,
+  SceneExportOptions,
+  SceneExportResult,
+  LODConfig,
+  TexturePackResult,
+} from '@/tools/export/SceneExporter';
 
-export type ExportFormat = 'gltf' | 'glb' | 'obj' | 'stl' | 'ply' | 'usd' | 'usdz';
+// Import the canonical exporter for delegation
+import {
+  SceneExporter as CanonicalSceneExporter,
+  type ExportFormat,
+  type SceneExportOptions,
+  type SceneExportResult,
+  type LODConfig,
+  type TexturePackResult,
+} from '@/tools/export/SceneExporter';
 
+// ---------------------------------------------------------------------------
+// Legacy type definitions (kept for backward compatibility)
+// ---------------------------------------------------------------------------
+
+/**
+ * @deprecated Use SceneExportOptions from @/tools/export/SceneExporter instead.
+ *
+ * This legacy interface is retained so that code importing `ExportOptions`
+ * from this module continues to compile. It mirrors the old shape that
+ * included quality/compression/LOD/texture settings not present in the
+ * canonical SceneExportOptions.
+ */
 export interface ExportOptions {
-  // Format-specific options
   format: ExportFormat;
-  
-  // Quality settings
   quality?: 'low' | 'medium' | 'high' | 'ultra';
-  
-  // Compression
   compress?: boolean;
   dracoCompression?: boolean;
   textureCompression?: 'basis' | 'ktx2' | 'none';
-  
-  // LOD settings
   generateLODs?: boolean;
   lodLevels?: number;
   lodDistances?: number[];
-  
-  // Texture settings
   embedTextures?: boolean;
   textureSize?: number;
   flipY?: boolean;
-  
-  // Geometry settings
   mergeGeometries?: boolean;
   quantizePosition?: number;
   quantizeUV?: number;
   quantizeNormal?: number;
   quantizeColor?: number;
-  
-  // Metadata
   includeMetadata?: boolean;
-  metadata?: Record<string, any>;
-  
-  // Output
+  metadata?: Record<string, unknown>;
   outputDirectory?: string;
   filename?: string;
-  
-  // Progress callback
   onProgress?: (progress: number, message: string) => void;
 }
 
+/**
+ * @deprecated Use SceneExportResult from @/tools/export/SceneExporter instead.
+ *
+ * This legacy interface returns URL-based paths and blob sizes, which is
+ * the browser-oriented shape used by the old pipeline. The canonical
+ * SceneExportResult returns raw `data` (ArrayBuffer | string) instead.
+ */
 export interface ExportResult {
   success: boolean;
   format: ExportFormat;
@@ -80,39 +95,32 @@ export interface ExportResult {
   textureCount: number;
   materialCount: number;
   duration: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   error?: string;
 }
 
-export interface LODConfig {
-  level: number;
-  distance: number;
-  reduction: number; // 0.0 to 1.0 (1.0 = full resolution)
-}
+// ---------------------------------------------------------------------------
+// Pipeline SceneExporter Class
+// ---------------------------------------------------------------------------
 
-export interface TexturePackResult {
-  albedo: string;
-  normal?: string;
-  roughness?: string;
-  metalness?: string;
-  ao?: string;
-  emission?: string;
-  opacity?: string;
-}
-
-// ============================================================================
-// Main SceneExporter Class
-// ============================================================================
-
+/**
+ * Pipeline-oriented SceneExporter that wraps the canonical SceneExporter.
+ *
+ * Key differences from the canonical SceneExporter:
+ * - Stores a `THREE.Scene` reference (passed in constructor)
+ * - `export()` method takes `Partial<ExportOptions>` (pipeline-style options)
+ * - Returns legacy `ExportResult` with URL-based paths and blob sizes
+ * - Includes pipeline-specific features: LOD generation, texture packing,
+ *   Draco encoder initialization, and browser download helper
+ */
 export class SceneExporter {
-  private exporter: GLTFExporter;
-  private dracoEncoder: DRACOEncoder | null = null;
   private scene: THREE.Scene;
+  private canonicalExporter: CanonicalSceneExporter;
   private options: ExportOptions;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
-    this.exporter = new GLTFExporter();
+    this.canonicalExporter = new CanonicalSceneExporter();
     this.options = {
       format: 'glb',
       quality: 'high',
@@ -132,32 +140,20 @@ export class SceneExporter {
 
   /**
    * Initialize Draco encoder for compression
+   * Note: Draco compression is handled internally by the canonical exporter
+   * when using GLTF export with compression settings. This method is retained
+   * for API compatibility but is largely a no-op.
    */
-  async initializeDraco(dracoPath?: string): Promise<void> {
-    if (this.dracoEncoder) return;
-
-    try {
-      // In browser environment, Draco needs to be loaded from CDN or local path
-      const script = document.createElement('script');
-      script.src = dracoPath || 'https://www.gstatic.com/draco/v1/draco_encoder.js';
-      await new Promise((resolve, reject) => {
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-
-      // @ts-ignore - Draco global
-      if (typeof DracoEncoderModule !== 'undefined') {
-        // @ts-ignore
-        this.dracoEncoder = new DracoEncoderModule();
-      }
-    } catch (error) {
-      console.warn('Draco encoder not available, falling back to uncompressed export');
-    }
+  async initializeDraco(_dracoPath?: string): Promise<void> {
+    // Draco encoding is now handled by the canonical GLTFExporter
+    // when dracoCompression is enabled. This method is kept for
+    // backward compatibility but does not need to do anything.
   }
 
   /**
-   * Export scene to specified format
+   * Export scene to specified format.
+   * Delegates to the canonical SceneExporter and converts the result
+   * to the legacy ExportResult shape.
    */
   async export(options?: Partial<ExportOptions>): Promise<ExportResult> {
     if (options) {
@@ -165,39 +161,84 @@ export class SceneExporter {
     }
 
     const startTime = performance.now();
-    const { format, onProgress } = this.options;
+    const { format, onProgress, filename, embedTextures, includeMetadata, metadata } = this.options;
 
     onProgress?.(0, `Starting ${format.toUpperCase()} export...`);
 
     try {
-      let result: ExportResult;
+      // Build canonical options from pipeline options
+      const canonicalOptions: Partial<SceneExportOptions> = {
+        format,
+        embedTextures,
+        onProgress,
+        binary: format === 'glb',
+      };
 
-      switch (format) {
-        case 'gltf':
-        case 'glb':
-          result = await this.exportGLTF();
-          break;
-        case 'obj':
-          result = await this.exportOBJ();
-          break;
-        case 'stl':
-          result = await this.exportSTL();
-          break;
-        case 'ply':
-          result = await this.exportPLY();
-          break;
-        case 'usd':
-        case 'usdz':
-          result = await this.exportUSD();
-          break;
-        default:
-          throw new Error(`Unsupported export format: ${format}`);
+      // Delegate to the canonical SceneExporter
+      const result: SceneExportResult = await this.canonicalExporter.exportScene(
+        this.scene,
+        canonicalOptions,
+      );
+
+      // Convert SceneExportResult → legacy ExportResult
+      if (!result.success) {
+        const duration = performance.now() - startTime;
+        return {
+          success: false,
+          format,
+          filename: '',
+          path: '',
+          size: 0,
+          vertexCount: 0,
+          triangleCount: 0,
+          textureCount: 0,
+          materialCount: 0,
+          duration,
+          error: result.errors.join('; ') || 'Export failed',
+        };
       }
 
-      result.duration = performance.now() - startTime;
-      onProgress?.(100, `Export completed in ${result.duration.toFixed(2)}ms`);
+      // Create a blob URL from the result data
+      let blob: Blob;
+      if (result.data instanceof ArrayBuffer) {
+        blob = new Blob([result.data], { type: result.mimeType });
+      } else if (typeof result.data === 'string') {
+        blob = new Blob([result.data], { type: result.mimeType });
+      } else {
+        blob = new Blob([], { type: result.mimeType });
+      }
 
-      return result;
+      const url = URL.createObjectURL(blob);
+      const baseFilename = filename || 'scene';
+
+      // Add metadata if requested
+      let resultMetadata: Record<string, unknown> | undefined;
+      if (includeMetadata) {
+        resultMetadata = {
+          timestamp: new Date().toISOString(),
+          generator: 'InfiniGen R3F',
+          version: '1.0.0',
+          ...metadata,
+          warnings: result.warnings,
+        };
+      }
+
+      const duration = performance.now() - startTime;
+      onProgress?.(100, `Export completed in ${duration.toFixed(2)}ms`);
+
+      return {
+        success: true,
+        format,
+        filename: result.filename || `${baseFilename}.${format}`,
+        path: url,
+        size: blob.size,
+        vertexCount: 0, // Not tracked in canonical result
+        triangleCount: result.stats.triangleCount,
+        textureCount: result.stats.textureCount,
+        materialCount: result.stats.materialCount,
+        duration,
+        metadata: resultMetadata,
+      };
     } catch (error) {
       const duration = performance.now() - startTime;
       return {
@@ -217,500 +258,11 @@ export class SceneExporter {
   }
 
   /**
-   * Export to glTF/GLB format
-   */
-  private async exportGLTF(): Promise<ExportResult> {
-    const { format, dracoCompression, embedTextures, textureSize, includeMetadata, metadata } = this.options;
-
-    return new Promise((resolve, reject) => {
-      const options: any = {
-        binary: format === 'glb',
-        trs: true,
-        onlyVisible: true,
-        truncateDrawRange: true,
-        embedImages: embedTextures !== false,
-        forceIndices: true,
-      };
-
-      if (dracoCompression && this.dracoEncoder) {
-        options.encoderOptions = {
-          methods: {
-            quantize_position: 14,
-            quantize_normal: 10,
-            quantize_texcoord: 12,
-            quantize_color: 8,
-            quantize_weight: 8,
-          },
-        };
-      }
-
-      // Collect scene statistics before export
-      const stats = this.collectSceneStatistics();
-
-      // Add metadata if requested
-      if (includeMetadata && this.scene.userData) {
-        this.scene.userData.exportMetadata = {
-          timestamp: new Date().toISOString(),
-          generator: 'InfiniGen R3F',
-          version: '1.0.0',
-          ...metadata,
-        };
-      }
-
-      this.exporter.parse(
-        this.scene,
-        (gltf: ArrayBuffer | object) => {
-          const blob = format === 'glb' 
-            ? new Blob([gltf as ArrayBuffer], { type: 'application/octet-stream' })
-            : new Blob([JSON.stringify(gltf)], { type: 'application/json' });
-
-          const filename = `${this.options.filename || 'scene'}.${format}`;
-          
-          resolve({
-            success: true,
-            format,
-            filename,
-            path: URL.createObjectURL(blob),
-            size: blob.size,
-            vertexCount: stats.vertexCount,
-            triangleCount: stats.triangleCount,
-            textureCount: stats.textureCount,
-            materialCount: stats.materialCount,
-            duration: 0,
-            metadata: includeMetadata ? this.scene.userData.exportMetadata : undefined,
-          } as ExportResult);
-        },
-        (error) => reject(error),
-        options
-      );
-    });
-  }
-
-  /**
-   * Export to OBJ format with MTL material file
-   */
-  private async exportOBJ(): Promise<ExportResult> {
-    const { filename, onProgress } = this.options;
-    
-    // OBJ export requires custom implementation
-    // This is a simplified version - full implementation would handle all geometry types
-    let objContent = '# OBJ Export from InfiniGen R3F\n';
-    let mtlContent = '# MTL Material File\n\n';
-    
-    let vertexCount = 0;
-    let triangleCount = 0;
-    let materialCount = 0;
-    const materials = new Set<string>();
-
-    onProgress?.(20, 'Traversing scene graph...');
-
-    this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        const mesh = object;
-        const geometry = mesh.geometry;
-        const material = mesh.material;
-
-        // Export material
-        if (material && !materials.has(material.uuid)) {
-          materials.add(material.uuid);
-          materialCount++;
-          mtlContent += this.exportMTLMaterial(material, materialCount);
-        }
-
-        // Export geometry
-        if (geometry.attributes.position) {
-          const positions = geometry.attributes.position.array;
-          const normals = geometry.attributes.normal?.array;
-          const uvs = geometry.attributes.uv?.array;
-
-          onProgress?.(40 + (vertexCount / 100000) * 40, `Exporting vertices: ${vertexCount}`);
-
-          // Vertices
-          for (let i = 0; i < positions.length; i += 3) {
-            objContent += `v ${positions[i]} ${positions[i + 1]} ${positions[i + 2]}\n`;
-            vertexCount++;
-          }
-
-          // Normals
-          if (normals) {
-            for (let i = 0; i < normals.length; i += 3) {
-              objContent += `vn ${normals[i]} ${normals[i + 1]} ${normals[i + 2]}\n`;
-            }
-          }
-
-          // UVs
-          if (uvs) {
-            for (let i = 0; i < uvs.length; i += 2) {
-              objContent += `vt ${uvs[i]} ${uvs[i + 1]}\n`;
-            }
-          }
-
-          // Faces
-          const index = geometry.index;
-          if (index) {
-            const indices = index.array;
-            for (let i = 0; i < indices.length; i += 3) {
-              const v1 = indices[i] + 1;
-              const v2 = indices[i + 1] + 1;
-              const v3 = indices[i + 2] + 1;
-              objContent += `f ${v1}//${v1} ${v2}//${v2} ${v3}//${v3}\n`;
-              triangleCount++;
-            }
-          } else {
-            for (let i = 0; i < positions.length / 3; i += 3) {
-              const v1 = i + 1;
-              const v2 = i + 2;
-              const v3 = i + 3;
-              objContent += `f ${v1}//${v1} ${v2}//${v2} ${v3}//${v3}\n`;
-              triangleCount++;
-            }
-          }
-        }
-      }
-    });
-
-    onProgress?.(90, 'Finalizing files...');
-
-    // Create blobs
-    const objBlob = new Blob([objContent], { type: 'text/plain' });
-    const mtlBlob = new Blob([mtlContent], { type: 'text/plain' });
-
-    const baseFilename = filename || 'scene';
-    
-    // For OBJ, we return both files
-    const objPath = URL.createObjectURL(objBlob);
-    const mtlPath = URL.createObjectURL(mtlBlob);
-
-    return {
-      success: true,
-      format: 'obj',
-      filename: `${baseFilename}.obj`,
-      path: objPath,
-      size: objBlob.size + mtlBlob.size,
-      vertexCount,
-      triangleCount,
-      textureCount: 0, // OBJ doesn't embed textures
-      materialCount,
-      duration: 0,
-      metadata: {
-        mtlFile: `${baseFilename}.mtl`,
-        mtlPath,
-      },
-    };
-  }
-
-  /**
-   * Generate MTL material definition
-   */
-  private exportMTLMaterial(material: THREE.Material, index: number): string {
-    let mtl = `newmtl material_${index}\n`;
-
-    if (material instanceof THREE.MeshStandardMaterial || 
-        material instanceof THREE.MeshPhysicalMaterial) {
-      const stdMat = material as THREE.MeshStandardMaterial;
-      
-      // Diffuse color
-      if (stdMat.color) {
-        mtl += `Kd ${stdMat.color.r.toFixed(3)} ${stdMat.color.g.toFixed(3)} ${stdMat.color.b.toFixed(3)}\n`;
-      }
-      
-      // Ambient color
-      mtl += `Ka 0.2 0.2 0.2\n`;
-      
-      // Specular color
-      if (stdMat.roughness !== undefined) {
-        const specular = 1 - stdMat.roughness;
-        mtl += `Ks ${specular.toFixed(3)} ${specular.toFixed(3)} ${specular.toFixed(3)}\n`;
-        mtl += `Ns ${(stdMat.roughness * 1000).toFixed(0)}\n`;
-      }
-      
-      // Emissive
-      if (stdMat.emissive && stdMat.emissiveIntensity) {
-        mtl += `Ke ${stdMat.emissive.r.toFixed(3)} ${stdMat.emissive.g.toFixed(3)} ${stdMat.emissive.b.toFixed(3)}\n`;
-      }
-      
-      // Transparency
-      if (stdMat.transparent && stdMat.opacity !== undefined) {
-        mtl += `d ${stdMat.opacity.toFixed(3)}\n`;
-      }
-    }
-
-    mtl += '\n';
-    return mtl;
-  }
-
-  /**
-   * Export to STL format (for 3D printing)
-   */
-  private async exportSTL(): Promise<ExportResult> {
-    const { filename, onProgress } = this.options;
-    
-    let stlContent = 'solid infinigen_scene\n';
-    let triangleCount = 0;
-    let vertexCount = 0;
-
-    onProgress?.(20, 'Converting to STL...');
-
-    this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        const mesh = object;
-        const geometry = mesh.geometry;
-
-        if (geometry.attributes.position) {
-          const positions = geometry.attributes.position.array;
-          const normals = geometry.attributes.normal?.array;
-
-          // Calculate normals if not present
-          if (!normals) {
-            geometry.computeVertexNormals();
-          }
-
-          const index = geometry.index;
-          if (index) {
-            const indices = index.array;
-            for (let i = 0; i < indices.length; i += 3) {
-              const v1 = indices[i] * 3;
-              const v2 = indices[i + 1] * 3;
-              const v3 = indices[i + 2] * 3;
-
-              const n1 = indices[i] * 3;
-              const n2 = indices[i + 1] * 3;
-              const n3 = indices[i + 2] * 3;
-
-              stlContent += '  facet normal ';
-              stlContent += `${geometry.attributes.normal.array[n1]} `;
-              stlContent += `${geometry.attributes.normal.array[n1 + 1]} `;
-              stlContent += `${geometry.attributes.normal.array[n1 + 2]}\n`;
-              
-              stlContent += '    outer loop\n';
-              stlContent += `      vertex ${positions[v1]} ${positions[v1 + 1]} ${positions[v1 + 2]}\n`;
-              stlContent += `      vertex ${positions[v2]} ${positions[v2 + 1]} ${positions[v2 + 2]}\n`;
-              stlContent += `      vertex ${positions[v3]} ${positions[v3 + 1]} ${positions[v3 + 2]}\n`;
-              stlContent += '    endloop\n';
-              stlContent += '  endfacet\n';
-
-              triangleCount++;
-              vertexCount += 3;
-            }
-          }
-        }
-      }
-    });
-
-    stlContent += 'endsolid infinigen_scene\n';
-
-    onProgress?.(90, 'Creating STL file...');
-
-    const blob = new Blob([stlContent], { type: 'model/stl' });
-    const baseFilename = filename || 'scene';
-
-    return {
-      success: true,
-      format: 'stl',
-      filename: `${baseFilename}.stl`,
-      path: URL.createObjectURL(blob),
-      size: blob.size,
-      vertexCount,
-      triangleCount,
-      textureCount: 0,
-      materialCount: 0,
-      duration: 0,
-    };
-  }
-
-  /**
-   * Export to PLY format (point cloud)
-   */
-  private async exportPLY(): Promise<ExportResult> {
-    const { filename, onProgress } = this.options;
-    
-    let vertices: number[] = [];
-    let colors: number[] = [];
-    let normals: number[] = [];
-
-    onProgress?.(20, 'Extracting point cloud...');
-
-    this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        const mesh = object;
-        const geometry = mesh.geometry;
-
-        if (geometry.attributes.position) {
-          const positions = geometry.attributes.position.array as ArrayLike<number>;
-          vertices.push(...Array.from(positions));
-
-          if (geometry.attributes.color) {
-            colors.push(...Array.from(geometry.attributes.color.array as ArrayLike<number>));
-          }
-
-          if (geometry.attributes.normal) {
-            normals.push(...Array.from(geometry.attributes.normal.array as ArrayLike<number>));
-          }
-        }
-      } else if (object instanceof THREE.Points) {
-        const points = object;
-        const geometry = points.geometry;
-
-        if (geometry.attributes.position) {
-          const positions = geometry.attributes.position.array as ArrayLike<number>;
-          vertices.push(...Array.from(positions));
-
-          if (geometry.attributes.color) {
-            colors.push(...Array.from(geometry.attributes.color.array as ArrayLike<number>));
-          }
-        }
-      }
-    });
-
-    onProgress?.(60, 'Building PLY structure...');
-
-    const vertexCount = vertices.length / 3;
-    let plyContent = `ply\nformat ascii 1.0\n`;
-    plyContent += `comment Generated by InfiniGen R3F\n`;
-    plyContent += `element vertex ${vertexCount}\n`;
-    plyContent += `property float x\n`;
-    plyContent += `property float y\n`;
-    plyContent += `property float z\n`;
-
-    if (normals.length > 0) {
-      plyContent += `property float nx\n`;
-      plyContent += `property float ny\n`;
-      plyContent += `property float nz\n`;
-    }
-
-    if (colors.length > 0) {
-      plyContent += `property uchar red\n`;
-      plyContent += `property uchar green\n`;
-      plyContent += `property uchar blue\n`;
-    }
-
-    plyContent += `end_header\n`;
-
-    // Write vertices
-    for (let i = 0; i < vertexCount; i++) {
-      plyContent += `${vertices[i * 3]} ${vertices[i * 3 + 1]} ${vertices[i * 3 + 2]}`;
-      
-      if (normals.length > 0) {
-        plyContent += ` ${normals[i * 3]} ${normals[i * 3 + 1]} ${normals[i * 3 + 2]}`;
-      }
-      
-      if (colors.length > 0) {
-        plyContent += ` ${Math.floor(colors[i * 3] * 255)} ${Math.floor(colors[i * 3 + 1] * 255)} ${Math.floor(colors[i * 3 + 2] * 255)}`;
-      }
-      
-      plyContent += '\n';
-    }
-
-    onProgress?.(90, 'Finalizing PLY...');
-
-    const blob = new Blob([plyContent], { type: 'application/ply' });
-    const baseFilename = filename || 'scene';
-
-    return {
-      success: true,
-      format: 'ply',
-      filename: `${baseFilename}.ply`,
-      path: URL.createObjectURL(blob),
-      size: blob.size,
-      vertexCount,
-      triangleCount: 0,
-      textureCount: 0,
-      materialCount: 0,
-      duration: 0,
-    };
-  }
-
-  /**
-   * Export to USD/USDZ format
-   * Note: Full USD export requires Pixar's USD library
-   * This is a placeholder that exports to glTF as intermediate format
-   */
-  private async exportUSD(): Promise<ExportResult> {
-    const { format, onProgress } = this.options;
-    
-    onProgress?.(10, 'USD export requires server-side processing...');
-    onProgress?.(50, 'Exporting to intermediate glTF format...');
-
-    // For now, export to glTF which can be converted to USD using usdconverter
-    const gltfResult = await this.exportGLTF();
-
-    onProgress?.(90, 'USD conversion note added...');
-
-    return {
-      ...gltfResult,
-      format: format as 'usd' | 'usdz',
-      metadata: {
-        ...gltfResult.metadata,
-        note: 'USD conversion requires server-side usdconverter tool',
-        converterCommand: `usd_converter ${gltfResult.filename} ${this.options.filename || 'scene'}.${format}`,
-      },
-    };
-  }
-
-  /**
-   * Collect scene statistics
-   */
-  private collectSceneStatistics(): {
-    vertexCount: number;
-    triangleCount: number;
-    textureCount: number;
-    materialCount: number;
-  } {
-    let vertexCount = 0;
-    let triangleCount = 0;
-    const textures = new Set<string>();
-    const materials = new Set<string>();
-
-    this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        const mesh = object;
-        const geometry = mesh.geometry;
-
-        if (geometry.attributes.position) {
-          vertexCount += geometry.attributes.position.count;
-          
-          const index = geometry.index;
-          if (index) {
-            triangleCount += index.count / 3;
-          } else {
-            triangleCount += geometry.attributes.position.count / 3;
-          }
-        }
-
-        // Count materials
-        if (mesh.material) {
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          mats.forEach((mat) => {
-            if (!materials.has(mat.uuid)) {
-              materials.add(mat.uuid);
-              
-              // Count textures in material
-              Object.keys(mat).forEach((key) => {
-                const value = (mat as any)[key];
-                if (value && value.isTexture && !textures.has(value.uuid)) {
-                  textures.add(value.uuid);
-                }
-              });
-            }
-          });
-        }
-      }
-    });
-
-    return {
-      vertexCount,
-      triangleCount,
-      textureCount: textures.size,
-      materialCount: materials.size,
-    };
-  }
-
-  /**
    * Generate Level of Detail (LOD) versions
    */
   async generateLODs(object: THREE.Object3D, config: LODConfig[]): Promise<THREE.LOD> {
     const lod = new THREE.LOD();
-    
+
     // Add original object as highest detail
     if (object instanceof THREE.Mesh) {
       lod.addLevel(object.clone(), config[0]?.distance || 0);
@@ -731,23 +283,23 @@ export class SceneExporter {
    */
   private reduceGeometryDetail(object: THREE.Object3D, reduction: number): THREE.Object3D {
     const cloned = object.clone();
-    
+
     cloned.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         const mesh = obj;
         const geometry = mesh.geometry;
-        
+
         // Simple vertex decimation (production would use proper mesh simplification)
         if (geometry.attributes.position) {
           const positionAttr = geometry.attributes.position;
           const keepCount = Math.floor(positionAttr.count * reduction);
-          
+
           // Create new buffer with reduced vertices
           const newPosition = new Float32Array(keepCount * 3);
           for (let i = 0; i < keepCount * 3; i++) {
             newPosition[i] = positionAttr.array[i];
           }
-          
+
           geometry.setAttribute('position', new THREE.BufferAttribute(newPosition, 3));
           geometry.attributes.position.needsUpdate = true;
         }
@@ -764,7 +316,7 @@ export class SceneExporter {
     // Implementation would combine multiple textures into single atlas
     // This is a placeholder for the full implementation
     console.warn('Texture packing not fully implemented');
-    
+
     return {
       albedo: '',
       normal: '',
@@ -788,6 +340,22 @@ export class SceneExporter {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  /**
+   * Get the list of supported export formats.
+   * Delegates to the canonical exporter.
+   */
+  getSupportedFormats(): ExportFormat[] {
+    return this.canonicalExporter.getSupportedFormats();
+  }
+
+  /**
+   * Check whether a specific format is supported.
+   * Delegates to the canonical exporter.
+   */
+  isFormatSupported(format: ExportFormat): boolean {
+    return this.canonicalExporter.isFormatSupported(format);
   }
 }
 

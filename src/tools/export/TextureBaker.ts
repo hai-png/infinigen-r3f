@@ -262,8 +262,9 @@ export class TextureBaker {
         ctx.globalCompositeOperation = 'multiply';
         ctx.drawImage(sourceMap.image as CanvasImageSource, 0, 0, size, size);
         ctx.globalCompositeOperation = 'source-over';
-      } catch {
-        // Image not drawable, use tint only
+      } catch (err) {
+        // Silently fall back - image not drawable, using tint only
+        if (process.env.NODE_ENV === 'development') console.debug('[TextureBaker] image composite fallback:', err);
       }
     }
 

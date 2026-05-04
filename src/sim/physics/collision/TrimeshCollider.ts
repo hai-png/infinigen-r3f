@@ -25,8 +25,9 @@ try {
   const bvhModule = require('three-mesh-bvh');
   MeshBVHClass = bvhModule.MeshBVH ?? null;
   generateMeshBVH = bvhModule.generateMeshBVH ?? null;
-} catch {
-  // three-mesh-bvh not available — fallback to standard Three.js APIs
+} catch (err) {
+  // Silently fall back - three-mesh-bvh not available, using standard Three.js APIs
+  if (process.env.NODE_ENV === 'development') console.debug('[TrimeshCollider] three-mesh-bvh import fallback:', err);
 }
 
 // ============================================================================
@@ -246,7 +247,9 @@ export class TrimeshCollider {
     // bvh.closestPointToPoint(point, { point, distance, faceIndex })
     try {
       this.bvh.closestPointToPoint(point, target);
-    } catch {
+    } catch (err) {
+      // Silently fall back - BVH closest point may fail on degenerate geometry
+      if (process.env.NODE_ENV === 'development') console.debug('[TrimeshCollider] closestPointToPoint BVH fallback:', err);
       return this._closestPointBruteForce(point, maxDistance);
     }
 

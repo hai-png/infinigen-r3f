@@ -225,7 +225,9 @@ export async function createDenoisePipeline(
 
     if (!success) return null;
     return pipeline;
-  } catch {
+  } catch (err) {
+    // Silently fall back - DenoisePipeline creation may fail without WebGL support
+    if (process.env.NODE_ENV === 'development') console.debug('[DenoisePipeline] createDenoisePipeline fallback:', err);
     return null;
   }
 }

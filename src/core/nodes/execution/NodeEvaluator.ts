@@ -16,6 +16,7 @@ import { SocketType, areSocketsCompatible, getDefaultValueForType } from '../cor
 import * as CoreExecutors from './CoreNodeExecutors';
 import * as ExtExecutors from './ExtendedNodeExecutors';
 import * as AddExecutors from './AdditionalNodeExecutors';
+import * as ExpExecutors from './ExpandedNodeExecutors';
 
 // ============================================================================
 // Types
@@ -749,6 +750,114 @@ export class NodeEvaluator {
     }
     if (nodeType === 'AccumulateField' || nodeType === 'accumulate_field' || nodeType === 'GeometryNodeAccumulateField') {
       return AddExecutors.executeAccumulateField(inputs);
+    }
+
+    // =========================================================================
+    // Expanded Node Executors (from ExpandedNodeExecutors.ts)
+    // =========================================================================
+
+    // Mesh Topology Nodes
+    if (nodeType === 'DualMesh' || nodeType === 'dual_mesh' || nodeType === 'GeometryNodeDualMesh') {
+      return ExpExecutors.executeDualMesh(inputs);
+    }
+    if (nodeType === 'EdgeNeighbors' || nodeType === 'edge_neighbors' || nodeType === 'GeometryNodeInputEdgeNeighbors') {
+      return ExpExecutors.executeEdgeNeighbors(inputs);
+    }
+    if (nodeType === 'EdgeVertices' || nodeType === 'edge_vertices' || nodeType === 'GeometryNodeInputEdgeVertices') {
+      return ExpExecutors.executeEdgeVertices(inputs);
+    }
+    if (nodeType === 'FaceArea' || nodeType === 'face_area' || nodeType === 'GeometryNodeInputMeshFaceArea') {
+      return ExpExecutors.executeFaceArea(inputs);
+    }
+    if (nodeType === 'VertexNeighbors' || nodeType === 'vertex_neighbors' || nodeType === 'GeometryNodeInputMeshVertexNeighbors') {
+      return ExpExecutors.executeVertexNeighbors(inputs);
+    }
+    if (nodeType === 'EdgesOfFace' || nodeType === 'edges_of_face' || nodeType === 'GeometryNodeInputMeshFaceEdges') {
+      return ExpExecutors.executeEdgesOfFace(inputs);
+    }
+    if (nodeType === 'FacesOfEdge' || nodeType === 'faces_of_edge' || nodeType === 'GeometryNodeInputMeshEdgeFaces') {
+      return ExpExecutors.executeFacesOfEdge(inputs);
+    }
+
+    // Attribute Nodes
+    if (nodeType === 'CaptureAttribute' || nodeType === 'capture_attribute' || nodeType === 'GeometryNodeCaptureAttribute') {
+      return ExpExecutors.executeCaptureAttribute(inputs);
+    }
+    if (nodeType === 'RemoveAttribute' || nodeType === 'remove_attribute' || nodeType === 'GeometryNodeRemoveAttribute') {
+      return ExpExecutors.executeRemoveAttribute(inputs);
+    }
+    if (nodeType === 'SampleIndex' || nodeType === 'sample_index' || nodeType === 'GeometryNodeSampleIndex') {
+      return ExpExecutors.executeSampleIndex(inputs);
+    }
+    if (nodeType === 'SampleNearest' || nodeType === 'sample_nearest' || nodeType === 'GeometryNodeSampleNearest') {
+      return ExpExecutors.executeSampleNearest(inputs);
+    }
+    if (nodeType === 'DomainSize' || nodeType === 'domain_size' || nodeType === 'GeometryNodeInputDomainSize') {
+      return ExpExecutors.executeDomainSize(inputs);
+    }
+
+    // Curve Modifier Nodes
+    if (nodeType === 'SetCurveRadius' || nodeType === 'set_curve_radius' || nodeType === 'GeometryNodeSetCurveRadius') {
+      return ExpExecutors.executeSetCurveRadius(inputs);
+    }
+    if (nodeType === 'SetCurveTilt' || nodeType === 'set_curve_tilt' || nodeType === 'GeometryNodeSetCurveTilt') {
+      return ExpExecutors.executeSetCurveTilt(inputs);
+    }
+    if (nodeType === 'SetHandlePositions' || nodeType === 'set_handle_positions' || nodeType === 'GeometryNodeSetCurveHandlePositions') {
+      return ExpExecutors.executeSetHandlePositions(inputs);
+    }
+    if (nodeType === 'SplineParameter' || nodeType === 'spline_parameter' || nodeType === 'GeometryNodeSplineParameter') {
+      return ExpExecutors.executeSplineParameter(inputs);
+    }
+    if (nodeType === 'FilletCurve' || nodeType === 'fillet_curve' || nodeType === 'GeometryNodeFilletCurve') {
+      return ExpExecutors.executeFilletCurve(inputs);
+    }
+
+    // Instance Transform Nodes
+    if (nodeType === 'TranslateInstances' || nodeType === 'translate_instances' || nodeType === 'GeometryNodeTranslateInstances') {
+      return ExpExecutors.executeTranslateInstances(inputs);
+    }
+    if (nodeType === 'RotateInstances' || nodeType === 'rotate_instances' || nodeType === 'GeometryNodeRotateInstances') {
+      return ExpExecutors.executeRotateInstances(inputs);
+    }
+    if (nodeType === 'ScaleInstances' || nodeType === 'scale_instances' || nodeType === 'GeometryNodeScaleInstances') {
+      return ExpExecutors.executeScaleInstances(inputs);
+    }
+
+    // Volume/Point Conversion Nodes
+    if (nodeType === 'VolumeToMesh' || nodeType === 'volume_to_mesh' || nodeType === 'GeometryNodeVolumeToMesh') {
+      return ExpExecutors.executeVolumeToMesh(inputs);
+    }
+    if (nodeType === 'VolumeToPoints' || nodeType === 'volume_to_points' || nodeType === 'GeometryNodeVolumeToPoints') {
+      return ExpExecutors.executeVolumeToPoints(inputs);
+    }
+    if (nodeType === 'PointsToVertices' || nodeType === 'points_to_vertices' || nodeType === 'GeometryNodePointsToVertices') {
+      return ExpExecutors.executePointsToVertices(inputs);
+    }
+    if (nodeType === 'PointsToCurves' || nodeType === 'points_to_curves' || nodeType === 'GeometryNodePointsToCurves') {
+      return ExpExecutors.executePointsToCurves(inputs);
+    }
+
+    // Geometry Operation Nodes
+    if (nodeType === 'SetPosition' || nodeType === 'set_position' || nodeType === 'GeometryNodeSetPosition') {
+      return ExpExecutors.executeSetPosition(inputs);
+    }
+    if (nodeType === 'DuplicateElements' || nodeType === 'duplicate_elements' || nodeType === 'GeometryNodeDuplicateElements') {
+      return ExpExecutors.executeDuplicateElements(inputs);
+    }
+    if (nodeType === 'SetShadeSmooth' || nodeType === 'set_shade_smooth' || nodeType === 'GeometryNodeSetShadeSmooth') {
+      return ExpExecutors.executeSetShadeSmooth(inputs);
+    }
+
+    // Shader Input / Light Nodes
+    if (nodeType === 'LightFalloff' || nodeType === 'light_falloff' || nodeType === 'ShaderNodeLightFalloff') {
+      return ExpExecutors.executeLightFalloff(inputs);
+    }
+    if (nodeType === 'ObjectIndex' || nodeType === 'object_index' || nodeType === 'GeometryNodeInputObjectIndex') {
+      return ExpExecutors.executeObjectIndex(inputs, node.settings);
+    }
+    if (nodeType === 'IsCameraRay' || nodeType === 'is_camera_ray' || nodeType === 'ShaderNodeIsCameraRay') {
+      return ExpExecutors.executeIsCameraRay(inputs);
     }
 
     // Output nodes - pass through

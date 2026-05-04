@@ -128,7 +128,9 @@ class PathTracerRenderer {
     try {
       this.pathTracer.renderSample();
       return this.pathTracer.samples ?? 0;
-    } catch {
+    } catch (err) {
+      // Silently fall back - renderSample may fail before first setup
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] renderSample fallback:', err);
       return 0;
     }
   }
@@ -137,8 +139,9 @@ class PathTracerRenderer {
     if (!this.pathTracer || !this.isSetup) return;
     try {
       this.pathTracer.reset();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - reset may fail if pathTracer is in bad state
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] reset fallback:', err);
     }
   }
 
@@ -146,8 +149,9 @@ class PathTracerRenderer {
     if (!this.pathTracer || !this.isSetup) return;
     try {
       this.pathTracer.setCamera(this.camera);
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - camera update may not be supported in all versions
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] updateCamera fallback:', err);
     }
   }
 
@@ -155,8 +159,9 @@ class PathTracerRenderer {
     if (!this.pathTracer || !this.isSetup) return;
     try {
       this.pathTracer.updateMaterials();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - material update may fail with unsupported materials
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] updateMaterials fallback:', err);
     }
   }
 
@@ -164,8 +169,9 @@ class PathTracerRenderer {
     if (!this.pathTracer || !this.isSetup) return;
     try {
       this.pathTracer.updateLights();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - light update may fail with unsupported light types
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] updateLights fallback:', err);
     }
   }
 
@@ -173,8 +179,9 @@ class PathTracerRenderer {
     if (!this.pathTracer || !this.isSetup) return;
     try {
       this.pathTracer.updateEnvironment();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - environment update may fail with missing env map
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] updateEnvironment fallback:', err);
     }
   }
 
@@ -191,8 +198,9 @@ class PathTracerRenderer {
     if (this.pathTracer) {
       try {
         this.pathTracer.dispose();
-      } catch {
-        // ignore
+      } catch (err) {
+        // Silently fall back - dispose may fail if resources already freed
+        if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] dispose fallback:', err);
       }
       this.pathTracer = null;
     }
@@ -266,8 +274,9 @@ function PathTraceMode({
     if (ptRendererRef.current) {
       try {
         ptRendererRef.current.reset();
-      } catch {
-        // ignore
+      } catch (err) {
+        // Silently fall back - reset after instance expansion may fail
+        if (process.env.NODE_ENV === 'development') console.debug('[PathTracerAdapter] reset-after-expansion fallback:', err);
       }
     }
 

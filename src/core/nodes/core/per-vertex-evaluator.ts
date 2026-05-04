@@ -498,8 +498,9 @@ export class PerVertexEvaluator {
             this.setStreamValue(stream, v, val);
           }
         }
-      } catch {
-        // Leave default (zero) values on error
+      } catch (err) {
+        // Silently fall back - leave default (zero) values on error
+        if (process.env.NODE_ENV === 'development') console.debug('[PerVertexEvaluator] node output stream fallback:', err);
       }
     }
 

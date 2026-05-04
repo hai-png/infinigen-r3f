@@ -1,10 +1,19 @@
 /**
  * Object Registry - Central registration system for all object generators
+ *
+ * This module provides two registry systems:
+ * 1. ObjectRegistry (singleton) - Registers named object instances with category/tags metadata
+ * 2. ClassObjectRegistry (static) - Registers Object3D class constructors by type string
  */
 
+import * as THREE from 'three';
 import { CactusGenerator, CACTUS_VARIANTS } from './vegetation/cactus';
 import { DeformedTreeGenerator, DEFORMED_TREE_VARIANTS } from './vegetation/trees/deformed-index';
 import { FruitGenerator, FruitBowlGenerator, FRUIT_TYPES } from './food';
+
+// ---------------------------------------------------------------------------
+// Instance-based registry (ObjectRegistry)
+// ---------------------------------------------------------------------------
 
 export interface RegisteredObject {
   name: string;
@@ -56,6 +65,39 @@ export class ObjectRegistry {
 
   has(name: string): boolean {
     return this.objects.has(name);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Class-based registry (ClassObjectRegistry) - consolidates functionality
+// previously in assets/objects/utils/ObjectRegistry.ts
+// ---------------------------------------------------------------------------
+
+export interface RegistrableObject {
+  new(...args: any[]): THREE.Object3D;
+  type: string;
+}
+
+export class ClassObjectRegistry {
+  private static registry: Map<string, RegistrableObject> = new Map();
+
+  static register(obj: RegistrableObject): void {
+    if (this.registry.has(obj.type)) {
+      throw new Error(`Object type ${obj.type} is already registered`);
+    }
+    this.registry.set(obj.type, obj);
+  }
+
+  static get(type: string): RegistrableObject | undefined {
+    return this.registry.get(type);
+  }
+
+  static getAll(): RegistrableObject[] {
+    return Array.from(this.registry.values());
+  }
+
+  static has(type: string): boolean {
+    return this.registry.has(type);
   }
 }
 

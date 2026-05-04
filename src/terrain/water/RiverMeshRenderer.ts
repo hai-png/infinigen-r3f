@@ -435,8 +435,9 @@ export class RiverMeshRenderer {
       texture.repeat.set(4, 4);
 
       return texture;
-    } catch {
+    } catch (err) {
       // createCanvas may fail during SSR; return null gracefully
+      if (process.env.NODE_ENV === 'development') console.debug('[RiverMeshRenderer] caustic texture creation fallback:', err);
       return null;
     }
   }

@@ -7,6 +7,16 @@
  * @module @infinigen/r3f/nodes/execution
  */
 
+// ExecutorTypes — Shared type definitions for the node execution subsystem
+export type {
+  NodeInputs,
+  NodeOutput,
+  Vector3Like,
+  ColorLike,
+  GeometryLike,
+  NodeExecutorFunction,
+} from './ExecutorTypes';
+
 // NodeEvaluator - Topological sort and graph evaluation
 export {
   NodeEvaluator,
@@ -188,6 +198,41 @@ export {
 export type {
   NodeExecutorFunction,
 } from './AdditionalNodeExecutors';
+
+// ExpandedNodeExecutors - 30 additional mesh topology, attribute, curve modifier, instance, volume/point, geometry, and shader input executors
+export {
+  ExpandedNodeExecutors,
+  executeDualMesh,
+  executeEdgeNeighbors,
+  executeEdgeVertices,
+  executeFaceArea,
+  executeVertexNeighbors,
+  executeEdgesOfFace,
+  executeFacesOfEdge,
+  executeCaptureAttribute,
+  executeRemoveAttribute,
+  executeSampleIndex,
+  executeSampleNearest,
+  executeDomainSize,
+  executeSetCurveRadius,
+  executeSetCurveTilt,
+  executeSetHandlePositions,
+  executeSplineParameter,
+  executeFilletCurve,
+  executeTranslateInstances,
+  executeRotateInstances,
+  executeScaleInstances,
+  executeVolumeToMesh,
+  executeVolumeToPoints,
+  executePointsToVertices,
+  executePointsToCurves,
+  executeSetPosition,
+  executeDuplicateElements,
+  executeSetShadeSmooth,
+  executeLightFalloff,
+  executeObjectIndex,
+  executeIsCameraRay,
+} from './ExpandedNodeExecutors';
 
 // GLSL Shader Generation - Node function libraries and shader composition
 export {

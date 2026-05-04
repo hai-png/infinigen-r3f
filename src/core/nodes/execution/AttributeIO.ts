@@ -690,4 +690,11 @@ export function newAttrData(
   return new NamedAttribute('', domain, type, data);
 }
 
-export default AttributeManager;
+/**
+ * Filename-matching alias for backward compat.
+ * `import AttributeIO from './AttributeIO'` and
+ * `import { AttributeIO } from './AttributeIO'` both work.
+ * AttributeIO is an alias for the primary class AttributeManager.
+ */
+export { AttributeManager as AttributeIO };
+export default AttributeIO;

@@ -641,8 +641,9 @@ export class ViolationAwareAcceptance {
         if (v > 0) {
           violationCount++;
         }
-      } catch {
+      } catch (err) {
         // If a constraint can't be evaluated, count it as violated
+        if (process.env.NODE_ENV === 'development') console.debug('[StructuredMoveProposals] violation count fallback:', err);
         violationCount++;
       }
     }

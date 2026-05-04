@@ -509,4 +509,10 @@ export const PolygonOps = {
   },
 };
 
-export default PolygonOps;
+/**
+ * Filename-matching alias for backward compat.
+ * `import Polygon2DOperations from './Polygon2DOperations'` and
+ * `import { Polygon2DOperations } from './Polygon2DOperations'` both work.
+ */
+export { PolygonOps as Polygon2DOperations };
+export default Polygon2DOperations;

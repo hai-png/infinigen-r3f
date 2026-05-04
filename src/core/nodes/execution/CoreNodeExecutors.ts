@@ -1043,7 +1043,9 @@ export function executeMeshBoolean(inputs: Record<string, any>): any {
       const result = geometry.clone();
       return { Geometry: result, _booleanOperation: operation, _operandProvided: true };
     }
-  } catch {
+  } catch (err) {
+    // Silently fall back - boolean operation failed, returning original geometry
+    if (process.env.NODE_ENV === 'development') console.debug('[CoreNodeExecutors] meshBoolean fallback:', err);
     return { Geometry: geometry.clone() };
   }
 }

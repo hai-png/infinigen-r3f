@@ -349,7 +349,8 @@ export class RockGenerator {
         mesh.receiveShadow = true;
         group.add(mesh);
       } catch (e) {
-        // Fallback: add individual meshes
+        // Silently fall back - geometry merge failed, adding individual meshes
+        if (process.env.NODE_ENV === 'development') console.debug('[RockGenerator] geometry merge fallback:', e);
         geometries.forEach(geo => {
           const mesh = new THREE.Mesh(geo, material);
           mesh.castShadow = true;

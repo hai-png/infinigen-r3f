@@ -1,5 +1,9 @@
 /**
  * CabinetGenerator - Procedural cabinet generation
+ *
+ * @deprecated Use `articulated/CabinetGenerator` instead, which extends ArticulatedObjectBase
+ *           and provides joint metadata + MJCF/URDF export. This storage version
+ *           will be removed in a future release.
  */
 
 import * as THREE from 'three';
@@ -20,6 +24,10 @@ export interface CabinetConfig extends BaseGeneratorConfig {
   variationSeed?: number;
 }
 
+/**
+ * @deprecated Use `import { CabinetGenerator } from '../articulated/CabinetGenerator'` instead.
+ *           The articulated version includes physics joint definitions and MJCF export.
+ */
 export class CabinetGenerator extends BaseObjectGenerator<CabinetConfig> {
   static readonly GENERATOR_ID = 'cabinet_generator';
   

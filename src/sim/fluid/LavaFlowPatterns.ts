@@ -658,4 +658,10 @@ export class LavaFlowSimulation {
   }
 }
 
-export default LavaFlowSimulation;
+/**
+ * Filename-matching alias for backward compat.
+ * `import LavaFlowPatterns from './LavaFlowPatterns'` and
+ * `import { LavaFlowPatterns } from './LavaFlowPatterns'` both work.
+ */
+export { LavaFlowSimulation as LavaFlowPatterns };
+export default LavaFlowPatterns;

@@ -504,8 +504,9 @@ class RoomSegmenter {
       const right = rightResult.length > 0 ? rightResult[0] as Polygon2D : [];
 
       return [left, right];
-    } catch {
-      // Fallback to the original sampling-based approach
+    } catch (err) {
+      // Silently fall back - polygon splitting may fail, using sampling-based approach
+      if (process.env.NODE_ENV === 'development') console.debug('[FloorPlanGenerator] splitPolygon fallback:', err);
       return this.splitPolygonFallback(poly, pos, horizontal);
     }
   }
@@ -719,8 +720,9 @@ class RoomSegmenter {
         }
         return best as Polygon2D;
       }
-    } catch {
-      // Fall back to convex hull on error
+    } catch (err) {
+      // Silently fall back - polygon union may fail, falling back to convex hull
+      if (process.env.NODE_ENV === 'development') console.debug('[FloorPlanGenerator] mergePolygons fallback:', err);
     }
 
     // Fallback: convex hull merge
@@ -1081,8 +1083,9 @@ class FloorPlanSolver {
         // (since the intersection is shared between both polygons)
         return totalPerimeter / 2;
       }
-    } catch {
-      // Fall back to approximation
+    } catch (err) {
+      // Silently fall back - shared boundary computation may fail, using approximation
+      if (process.env.NODE_ENV === 'development') console.debug('[FloorPlanGenerator] computeSharedBoundaryLength fallback:', err);
     }
 
     // Fallback: distance-based approximation

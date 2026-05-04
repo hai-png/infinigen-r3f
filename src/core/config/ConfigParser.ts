@@ -273,8 +273,9 @@ export function parseValue(valueStr: string): ConfigValue {
       }
       // Plain object — store as JSON string
       return JSON.stringify(obj);
-    } catch {
-      // Not valid JSON — treat as a string
+    } catch (err) {
+      // Silently fall back - not valid JSON, treat as a string
+      if (process.env.NODE_ENV === 'development') console.debug('[ConfigParser] JSON value parse fallback:', err);
       return trimmed;
     }
   }
@@ -286,8 +287,9 @@ export function parseValue(valueStr: string): ConfigValue {
       if (Array.isArray(arr)) {
         return JSON.stringify(arr);
       }
-    } catch {
-      // Not valid JSON array
+    } catch (err) {
+      // Silently fall back - not valid JSON array
+      if (process.env.NODE_ENV === 'development') console.debug('[ConfigParser] JSON array parse fallback:', err);
     }
     return trimmed;
   }

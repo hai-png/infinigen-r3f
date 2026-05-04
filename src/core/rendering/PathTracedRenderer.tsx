@@ -145,8 +145,9 @@ export class PathTracerManager {
       const { PathTracingSceneWorker } = await import('three-gpu-pathtracer');
       const worker = new PathTracingSceneWorker();
       this.pathTracer.setBVHWorker(worker);
-    } catch {
-      // Worker not available, will use synchronous generation
+    } catch (err) {
+      // Silently fall back - BVH Worker not available, will use synchronous generation
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] setBVHWorker fallback:', err);
     }
   }
 
@@ -160,7 +161,9 @@ export class PathTracerManager {
     try {
       this.pathTracer.renderSample();
       return this.pathTracer.samples ?? 0;
-    } catch {
+    } catch (err) {
+      // Silently fall back - renderSample may fail before pathTracer is ready
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] renderSample fallback:', err);
       return 0;
     }
   }
@@ -172,8 +175,9 @@ export class PathTracerManager {
     if (!this.pathTracer) return;
     try {
       this.pathTracer.reset();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - reset may fail if pathTracer is in bad state
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] reset fallback:', err);
     }
   }
 
@@ -184,8 +188,9 @@ export class PathTracerManager {
     if (!this.pathTracer) return;
     try {
       this.pathTracer.updateCamera();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - camera update may not be supported in all versions
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] updateCamera fallback:', err);
     }
   }
 
@@ -196,8 +201,9 @@ export class PathTracerManager {
     if (!this.pathTracer) return;
     try {
       this.pathTracer.updateMaterials();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - material update may fail with unsupported materials
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] updateMaterials fallback:', err);
     }
   }
 
@@ -208,8 +214,9 @@ export class PathTracerManager {
     if (!this.pathTracer) return;
     try {
       this.pathTracer.updateLights();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - light update may fail with unsupported light types
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] updateLights fallback:', err);
     }
   }
 
@@ -220,8 +227,9 @@ export class PathTracerManager {
     if (!this.pathTracer) return;
     try {
       this.pathTracer.updateEnvironment();
-    } catch {
-      // ignore
+    } catch (err) {
+      // Silently fall back - environment update may fail with missing env map
+      if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] updateEnvironment fallback:', err);
     }
   }
 
@@ -276,8 +284,9 @@ export class PathTracerManager {
     if (this.pathTracer) {
       try {
         this.pathTracer.dispose();
-      } catch {
-        // ignore
+      } catch (err) {
+        // Silently fall back - dispose may fail if resources already freed
+        if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] dispose fallback:', err);
       }
       this.pathTracer = null;
     }
@@ -354,7 +363,9 @@ export function detectGPUCapabilities(): GPUCapabilities {
 
     canvas.remove();
     return defaults;
-  } catch {
+  } catch (err) {
+    // Silently fall back - GPU capability detection may fail in restricted environments
+    if (process.env.NODE_ENV === 'development') console.debug('[PathTracedRenderer] detectGPUCapabilities fallback:', err);
     return defaults;
   }
 }

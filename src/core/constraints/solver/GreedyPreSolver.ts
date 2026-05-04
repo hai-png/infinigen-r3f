@@ -543,7 +543,8 @@ export class GreedyPreSolver {
     if (typeof constraint.isSatisfied === 'function') {
       try {
         return constraint.isSatisfied(assignment);
-      } catch {
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.debug('[GreedyPreSolver] isSatisfied fallback:', err);
         return false;
       }
     }
@@ -553,7 +554,8 @@ export class GreedyPreSolver {
       try {
         const result = constraint.evaluate(assignment);
         return !!result;
-      } catch {
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.debug('[GreedyPreSolver] evaluate fallback:', err);
         return false;
       }
     }
@@ -562,7 +564,8 @@ export class GreedyPreSolver {
     if (typeof constraint.check === 'function') {
       try {
         return constraint.check(assignment);
-      } catch {
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') console.debug('[GreedyPreSolver] check fallback:', err);
         return false;
       }
     }

@@ -27,8 +27,9 @@ export function createTestScene() {
   try {
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(256, 256);
-  } catch {
-    // WebGLRenderer may not be available in all test environments (e.g., headless CI)
+  } catch (err) {
+    // Silently fall back - WebGLRenderer may not be available in headless CI environments
+    if (process.env.NODE_ENV === 'development') console.debug('[testUtilities] WebGLRenderer creation fallback:', err);
     renderer = null;
   }
 

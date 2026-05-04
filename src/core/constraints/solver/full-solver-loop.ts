@@ -161,15 +161,17 @@ export class FullSolverLoop {
         for (const constraint of problem.constraints.values()) {
           try {
             totalViolation += violCount(constraint as any, this.evaluatorState, memo);
-          } catch {
+          } catch (err) {
             // If a constraint can't be evaluated, count it as a violation
+            if (process.env.NODE_ENV === 'development') console.debug('[FullSolverLoop] constraint evaluation fallback:', err);
             totalViolation += 1;
           }
         }
 
         return totalViolation;
-      } catch {
+      } catch (err) {
         // Fall through to fallback
+        if (process.env.NODE_ENV === 'development') console.debug('[FullSolverLoop] energy evaluation fallback:', err);
       }
     }
 
@@ -326,8 +328,9 @@ export class FullSolverLoop {
             problem.constraints.values() as Iterable<Node>,
             this.evaluatorState
           );
-        } catch {
+        } catch (err) {
           // Fall through to energy-based estimation
+          if (process.env.NODE_ENV === 'development') console.debug('[FullSolverLoop] violation count fallback:', err);
         }
       }
     }

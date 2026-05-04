@@ -342,7 +342,9 @@ async function checkCSGAvailable(): Promise<boolean> {
   try {
     await import('three-bvh-csg');
     CSGAvailable = true;
-  } catch {
+  } catch (err) {
+    // Silently fall back - three-bvh-csg not available
+    if (process.env.NODE_ENV === 'development') console.debug('[TerrainMultiMaterial] three-bvh-csg import fallback:', err);
     CSGAvailable = false;
   }
   return CSGAvailable;

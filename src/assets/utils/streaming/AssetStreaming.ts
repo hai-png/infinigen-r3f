@@ -602,11 +602,10 @@ export class PredictionEngine {
   }
 }
 
-export default {
-  StreamPriority,
-  LoadState,
-  DEFAULT_STREAMING_CONFIG,
-  AssetStreamer,
-  progressiveLoad,
-  PredictionEngine,
-};
+/**
+ * Default export – AssetStreamer, the primary class in this module.
+ *
+ * Previously this file exported a bag-of-symbols object as default.  All
+ * symbols remain available as named exports.
+ */
+export default AssetStreamer;

@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from './MathUtils';
+import { Logger } from './Logger';
 
 // ============================================================================
 // Scene Organization
@@ -224,28 +225,28 @@ export class ScenePipeline {
    * Executes the pipeline.
    */
   async execute(scene: THREE.Scene): Promise<void> {
-    console.log(`Starting pipeline with seed ${this.config.seed}`);
+    Logger.info('Pipeline', `Starting pipeline with seed ${this.config.seed}`);
 
     for (const stageConfig of this.config.stages) {
       if (!stageConfig.enabled) {
-        console.log(`Skipping stage: ${stageConfig.name}`);
+        Logger.debug('Pipeline', `Skipping stage: ${stageConfig.name}`);
         continue;
       }
 
       this.currentStage = stageConfig.name;
-      console.log(`Executing stage: ${stageConfig.name}`);
+      Logger.info('Pipeline', `Executing stage: ${stageConfig.name}`);
 
       try {
         await this.executeStage(stageConfig.name, scene, stageConfig.parameters);
         this.stageProgress.set(stageConfig.name, 100);
       } catch (error) {
-        console.error(`Stage ${stageConfig.name} failed:`, error);
+        Logger.error('Pipeline', `Stage ${stageConfig.name} failed:`, error);
         throw error;
       }
     }
 
     this.currentStage = null;
-    console.log('Pipeline completed successfully');
+    Logger.info('Pipeline', 'Pipeline completed successfully');
   }
 
   private async executeStage(
@@ -278,32 +279,32 @@ export class ScenePipeline {
 
   private async setupStage(scene: THREE.Scene, params: Record<string, any>): Promise<void> {
     // Setup environment, lighting, camera
-    console.log('Setup stage complete');
+    Logger.debug('Pipeline', 'Setup stage complete');
   }
 
   private async generationStage(scene: THREE.Scene, params: Record<string, any>): Promise<void> {
     // Generate assets, terrain, structures
-    console.log('Generation stage complete');
+    Logger.debug('Pipeline', 'Generation stage complete');
   }
 
   private async placementStage(scene: THREE.Scene, params: Record<string, any>): Promise<void> {
     // Place objects according to constraints
-    console.log('Placement stage complete');
+    Logger.debug('Pipeline', 'Placement stage complete');
   }
 
   private async physicsStage(scene: THREE.Scene, params: Record<string, any>): Promise<void> {
     // Setup physics simulation
-    console.log('Physics stage complete');
+    Logger.debug('Pipeline', 'Physics stage complete');
   }
 
   private async renderingStage(scene: THREE.Scene, params: Record<string, any>): Promise<void> {
     // Configure rendering settings
-    console.log('Rendering stage complete');
+    Logger.debug('Pipeline', 'Rendering stage complete');
   }
 
   private async exportStage(scene: THREE.Scene, params: Record<string, any>): Promise<void> {
     // Export scene to file
-    console.log('Export stage complete');
+    Logger.debug('Pipeline', 'Export stage complete');
   }
 
   /**
@@ -467,7 +468,7 @@ export async function batchExportScenes(
       
       results.set(name, blob);
     } catch (error) {
-      console.error(`Failed to export scene ${name}:`, error);
+      Logger.error('Pipeline', `Failed to export scene ${name}:`, error);
     }
   }
 
@@ -480,7 +481,7 @@ export async function batchExportScenes(
  */
 export async function compressGLTF(gltfData: any): Promise<any> {
   // Placeholder - would use draco3d or gltf-pipeline in production
-  console.warn('GLTF compression not implemented in browser environment');
+  Logger.warn('Pipeline', 'GLTF compression not implemented in browser environment');
   return gltfData;
 }
 

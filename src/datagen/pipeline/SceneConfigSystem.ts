@@ -897,4 +897,10 @@ export class ConfigParser {
   }
 }
 
-export default ConfigParser;
+/**
+ * Filename-matching alias for backward compat.
+ * `import SceneConfigSystem from './SceneConfigSystem'` and
+ * `import { SceneConfigSystem } from './SceneConfigSystem'` both work.
+ */
+export { ConfigParser as SceneConfigSystem };
+export default SceneConfigSystem;

@@ -10,6 +10,20 @@ import { Vector3, Matrix4, BufferGeometry, Float32BufferAttribute, Box3, Sphere 
 import { SphericalMesher, SphericalMesherConfig, CameraPose } from './SphericalMesher';
 import { SDFKernel } from '../sdf/SDFOperations';
 
+/**
+ * Terrain LOD configuration.
+ *
+ * Extends SphericalMesherConfig with LOD-specific fields. The LOD fields are
+ * defined canonically in `TerrainLODConfigFields` at `@/assets/core/LODSystem`;
+ * they are repeated here (rather than using `extends`) because
+ * `SphericalMesherConfig` already declares `maxLOD` as optional, which
+ * conflicts with the required version in `TerrainLODConfigFields`.
+ *
+ * @deprecated For the LOD-specific fields only, use `TerrainLODConfigFields`
+ * from `@/assets/core/LODSystem`. The full composed type (with
+ * SphericalMesherConfig) remains here because it depends on a
+ * terrain-specific base type.
+ */
 export interface LODConfig extends SphericalMesherConfig {
   maxLOD: number;
   minLOD: number;

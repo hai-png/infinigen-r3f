@@ -38,6 +38,9 @@ export type {
   ExportScope,
   SceneExportOptions,
   SceneExportResult,
+  // Pipeline-specific types (now consolidated from datagen/pipeline/SceneExporter)
+  LODConfig,
+  TexturePackResult,
   TextureBakeOptions,
   TextureBakeResult,
   TextureSize,

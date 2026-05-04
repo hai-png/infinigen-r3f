@@ -355,7 +355,8 @@ const ConstraintItem: React.FC<{
                   const args = JSON.parse(e.target.value);
                   onChange({ ...constraint, args });
                 } catch (err) {
-                  // Invalid JSON, ignore
+                  // Silently fall back - invalid JSON input, ignoring parse error
+                  if (process.env.NODE_ENV === 'development') console.debug('[ConstraintEditor] JSON parse fallback:', err);
                 }
               }}
               disabled={readOnly}

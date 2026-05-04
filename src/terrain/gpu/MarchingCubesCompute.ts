@@ -495,7 +495,7 @@ export class MarchingCubesCompute {
 
   private destroyBuffers(...buffers: any[]): void {
     for (const b of buffers) {
-      try { if (b && typeof b.destroy === 'function') b.destroy(); } catch {}
+      try { if (b && typeof b.destroy === 'function') b.destroy(); } catch (err) { if (process.env.NODE_ENV === 'development') console.debug('[MarchingCubesCompute] buffer destroy fallback:', err); }
     }
   }
 

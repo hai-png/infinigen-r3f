@@ -496,8 +496,9 @@ export class MammalGenerator extends CreatureBase {
       });
 
       return this.skinSystem.generateMaterial(skinConfig);
-    } catch {
-      // Fallback: roughness-only material (previous behavior)
+    } catch (err) {
+      // Silently fall back - skin system failed, using roughness-only material
+      if (process.env.NODE_ENV === 'development') console.debug('[MammalGenerator] skinSystem material fallback:', err);
       const roughness = Math.min(0.5 + length * 5, 1.0);
       const mat = new MeshStandardMaterial({
         color,

@@ -1,9 +1,18 @@
 /**
  * Water System Module Exports
+ *
+ * Canonical exports default to V2 generators. V1 generators are
+ * re-exported with deprecation notices for backward compatibility.
  */
 
-export { LakeGenerator } from './LakeGenerator';
-export { RiverNetwork } from './RiverNetwork';
+// ── Canonical (V2) generators ──────────────────────────────────────────────
+export { LakeGeneratorV2 } from './LakeGeneratorV2';
+export type { LakeGeneratorConfig, LakeInfo } from './LakeGeneratorV2';
+
+export { RiverNetworkV2 } from './RiverNetworkV2';
+export type { RiverNetworkConfig, RiverPath, RiverSegment } from './RiverNetworkV2';
+
+// ── Other water systems ────────────────────────────────────────────────────
 export { WaterfallGenerator } from './WaterfallGenerator';
 export { OceanSurface, OceanSystem } from './OceanSystem';
 export { CausticsRenderer } from './CausticsRenderer';
@@ -14,6 +23,19 @@ export { WaterfallMeshRenderer } from './WaterfallMeshRenderer';
 export { UnderwaterEffects } from './UnderwaterEffects';
 export { WaterSystemManager } from './WaterSystemManager';
 
+// ── Re-export V1 generators for backward compatibility (deprecated) ────────
+
+/**
+ * @deprecated Use `LakeGeneratorV2` instead. Re-exported for backward compat.
+ */
+export { LakeGenerator } from './LakeGenerator';
+
+/**
+ * @deprecated Use `RiverNetworkV2` instead. Re-exported for backward compat.
+ */
+export { RiverNetwork } from './RiverNetwork';
+
+// V1 type exports (still used by some consumers)
 export type { 
   LakeConfig, 
   RiverConfig, 

@@ -21,6 +21,12 @@ export type { CubeSphericalConfig } from './CubeSphericalMesher';
 export { LODMesher } from './LODMesher';
 export type { LODConfig, LODChunk } from './LODMesher';
 
+/**
+ * @deprecated Use `TerrainLODConfigFields` from `@/assets/core/LODSystem` instead.
+ * Alias kept for backward compatibility — re-exported from canonical location.
+ */
+export type { TerrainLODConfigFields } from '@/assets/core/LODSystem';
+
 // Chunked terrain system with LOD management
 export { ChunkedTerrainSystem, LODLevel } from './ChunkedTerrainSystem';
 export type { ChunkedTerrainConfig, TerrainChunk } from './ChunkedTerrainSystem';

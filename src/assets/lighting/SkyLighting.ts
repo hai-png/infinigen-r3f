@@ -1,7 +1,27 @@
 import * as THREE from 'three';
 
 /**
- * Configuration for sky lighting system
+ * Legacy sky lighting module — gradient sphere + HemisphereLight + DirectionalLight
+ *
+ * @deprecated Use `SkyLightingSystem` from `./SkyLightingSystem` instead, which
+ *           provides Nishita-integrated physically-based sky rendering with
+ *           automatic sun tracking, ambient light derived from sun elevation,
+ *           and smooth time-of-day transitions.
+ *
+ * This legacy module will be removed in a future release. To migrate:
+ *   OLD: import { SkyLightingSystem } from './SkyLighting';
+ *   NEW: import { SkyLightingSystem } from './SkyLightingSystem';
+ *
+ *   OLD: const sky = new SkyLightingSystem(config);
+ *        scene.add(sky.getGroup());
+ *   NEW: const sky = new SkyLightingSystem(config);
+ *        await sky.attach(scene);
+ */
+
+/**
+ * Configuration for legacy sky lighting system
+ *
+ * @deprecated Use {@link SkyLightingSystemConfig} from `./SkyLightingSystem` instead.
  */
 export interface SkyLightingConfig {
   // Sun properties
@@ -24,8 +44,13 @@ export interface SkyLightingConfig {
 }
 
 /**
- * Sky Lighting System
- * Creates realistic sky and sun lighting using hemisphere and directional lights
+ * Legacy Sky Lighting System
+ * Creates sky and sun lighting using hemisphere and directional lights.
+ *
+ * @deprecated Use {@link import('./SkyLightingSystem').SkyLightingSystem} instead, which
+ *           provides Nishita-integrated physically-based sky rendering.
+ *           This class is renamed to `LegacySkyLightingSystem` in the re-export barrel
+ *           to avoid name collision with the canonical SkyLightingSystem.
  */
 export class SkyLightingSystem {
   private config: SkyLightingConfig;

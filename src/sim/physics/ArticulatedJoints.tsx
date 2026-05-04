@@ -159,8 +159,9 @@ export function RevoluteJoint({
         if (jointHandle) {
           try {
             rapierWorld.removeImpulseJoint(jointHandle, true);
-          } catch {
-            // Joint may already be removed
+          } catch (err) {
+            // Silently fall back - joint may already be removed
+            if (process.env.NODE_ENV === 'development') console.debug('[RevoluteJoint] removeImpulseJoint fallback:', err);
           }
         }
       };
@@ -268,8 +269,9 @@ export function PrismaticJoint({
         if (jointHandle) {
           try {
             rapierWorld.removeImpulseJoint(jointHandle, true);
-          } catch {
-            // Joint may already be removed
+          } catch (err) {
+            // Silently fall back - joint may already be removed
+            if (process.env.NODE_ENV === 'development') console.debug('[PrismaticJoint] removeImpulseJoint fallback:', err);
           }
         }
       };
@@ -369,8 +371,9 @@ export function SphericalJoint({
         if (jointHandle) {
           try {
             rapierWorld.removeImpulseJoint(jointHandle, true);
-          } catch {
-            // Joint may already be removed
+          } catch (err) {
+            // Silently fall back - joint may already be removed
+            if (process.env.NODE_ENV === 'development') console.debug('[SphericalJoint] removeImpulseJoint fallback:', err);
           }
         }
       };
@@ -446,8 +449,9 @@ export function FixedJoint({
         if (jointHandle) {
           try {
             rapierWorld.removeImpulseJoint(jointHandle, true);
-          } catch {
-            // Joint may already be removed
+          } catch (err) {
+            // Silently fall back - joint may already be removed
+            if (process.env.NODE_ENV === 'development') console.debug('[FixedJoint] removeImpulseJoint fallback:', err);
           }
         }
       };
@@ -757,8 +761,9 @@ export function solveSpringRopeJoints(dt: number): void {
       }
 
       spring.prevExtension = extension;
-    } catch {
-      // Body may have been removed
+    } catch (err) {
+      // Silently fall back - spring body may have been removed
+      if (process.env.NODE_ENV === 'development') console.debug('[ArticulatedJoints] spring solve fallback:', err);
     }
   }
 
@@ -792,8 +797,9 @@ export function solveSpringRopeJoints(dt: number): void {
       if (rope.bodyA.bodyType() !== 0) {
         rope.bodyA.applyImpulse({ x: fx * dt, y: fy * dt, z: fz * dt }, true);
       }
-    } catch {
-      // Body may have been removed
+    } catch (err) {
+      // Silently fall back - rope body may have been removed
+      if (process.env.NODE_ENV === 'development') console.debug('[ArticulatedJoints] rope solve fallback:', err);
     }
   }
 }

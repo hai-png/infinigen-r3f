@@ -8,7 +8,7 @@
  * 
  * Note: Several names exist in multiple sub-modules. Conflicts are resolved here:
  * - ScatterConfig: from ./core (placement) is primary; ./assets has InstanceScatterSystem.ScatterConfig
- * - LODConfig: from ./terrain is primary; ./assets and ./datagen have their own versions
+ * - LODConfig: from ./terrain is primary; canonical shared types (RenderingLODConfig, ExportLODConfig, TerrainLODConfigFields) live in ./assets/core/LODSystem
  * - BiomeType, TerrainConfig: from ./terrain is primary; ./datagen has its own versions
  * - ThreePointLightingConfig: from ./assets/lighting is primary; ./datagen has its own version
  * - ExportFormat: from ./tools is primary; ./datagen has its own version
@@ -173,7 +173,8 @@ export {
 } from './tools';
 
 // Re-export ExportFormat from tools as the primary one
-export type { ExportFormat, SceneExportFormat } from './tools';
+// Also export the consolidated pipeline-specific types (LODConfig, TexturePackResult)
+export type { ExportFormat, SceneExportFormat, LODConfig, TexturePackResult } from './tools';
 
 // GPL Module (placeholder)
 export * from './infinigen_gpl';
@@ -234,23 +235,39 @@ export {
   type WorkerPoolConfig,
   type MemoryStats,
 } from './core/util/optimization';
-// LOD - export selectively to avoid LODConfig conflict with terrain
+// LOD — canonical types from assets/core/LODSystem
+// The rendering-pipeline types (RenderingLODConfig, LODLevel, etc.) were
+// previously imported from ./core/rendering/lod which now re-exports from
+// the canonical location for backward compatibility.
 export {
+  // Classes
   LODManager,
   InstancedLODManager,
-  LODSystem,
-  type LODLevel,
+
+  // Constants
   DEFAULT_LOD_CONFIG,
+
+  // Functions
   generateLODLevels,
   selectLODByDistance,
   selectLODByScreenSpace,
   updateLODWithHysteresis,
   calculateMemorySavings,
   estimateRenderingImprovement,
-  type LODConfig as RenderingLODConfig,
+
+  // Rendering types
+  type RenderingLODConfig,
+  type RenderingLODLevel,
+  type LODLevel,
   type LODMesh,
   type LODObject,
   type InstancedLODConfig,
+
+  // Export-pipeline type
+  type ExportLODConfig,
+
+  // Terrain LOD type
+  type TerrainLODConfigFields,
 } from './core/rendering/lod';
 
 // Shaders

@@ -126,7 +126,9 @@ function detectPathTraceCapability(): { available: boolean; renderScale: number 
     canvas.remove();
 
     return { available, renderScale };
-  } catch {
+  } catch (err) {
+    // Silently fall back - GPU capability detection may fail in restricted environments
+    if (process.env.NODE_ENV === 'development') console.debug('[RenderingModeContext] detectPathTraceCapability fallback:', err);
     return { available: false, renderScale: 0.5 };
   }
 }

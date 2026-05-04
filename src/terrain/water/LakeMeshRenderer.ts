@@ -377,7 +377,9 @@ export class LakeMeshRenderer {
       texture.repeat.set(3, 3);
 
       return texture;
-    } catch {
+    } catch (err) {
+      // Expected fallback in rendering pipeline
+      if (process.env.NODE_ENV === 'development') console.debug('[LakeMeshRenderer] caustic texture creation fallback:', err);
       return null;
     }
   }

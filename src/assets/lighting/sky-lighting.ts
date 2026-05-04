@@ -4,9 +4,18 @@
  * Provides sky lighting configuration and setup utilities
  * for outdoor scene rendering.
  *
- * The primary sky solution is now the Nishita-backed {@link SkyLightingSystem}
- * (re-exported below). The legacy `setupSkyLighting` function remains for
- * backward compatibility.
+ * ⚠️  DEPRECATED: This module is superseded by the Nishita-backed
+ *     {@link SkyLightingSystem} from `./SkyLightingSystem`.
+ *
+ * The `setupSkyLighting` function and `SkyConfig` type are retained for
+ * backward compatibility only. They will be removed in a future release.
+ *
+ * Migration:
+ *   OLD: import { setupSkyLighting } from './sky-lighting';
+ *   NEW: import { SkyLightingSystem } from './SkyLightingSystem';
+ *        const sky = new SkyLightingSystem(); await sky.attach(scene);
+ *
+ * @deprecated Use `./SkyLightingSystem` instead.
  */
 
 import * as THREE from 'three';
@@ -15,6 +24,9 @@ import * as THREE from 'three';
 export { SkyLightingSystem } from './SkyLightingSystem';
 export type { SkyLightingSystemConfig } from './SkyLightingSystem';
 
+/**
+ * @deprecated Use {@link SkyLightingSystemConfig} from `./SkyLightingSystem` instead.
+ */
 export interface SkyConfig {
   turbidity: number;
   rayleigh: number;
@@ -32,6 +44,9 @@ export interface SkyConfig {
   hour?: number;
 }
 
+/**
+ * @deprecated Use {@link SkyLightingSystem} from `./SkyLightingSystem` instead.
+ */
 export const DEFAULT_SKY_CONFIG: SkyConfig = {
   turbidity: 10,
   rayleigh: 3,
@@ -45,6 +60,11 @@ export const DEFAULT_SKY_CONFIG: SkyConfig = {
   groundColor: new THREE.Color(0x444422),
 };
 
+/**
+ * @deprecated Use {@link SkyLightingSystem} from `./SkyLightingSystem` instead.
+ *           To create a sky-lit scene, instantiate SkyLightingSystem and call
+ *           `await sky.attach(scene)`.
+ */
 export function setupSkyLighting(
   sceneOrConfig: THREE.Scene | Partial<SkyConfig>,
   configOrUndefined?: Partial<SkyConfig>

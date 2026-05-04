@@ -422,9 +422,10 @@ export class HandheldSimulator {
 // Legacy re-exports for backwards compatibility
 export { createHandheldSim as simulateHandheld };
 
-export default {
-  createHandheldSim,
-  generateHandheldTrajectory,
-  HandheldSimulator,
-  simulateHandheld: createHandheldSim,
-};
+/**
+ * Default export – HandheldSimulator, the primary class in this module.
+ *
+ * Previously this file exported a bag-of-symbols object as default.  All
+ * symbols remain available as named exports.
+ */
+export default HandheldSimulator;

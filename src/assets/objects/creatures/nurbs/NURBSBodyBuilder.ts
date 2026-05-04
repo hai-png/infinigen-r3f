@@ -312,8 +312,9 @@ export class NURBSBodyBuilder {
           u: spec.u,
           v: spec.v,
         });
-      } catch {
-        // Skip attachment points that fail to evaluate (degenerate surface regions)
+      } catch (err) {
+        // Silently fall back - skip attachment points that fail to evaluate (degenerate surface regions)
+        if (process.env.NODE_ENV === 'development') console.debug('[NURBSBodyBuilder] attachment point evaluation fallback:', err);
       }
     }
 

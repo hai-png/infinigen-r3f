@@ -459,9 +459,10 @@ export class TrackingShotSimulator {
 // Legacy re-exports for backwards compatibility
 export type TrackingShotConfig_alias = TrackingShotConfig;
 
-export default {
-  createTrackingShot,
-  generateTrackingTrajectory,
-  computeDynamicDistanceSchedule,
-  TrackingShotSimulator,
-};
+/**
+ * Default export – TrackingShotSimulator, the primary class in this module.
+ *
+ * Previously this file exported a bag-of-symbols object as default.  All
+ * symbols remain available as named exports.
+ */
+export default TrackingShotSimulator;

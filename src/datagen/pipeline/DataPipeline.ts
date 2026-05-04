@@ -146,7 +146,9 @@ function createOffscreenRenderer(width: number, height: number): {
   let canvas: OffscreenCanvas | HTMLCanvasElement;
   try {
     canvas = new OffscreenCanvas(width, height);
-  } catch {
+  } catch (err) {
+    // Silently fall back - OffscreenCanvas may not be available in all environments
+    if (process.env.NODE_ENV === 'development') console.debug('[DataPipeline] OffscreenCanvas fallback:', err);
     canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -184,7 +186,9 @@ async function canvasToImageUrl(canvas: OffscreenCanvas | HTMLCanvasElement): Pr
     } else {
       return (canvas as HTMLCanvasElement).toDataURL('image/png');
     }
-  } catch {
+  } catch (err) {
+    // Silently fall back - canvas image URL conversion may fail
+    if (process.env.NODE_ENV === 'development') console.debug('[DataPipeline] canvasToImageUrl fallback:', err);
     return '';
   }
 }

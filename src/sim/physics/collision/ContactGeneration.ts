@@ -623,4 +623,11 @@ function getMaxRadius(collider: Collider): number {
   }
 }
 
-export default { generateContacts };
+/**
+ * Default export – ContactManifold, the primary class in this module.
+ *
+ * Previously this file exported `{ generateContacts }` as default, which was
+ * inconsistent with the rest of the codebase.  `generateContacts` and all
+ * other symbols remain available as named exports.
+ */
+export default ContactManifold;

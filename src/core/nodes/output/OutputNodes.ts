@@ -688,8 +688,9 @@ export class ImageOutputNode implements OutputNodeBase {
           if (blob) this.outputs.blob = blob;
         }, mimeType, quality);
       }
-    } catch {
-      // Fallback for non-browser environments (e.g., SSR / node)
+    } catch (err) {
+      // Silently fall back - canvas not available in non-browser environments (e.g., SSR / node)
+      if (process.env.NODE_ENV === 'development') console.debug('[OutputNodes] canvas toDataURL fallback:', err);
       this.outputs.url = `data:image/${format};base64,placeholder_${width}x${height}_q${Math.round(quality * 100)}`;
     }
 

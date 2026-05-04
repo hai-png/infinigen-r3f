@@ -287,8 +287,9 @@ export function isSatisfiable(
     if (result.type === 'Boolean' && typeof result.value === 'boolean') {
       return result.value;
     }
-  } catch {
+  } catch (err) {
     // Evaluation failed, assume potentially satisfiable
+    if (process.env.NODE_ENV === 'development') console.debug('[ConstraintUtil] isSatisfiable evaluation fallback:', err);
   }
   
   return true; // Cannot determine, assume satisfiable

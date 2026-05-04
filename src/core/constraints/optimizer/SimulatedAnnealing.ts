@@ -7,6 +7,7 @@ import { ConstraintDomain, ConstraintEvaluationResult } from '../core/Constraint
 import { MoveOperatorFactory, Move, MoveType, MoveResult } from '../moves/MoveOperators';
 import { Vector3 } from 'three';
 import { SeededRandom } from '../../util/MathUtils';
+import { Logger } from '../../util/Logger';
 
 export interface AnnealingConfig {
   initialTemperature: number;
@@ -73,7 +74,7 @@ export class SimulatedAnnealing {
     this.currentEnergy = initialEval.energy;
     
     if (this.config.debugMode) {
-      console.log(`[Annealing] Initial energy: ${this.currentEnergy.toFixed(2)}`);
+      Logger.debug('Annealing', `Initial energy: ${this.currentEnergy.toFixed(2)}`);
     }
 
     while (this.currentTemperature > this.config.minTemperature) {
@@ -94,7 +95,7 @@ export class SimulatedAnnealing {
             this.currentEnergy += result.energyChange;
             
             if (this.config.debugMode && this.iterationCount % 100 === 0) {
-              console.log(`[Annealing] Iter ${this.iterationCount}, Temp: ${this.currentTemperature.toFixed(2)}, Energy: ${this.currentEnergy.toFixed(2)}`);
+              Logger.debug('Annealing', `Iter ${this.iterationCount}, Temp: ${this.currentTemperature.toFixed(2)}, Energy: ${this.currentEnergy.toFixed(2)}`);
             }
           } else {
             // Reject the move (undo)
@@ -108,7 +109,7 @@ export class SimulatedAnnealing {
         // Early termination if energy is zero (perfect solution)
         if (this.currentEnergy < this.config.acceptanceThreshold) {
           if (this.config.debugMode) {
-            console.log(`[Annealing] Converged to near-zero energy at iteration ${this.iterationCount}`);
+            Logger.debug('Annealing', `Converged to near-zero energy at iteration ${this.iterationCount}`);
           }
           break;
         }
@@ -122,11 +123,11 @@ export class SimulatedAnnealing {
     this.stats.finalEnergy = this.currentEnergy;
 
     if (this.config.debugMode) {
-      console.log(`[Annealing] Optimization complete:`);
-      console.log(`  - Total iterations: ${this.stats.totalIterations}`);
-      console.log(`  - Accepted moves: ${this.stats.acceptedMoves}`);
-      console.log(`  - Rejected moves: ${this.stats.rejectedMoves}`);
-      console.log(`  - Final energy: ${this.stats.finalEnergy.toFixed(2)}`);
+      Logger.debug('Annealing', 'Optimization complete:');
+      Logger.debug('Annealing', `  - Total iterations: ${this.stats.totalIterations}`);
+      Logger.debug('Annealing', `  - Accepted moves: ${this.stats.acceptedMoves}`);
+      Logger.debug('Annealing', `  - Rejected moves: ${this.stats.rejectedMoves}`);
+      Logger.debug('Annealing', `  - Final energy: ${this.stats.finalEnergy.toFixed(2)}`);
     }
 
     return this.stats;

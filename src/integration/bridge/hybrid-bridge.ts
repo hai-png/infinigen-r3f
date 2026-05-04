@@ -15,6 +15,7 @@
 
 import { MeshData, PhysicsConfig } from '../../types';
 import { SeededRandom } from '@/core/util/MathUtils';
+import { Logger } from '@/core/util/Logger';
 
 /** All supported RPC method names (text + binary) */
 export type BridgeMethod =
@@ -146,7 +147,7 @@ export class HybridBridge {
           this.connected = true;
           this.connecting = false;
           this.reconnectAttempts = 0;
-          console.log('[HybridBridge] Connected to Python backend');
+          Logger.info('HybridBridge', 'Connected to Python backend');
 
           // Process queued requests
           while (this.queue.length > 0) {
@@ -161,7 +162,7 @@ export class HybridBridge {
         };
 
         this.ws.onerror = (err) => {
-          console.error('[HybridBridge] Connection error:', err);
+          Logger.error('HybridBridge', 'Connection error:', err);
           if (!this.connected) {
             this.connecting = false;
             reject(err);
@@ -171,7 +172,7 @@ export class HybridBridge {
         this.ws.onclose = () => {
           this.connected = false;
           this.connecting = false;
-          console.warn('[HybridBridge] Disconnected');
+          Logger.warn('HybridBridge', 'Disconnected');
 
           // Auto-reconnect unless intentionally closed
           if (!this.intentionallyClosed) {
@@ -207,14 +208,15 @@ export class HybridBridge {
       this.config.maxReconnectInterval
     );
 
-    console.log(`[HybridBridge] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    Logger.info('HybridBridge', `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
       try {
         await this.connect();
-      } catch {
-        // connect() already schedules the next attempt via onclose
+      } catch (err) {
+        // Silently fall back - connect() already schedules the next attempt via onclose
+        Logger.debug('HybridBridge', 'reconnect fallback:', err);
       }
     }, delay);
   }
@@ -230,7 +232,7 @@ export class HybridBridge {
     // --- Blob fallback (some browsers) ----------------------------------
     if (data instanceof Blob) {
       data.arrayBuffer().then(buf => this.handleBinaryFrame(buf)).catch(() => {
-        console.warn('[HybridBridge] Failed to read Blob binary frame');
+        Logger.warn('HybridBridge', 'Failed to read Blob binary frame');
       });
       return;
     }
@@ -249,7 +251,7 @@ export class HybridBridge {
         }
       }
     } catch (e) {
-      console.error('[HybridBridge] Failed to parse response:', e);
+      Logger.error('HybridBridge', 'Failed to parse response:', e);
     }
   }
 
@@ -267,7 +269,7 @@ export class HybridBridge {
       const headerLength = view.getUint32(0, true); // little-endian
 
       if (headerLength > buffer.byteLength - 4) {
-        console.error('[HybridBridge] Binary frame header length exceeds buffer');
+        Logger.error('HybridBridge', 'Binary frame header length exceeds buffer');
         return;
       }
 
@@ -290,7 +292,7 @@ export class HybridBridge {
 
       this.routeBinaryMessage(msg);
     } catch (e) {
-      console.error('[HybridBridge] Failed to decode binary frame:', e);
+      Logger.error('HybridBridge', 'Failed to decode binary frame:', e);
     }
   }
 
@@ -345,7 +347,7 @@ export class HybridBridge {
     if (handler) {
       handler(msg);
     } else {
-      console.warn(`[HybridBridge] No binary handler for method '${msg.method}'`);
+      Logger.warn('HybridBridge', `No binary handler for method '${msg.method}'`);
     }
   }
 
@@ -423,7 +425,7 @@ export class HybridBridge {
         imageData,
       );
     } catch (e) {
-      console.warn('[HybridBridge] Image transfer failed:', e);
+      Logger.warn('HybridBridge', 'Image transfer failed:', e);
       return { saved: false };
     }
   }
@@ -441,7 +443,7 @@ export class HybridBridge {
         geometryData,
       );
     } catch (e) {
-      console.warn('[HybridBridge] Geometry transfer failed:', e);
+      Logger.warn('HybridBridge', 'Geometry transfer failed:', e);
       return { received: false };
     }
   }
@@ -462,7 +464,7 @@ export class HybridBridge {
         buffer,
       );
     } catch (e) {
-      console.warn('[HybridBridge] Heightmap transfer failed:', e);
+      Logger.warn('HybridBridge', 'Heightmap transfer failed:', e);
       return { received: false };
     }
   }
@@ -476,7 +478,7 @@ export class HybridBridge {
     try {
       return await this.request<MeshData>('mesh_boolean', { operation: op, meshes });
     } catch (e) {
-      console.warn('[HybridBridge] MeshBoolean failed, falling back to mock');
+      Logger.warn('HybridBridge', 'MeshBoolean failed, falling back to mock');
       return this.mockBoolean(op, meshes);
     }
   }
@@ -488,7 +490,7 @@ export class HybridBridge {
     try {
       return await this.request<MeshData>('mesh_subdivide', { mesh, levels });
     } catch (e) {
-      console.warn('[HybridBridge] Subdivide failed, returning original');
+      Logger.warn('HybridBridge', 'Subdivide failed, returning original');
       return mesh;
     }
   }
@@ -501,7 +503,7 @@ export class HybridBridge {
     try {
       return await this.request<string>('export_mjcf', { config });
     } catch (e) {
-      console.warn('[HybridBridge] MJCF export failed, using browser fallback');
+      Logger.warn('HybridBridge', 'MJCF export failed, using browser fallback');
       return this.fallbackMjcfExport(config);
     }
   }
@@ -514,7 +516,7 @@ export class HybridBridge {
     try {
       return await this.request<MeshData>('generate_procedural', { type, params });
     } catch (e) {
-      console.warn('[HybridBridge] Procedural generation failed, using browser fallback');
+      Logger.warn('HybridBridge', 'Procedural generation failed, using browser fallback');
       return this.fallbackProcedural(type, params);
     }
   }
@@ -527,6 +529,7 @@ export class HybridBridge {
       return await this.request<number[]>('raycast_batch', { rays });
     } catch (e) {
       // Fallback to simple distance check
+      Logger.debug('HybridBridge', 'batchRaycast fallback:', e);
       return rays.map(() => Infinity);
     }
   }
@@ -538,7 +541,7 @@ export class HybridBridge {
     try {
       return await this.request<any[]>('optimize_decoration', { roomBounds, decorations });
     } catch (e) {
-      console.warn('[HybridBridge] Decoration optimization failed, returning original');
+      Logger.warn('HybridBridge', 'Decoration optimization failed, returning original');
       return decorations;
     }
   }
@@ -550,7 +553,7 @@ export class HybridBridge {
     try {
       return await this.request<any[]>('optimize_trajectories', { trajectories });
     } catch (e) {
-      console.warn('[HybridBridge] Trajectory optimization failed, returning original');
+      Logger.warn('HybridBridge', 'Trajectory optimization failed, returning original');
       return trajectories;
     }
   }
@@ -558,7 +561,7 @@ export class HybridBridge {
   // --- Mock Fallbacks for Browser-Only Mode ---
 
   private mockBoolean(op: string, meshes: MeshData[]): MeshData {
-    console.warn('Using mock Boolean operation');
+    Logger.warn('HybridBridge', 'Using mock Boolean operation');
     return meshes[0] || { vertices: [], faces: [] };
   }
 
@@ -591,7 +594,7 @@ export class HybridBridge {
    * Browser fallback for procedural generation: simple primitives
    */
   private fallbackProcedural(type: string, params: any): MeshData {
-    console.warn(`[HybridBridge] Using browser fallback for procedural ${type}`);
+    Logger.warn('HybridBridge', `Using browser fallback for procedural ${type}`);
 
     if (type === 'terrain') {
       // Simple heightmap terrain

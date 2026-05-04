@@ -525,8 +525,9 @@ export class FluidSurfaceRenderer {
         const lib = getDefaultLibrary();
         const mat = lib.getSimpleMaterial(this.config.materialPreset);
         if (mat) return mat;
-      } catch {
+      } catch (err) {
         // Library unavailable – fall through to built-in material
+        if (process.env.NODE_ENV === 'development') console.debug('[FluidSurfaceRenderer] MaterialPresetLibrary fallback:', err);
       }
     }
 

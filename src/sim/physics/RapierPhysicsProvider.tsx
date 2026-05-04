@@ -135,8 +135,9 @@ function RapierPhysicsInner({
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     rapier = useRapier();
-  } catch {
-    // Not inside rapier context — rapier stays null
+  } catch (err) {
+    // Silently fall back - not inside rapier context, rapier stays null
+    if (process.env.NODE_ENV === 'development') console.debug('[RapierPhysicsProvider] useRapier fallback:', err);
   }
 
   const rapierWorldRef = useRef<any>(null);

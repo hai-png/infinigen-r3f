@@ -541,4 +541,10 @@ export class FallingLeavesSystem {
   }
 }
 
-export default FallingLeavesSystem;
+/**
+ * Filename-matching alias for backward compat.
+ * `import LeavesSystem from './LeavesSystem'` and
+ * `import { LeavesSystem } from './LeavesSystem'` both work.
+ */
+export { FallingLeavesSystem as LeavesSystem };
+export default LeavesSystem;

@@ -232,4 +232,12 @@ export const CAMERA_PRESETS: Record<string, CameraProperties> = {
   },
 };
 
-export default CameraProperties;
+/**
+ * Default export – DEFAULT_CAMERA_PROPERTIES.
+ *
+ * `CameraProperties` is an interface (erased at runtime), so it cannot be a
+ * valid default export value.  The default is now the canonical preset so
+ * that `import cameraProps from './CameraProperties'` yields a usable object.
+ * Use named import `{ CameraProperties }` for the type.
+ */
+export default DEFAULT_CAMERA_PROPERTIES;

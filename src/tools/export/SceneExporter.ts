@@ -19,12 +19,13 @@
 import * as THREE from 'three';
 import { HybridBridge } from '@/integration/bridge/hybrid-bridge';
 import type { MeshSimplifier } from './MeshSimplifier';
+import { ExportLODConfig } from '@/assets/core/LODSystem';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = 'glb' | 'gltf' | 'obj' | 'ply' | 'stl' | 'json' | 'fbx' | 'usd';
+export type ExportFormat = 'glb' | 'gltf' | 'obj' | 'ply' | 'stl' | 'json' | 'fbx' | 'usd' | 'usdz';
 
 export type ExportScope = 'full' | 'selected' | 'terrain';
 
@@ -68,14 +69,54 @@ export interface SceneExportResult {
 }
 
 // ---------------------------------------------------------------------------
+// Backward-compatible aliases & pipeline-specific types
+// ---------------------------------------------------------------------------
+
+/**
+ * @deprecated Use SceneExportOptions instead.
+ * Alias kept for backward compatibility with datagen/pipeline/SceneExporter.
+ */
+export type ExportOptions = SceneExportOptions;
+
+/**
+ * @deprecated Use SceneExportResult instead.
+ * Alias kept for backward compatibility with datagen/pipeline/SceneExporter.
+ */
+export type ExportResult = SceneExportResult;
+
+/**
+ * LOD level configuration for pipeline-specific LOD generation.
+ *
+ * @deprecated Use `ExportLODConfig` from `@/assets/core/LODSystem` instead.
+ * Kept as a type alias for backward compatibility.
+ */
+export type LODConfig = ExportLODConfig;
+
+/**
+ * Result of texture atlas packing.
+ */
+export interface TexturePackResult {
+  albedo: string;
+  normal?: string;
+  roughness?: string;
+  metalness?: string;
+  ao?: string;
+  emission?: string;
+  opacity?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 /** Formats that produce real output entirely within JavaScript */
 const NATIVE_FORMATS: readonly ExportFormat[] = ['glb', 'gltf', 'obj', 'ply', 'stl', 'json'];
 
+/** USDZ is treated as a variant of USD — same bridge requirement */
+const USD_FAMILY: readonly ExportFormat[] = ['usd', 'usdz'];
+
 /** Formats that need an external Python bridge and cannot work standalone */
-const BRIDGE_FORMATS: readonly ExportFormat[] = ['fbx', 'usd'];
+const BRIDGE_FORMATS: readonly ExportFormat[] = ['fbx', 'usd', 'usdz'];
 
 // ---------------------------------------------------------------------------
 // SceneExporter class
@@ -113,6 +154,8 @@ export class SceneExporter {
   isFormatSupported(format: ExportFormat): boolean {
     if (NATIVE_FORMATS.includes(format)) return true;
     if (BRIDGE_FORMATS.includes(format)) return HybridBridge.isConnected();
+    // USDZ is in the USD family — same bridge requirement
+    if (USD_FAMILY.includes(format)) return HybridBridge.isConnected();
     return false;
   }
 
@@ -201,6 +244,7 @@ export class SceneExporter {
             startTime, warnings, errors,
           );
         case 'usd':
+        case 'usdz':
           result = await this.exportUSD(exportScene, opts, stats, warnings, errors);
           break;
         default:
@@ -574,18 +618,22 @@ export class SceneExporter {
         const bridgeResult = await this.bridge.transferGeometry(glbResult.data);
         if (bridgeResult.received) {
           warnings.push('USD export sent to Python backend for conversion');
+          const usdFilename = opts.format === 'usdz' ? 'scene.usdz' : 'scene.usda';
+          const usdMime = opts.format === 'usdz' ? 'model/vnd.usdz+zip' : 'model/usd';
           return {
             success: true,
             data: glbResult.data,
-            filename: 'scene.usda',
-            mimeType: 'model/usd',
+            filename: usdFilename,
+            mimeType: usdMime,
             warnings,
             errors,
             stats,
           };
         }
       }
-    } catch {
+    } catch (err) {
+      // Silently fall back - Python bridge USD conversion failed, falling back to GLB
+      if (process.env.NODE_ENV === 'development') console.debug('[SceneExporter] USD export fallback:', err);
       warnings.push('Python bridge USD conversion failed, falling back to GLB');
     }
 
@@ -715,8 +763,9 @@ export class SceneExporter {
           const simplified = this.simplifier!.simplify(child.geometry, ratio);
           child.geometry.dispose();
           child.geometry = simplified;
-        } catch {
-          // Keep original geometry on simplification failure
+        } catch (err) {
+          // Silently fall back - geometry simplification failed, keeping original
+          if (process.env.NODE_ENV === 'development') console.debug('[SceneExporter] simplifyMesh fallback:', err);
         }
       }
     });

@@ -635,4 +635,10 @@ export function generateCameraPath(
   return keyframes;
 }
 
-export default PathFollower;
+/**
+ * Filename-matching alias for backward compat.
+ * `import PathFollowing from './PathFollowing'` and
+ * `import { PathFollowing } from './PathFollowing'` both work.
+ */
+export { PathFollower as PathFollowing };
+export default PathFollowing;

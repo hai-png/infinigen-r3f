@@ -556,8 +556,9 @@ async function createTrackLight(
           group.add(spotLight);
           group.add(spotLight.target);
           continue;
-        } catch {
-          // Fall through to fallback
+        } catch (err) {
+          // Silently fall back - PhysicalSpotLight creation failed, using standard SpotLight
+          if (process.env.NODE_ENV === 'development') console.debug('[IndoorLightingSetup] PhysicalSpotLight fallback:', err);
         }
       }
     }
