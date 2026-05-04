@@ -15,6 +15,7 @@ import type { NodeInstance, NodeLink, NodeDefinition } from '../core/types';
 import { SocketType, areSocketsCompatible, getDefaultValueForType } from '../core/types';
 import * as CoreExecutors from './CoreNodeExecutors';
 import * as ExtExecutors from './ExtendedNodeExecutors';
+import * as AddExecutors from './AdditionalNodeExecutors';
 
 // ============================================================================
 // Types
@@ -644,6 +645,110 @@ export class NodeEvaluator {
     }
     if (nodeType === 'mesh_to_points' || nodeType === 'GeometryNodeMeshToPoints' || nodeType === 'MeshToPointsNode') {
       return ExtExecutors.executeMeshToPoints(inputs);
+    }
+
+    // =========================================================================
+    // Additional Node Executors (from AdditionalNodeExecutors.ts)
+    // =========================================================================
+
+    // Texture Coordinate Nodes
+    if (nodeType === 'TextureCoordinate' || nodeType === 'texture_coordinate' || nodeType === 'ShaderNodeTexCoord') {
+      return AddExecutors.executeTextureCoordinate(inputs);
+    }
+    if (nodeType === 'Mapping' || nodeType === 'mapping' || nodeType === 'ShaderNodeMapping') {
+      return AddExecutors.executeMapping(inputs);
+    }
+    if (nodeType === 'UVMap' || nodeType === 'uv_map' || nodeType === 'GeometryNodeInputUVMap') {
+      return AddExecutors.executeUVMap(inputs);
+    }
+    if (nodeType === 'GeometryNodeInputPosition' || nodeType === 'input_position') {
+      return AddExecutors.executeGeometryNodeInputPosition(inputs);
+    }
+    if (nodeType === 'GeometryNodeInputNormal' || nodeType === 'input_normal') {
+      return AddExecutors.executeGeometryNodeInputNormal(inputs);
+    }
+    if (nodeType === 'GeometryNodeInputTangent' || nodeType === 'input_tangent') {
+      return AddExecutors.executeGeometryNodeInputTangent(inputs);
+    }
+
+    // Geometry Operation Nodes
+    if (nodeType === 'SubdivideMesh' || nodeType === 'subdivide_mesh' || nodeType === 'GeometryNodeSubdivisionSurface') {
+      return AddExecutors.executeSubdivideMesh(inputs);
+    }
+    if (nodeType === 'DecimateMesh' || nodeType === 'decimate_mesh' || nodeType === 'GeometryNodeDecimate') {
+      return AddExecutors.executeDecimateMesh(inputs);
+    }
+    if (nodeType === 'ExtrudeFaces' || nodeType === 'extrude_faces' || nodeType === 'GeometryNodeExtrudeFaces') {
+      return AddExecutors.executeExtrudeFaces(inputs);
+    }
+    if (nodeType === 'InsetFaces' || nodeType === 'inset_faces' || nodeType === 'GeometryNodeInsetFaces') {
+      return AddExecutors.executeInsetFaces(inputs);
+    }
+    if (nodeType === 'FlipFaces' || nodeType === 'flip_faces' || nodeType === 'GeometryNodeFlipFaces') {
+      return AddExecutors.executeFlipFaces(inputs);
+    }
+    if (nodeType === 'RotateMesh' || nodeType === 'rotate_mesh' || nodeType === 'GeometryNodeRotateMesh') {
+      return AddExecutors.executeRotateMesh(inputs);
+    }
+    if (nodeType === 'ScaleMesh' || nodeType === 'scale_mesh' || nodeType === 'GeometryNodeScaleMesh') {
+      return AddExecutors.executeScaleMesh(inputs);
+    }
+    if (nodeType === 'TranslateMesh' || nodeType === 'translate_mesh' || nodeType === 'GeometryNodeTranslateMesh') {
+      return AddExecutors.executeTranslateMesh(inputs);
+    }
+
+    // Texture/Evaluation Nodes
+    if (nodeType === 'BrickTexture' || nodeType === 'brick_texture' || nodeType === 'ShaderNodeTexBrick') {
+      return AddExecutors.executeBrickTexture(inputs);
+    }
+    if (nodeType === 'CheckerTexture' || nodeType === 'checker_texture' || nodeType === 'ShaderNodeTexChecker') {
+      return AddExecutors.executeCheckerTexture(inputs);
+    }
+    if (nodeType === 'GradientTexture' || nodeType === 'gradient_texture' || nodeType === 'ShaderNodeTexGradient') {
+      return AddExecutors.executeGradientTexture(inputs);
+    }
+    if (nodeType === 'MagicTexture' || nodeType === 'magic_texture' || nodeType === 'ShaderNodeTexMagic') {
+      return AddExecutors.executeMagicTexture(inputs);
+    }
+    if (nodeType === 'WaveTexture' || nodeType === 'wave_texture' || nodeType === 'ShaderNodeTexWave') {
+      return AddExecutors.executeWaveTexture(inputs);
+    }
+    if (nodeType === 'WhiteNoiseTexture' || nodeType === 'white_noise_texture' || nodeType === 'ShaderNodeTexWhiteNoise') {
+      return AddExecutors.executeWhiteNoiseTexture(inputs);
+    }
+
+    // Color/Mix Nodes
+    if (nodeType === 'ColorRamp' || nodeType === 'color_ramp' || nodeType === 'ShaderNodeValToRGB') {
+      return AddExecutors.executeColorRamp(inputs);
+    }
+    if (nodeType === 'Curves' || nodeType === 'curves' || nodeType === 'ShaderNodeCurveRGB') {
+      return AddExecutors.executeCurves(inputs);
+    }
+    if (nodeType === 'SeparateColor' || nodeType === 'separate_color' || nodeType === 'FunctionNodeSeparateColor') {
+      return AddExecutors.executeSeparateColor(inputs);
+    }
+    if (nodeType === 'CombineColor' || nodeType === 'combine_color' || nodeType === 'FunctionNodeCombineColor') {
+      return AddExecutors.executeCombineColor(inputs);
+    }
+
+    // Math/Utility Nodes
+    if (nodeType === 'BooleanMath' || nodeType === 'boolean_math' || nodeType === 'FunctionNodeBooleanMath') {
+      return AddExecutors.executeBooleanMath(inputs);
+    }
+    if (nodeType === 'FloatCompare' || nodeType === 'float_compare' || nodeType === 'FunctionNodeFloatCompare') {
+      return AddExecutors.executeFloatCompare(inputs);
+    }
+    if (nodeType === 'MapRangeVector' || nodeType === 'map_range_vector' || nodeType === 'ShaderNodeVectorMapRange') {
+      return AddExecutors.executeMapRangeVector(inputs);
+    }
+    if (nodeType === 'RotationToEuler' || nodeType === 'rotation_to_euler' || nodeType === 'FunctionNodeRotationToEuler') {
+      return AddExecutors.executeRotationToEuler(inputs);
+    }
+    if (nodeType === 'EulerToRotation' || nodeType === 'euler_to_rotation' || nodeType === 'FunctionNodeEulerToRotation') {
+      return AddExecutors.executeEulerToRotation(inputs);
+    }
+    if (nodeType === 'AccumulateField' || nodeType === 'accumulate_field' || nodeType === 'GeometryNodeAccumulateField') {
+      return AddExecutors.executeAccumulateField(inputs);
     }
 
     // Output nodes - pass through

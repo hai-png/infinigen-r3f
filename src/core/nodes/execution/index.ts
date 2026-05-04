@@ -150,6 +150,45 @@ export {
   executeMeshToPoints,
 } from './ExtendedNodeExecutors';
 
+// AdditionalNodeExecutors - 30 additional texture coordinate, geometry operation, texture/evaluation, color/mix, and math/utility executors
+export {
+  AdditionalNodeExecutors,
+  executeTextureCoordinate,
+  executeMapping,
+  executeUVMap,
+  executeGeometryNodeInputPosition,
+  executeGeometryNodeInputNormal,
+  executeGeometryNodeInputTangent,
+  executeSubdivideMesh,
+  executeDecimateMesh,
+  executeExtrudeFaces,
+  executeInsetFaces,
+  executeFlipFaces,
+  executeRotateMesh,
+  executeScaleMesh,
+  executeTranslateMesh,
+  executeBrickTexture,
+  executeCheckerTexture,
+  executeGradientTexture,
+  executeMagicTexture,
+  executeWaveTexture,
+  executeWhiteNoiseTexture,
+  executeColorRamp,
+  executeCurves,
+  executeSeparateColor,
+  executeCombineColor,
+  executeBooleanMath,
+  executeFloatCompare,
+  executeMapRangeVector,
+  executeRotationToEuler,
+  executeEulerToRotation,
+  executeAccumulateField,
+} from './AdditionalNodeExecutors';
+
+export type {
+  NodeExecutorFunction,
+} from './AdditionalNodeExecutors';
+
 // GLSL Shader Generation - Node function libraries and shader composition
 export {
   GLSLShaderComposer,
