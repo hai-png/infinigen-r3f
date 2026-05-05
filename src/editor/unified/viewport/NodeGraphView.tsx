@@ -23,7 +23,7 @@ import { useEditor } from '../EditorContext';
 // Adapted from ../../../../infinigen-r3f/src/ to ../../../
 import { SocketType } from '../../../core/nodes/core/socket-types';
 import { nodeDefinitionRegistry } from '../../../core/nodes/core/node-definition-registry';
-import type { InfinigenNodeData } from '../../../ui/hooks/useNodeGraph';
+import type { InfinigenNodeData } from '../nodeGraphConstants';
 
 // ---- Custom Node Components ----
 

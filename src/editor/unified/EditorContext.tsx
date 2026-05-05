@@ -30,7 +30,7 @@ import {
   type TextureMapSlot,
   type ApplyResult,
 } from '../SceneWireup';
-import { CATEGORY_COLORS, SOCKET_COLORS, type InfinigenNodeData } from '../../ui/hooks/useNodeGraph';
+import { CATEGORY_COLORS, SOCKET_COLORS, type InfinigenNodeData } from './nodeGraphConstants';
 
 // React Flow types
 import type { Node as RFNode, Edge as RFEdge } from '@xyflow/react';

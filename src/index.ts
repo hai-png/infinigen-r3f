@@ -180,7 +180,6 @@ export type { ExportFormat, SceneExportFormat, LODConfig, TexturePackResult } fr
 export * from './infinigen_gpl';
 
 // R3F-Specific Modules
-export * from './ui';
 export * from './editor';
 export * from './integration';
 

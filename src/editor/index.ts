@@ -1,26 +1,12 @@
 /**
  * Editor Module Exports
+ *
+ * Only the unified editor and scene wireup are exported.
+ * The legacy standalone editors (SceneEditor, NodeGraphEditor, etc.)
+ * have been removed — their functionality is in the unified editor.
  */
 
-import { SceneEditor } from './SceneEditor';
-
-export { SceneEditor } from './SceneEditor';
-export type { SceneObject } from './SceneEditor';
-export type { SceneEditorProps } from './SceneEditor';
-
-export { NodeGraphEditor } from './NodeGraphEditor';
-export { NodeGraphEditor as default } from './NodeGraphEditor';
-
-export { NodeEvalPreview } from './NodeEvalPreview';
-export type { NodeEvalPreviewProps } from './NodeEvalPreview';
-
-export { NodeEvalProvider, useNodeEvalContext } from './NodeEvalContext';
-export type {
-  NodeEvalContextValue,
-  ProcessedEvalResult,
-  ApplyToSceneCallback,
-} from './NodeEvalContext';
-
+// Scene Wireup (used by unified EditorContext)
 export { SceneWireup, applyMaterialToScene, applyGeometryToScene, applyTextureToScene } from './SceneWireup';
 export type { ApplyResult, AppliedEntry, TextureMapSlot } from './SceneWireup';
 
@@ -45,3 +31,10 @@ export type {
 } from './unified/EditorContext';
 
 export { default as InfinigenEditor } from './unified/InfinigenEditor';
+
+// Node graph constants (category colors, socket colors, node data type)
+export {
+  CATEGORY_COLORS,
+  SOCKET_COLORS,
+  type InfinigenNodeData,
+} from './unified/nodeGraphConstants';
