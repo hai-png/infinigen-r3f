@@ -965,4 +965,4 @@ export class CSGFractureSystem {
  * `import CSGFracture from './CSGFracture'` and `import { CSGFracture } from './CSGFracture'` both work.
  */
 export { CSGFractureSystem as CSGFracture };
-export default CSGFracture;
+export default CSGFractureSystem;

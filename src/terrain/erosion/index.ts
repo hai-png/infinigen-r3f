@@ -2,7 +2,7 @@
  * Erosion Module Exports
  */
 
-export type { ErosionSystem, ThermalErosion, RiverFormation, ErosionParams } from './ErosionSystem';
+export type { ErosionSystem, ThermalErosion, RiverFormation, ErosionParams, ErosionMasks, ErosionResult } from './ErosionSystem';
 
 // Also export ErosionEnhanced and related types for direct hydraulic erosion usage
 export { ErosionEnhanced, HydraulicErosion, SedimentTransport } from './ErosionEnhanced';

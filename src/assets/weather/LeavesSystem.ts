@@ -547,4 +547,4 @@ export class FallingLeavesSystem {
  * `import { LeavesSystem } from './LeavesSystem'` both work.
  */
 export { FallingLeavesSystem as LeavesSystem };
-export default LeavesSystem;
+export default FallingLeavesSystem;

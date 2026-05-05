@@ -903,4 +903,4 @@ export class ConfigParser {
  * `import { SceneConfigSystem } from './SceneConfigSystem'` both work.
  */
 export { ConfigParser as SceneConfigSystem };
-export default SceneConfigSystem;
+export default ConfigParser;

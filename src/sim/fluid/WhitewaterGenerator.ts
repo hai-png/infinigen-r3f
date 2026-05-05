@@ -521,4 +521,4 @@ export class WhitewaterSystem {
  * `import { WhitewaterGenerator } from './WhitewaterGenerator'` both work.
  */
 export { WhitewaterSystem as WhitewaterGenerator };
-export default WhitewaterGenerator;
+export default WhitewaterSystem;

@@ -31,7 +31,7 @@ export type NodeInputs = Record<string, unknown>;
  * Keys are output socket names (e.g. "Geometry", "Color", "Fac").
  * Values are the computed output data.
  */
-export type NodeOutput = Record<string, unknown>;
+export type NodeOutput = Record<string, any>;
 
 // ============================================================================
 // Value-like Types

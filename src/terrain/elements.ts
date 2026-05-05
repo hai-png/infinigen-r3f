@@ -3,6 +3,9 @@
  * 
  * Provides generators for terrain elements like rocks, boulders,
  * cliffs, vegetation patches, and other surface features.
+ * 
+ * Also re-exports the Unified Element Composition System from
+ * the SDF module for composable terrain generation.
  */
 
 export interface TerrainElement {
@@ -30,3 +33,22 @@ class VegetationPatchGenerator implements ElementGenerator {
 }
 
 export { RockElementGenerator, VegetationPatchGenerator };
+
+// Re-export from the Unified Element Composition System
+export type {
+  ElementEvalResult,
+  SceneCompositionConfig,
+} from './sdf/TerrainElementSystem';
+export {
+  TerrainElement as SDFTerrainElement,
+  CompositionOperation,
+  ElementRegistry,
+  GroundElement,
+  MountainElement,
+  CaveElement,
+  VoronoiRockElement,
+  WaterbodyElement,
+  SceneComposer,
+  DEFAULT_SCENE_COMPOSITION_CONFIG,
+  buildSDFFromElements,
+} from './sdf/TerrainElementSystem';

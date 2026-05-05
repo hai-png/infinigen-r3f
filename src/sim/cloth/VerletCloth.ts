@@ -779,4 +779,4 @@ export class VerletClothSimulation {
  * `import VerletCloth from './VerletCloth'` and `import { VerletCloth } from './VerletCloth'` both work.
  */
 export { VerletClothSimulation as VerletCloth };
-export default VerletCloth;
+export default VerletClothSimulation;

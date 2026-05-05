@@ -11,12 +11,42 @@
  * NOTE: The duplicate ThermalErosion that was in ErosionEnhanced.ts has been removed.
  * This file is the canonical location for ThermalErosion and RiverFormation.
  * 
+ * P2-2: Extended to output erosion rate, sediment deposit, and water flow masks
+ * as separate Float32Array channels alongside the modified heightmap.
+ * 
  * @see https://github.com/princeton-vl/infinigen
  */
 
 import * as THREE from 'three';
 import { SeededRandom } from '../../core/util/MathUtils';
 import { ErosionEnhanced, type ErosionData, type ErosionConfig } from './ErosionEnhanced';
+
+/**
+ * Erosion masks providing per-cell erosion analysis data.
+ * Each mask is a Float32Array of size `width * height`, aligned with the heightmap grid.
+ */
+export interface ErosionMasks {
+  /** Erosion rate mask: how much height was removed at each point (positive = erosion) */
+  erosionRate: Float32Array;
+  /** Sediment deposit mask: how much sediment was deposited at each point (positive = deposit) */
+  sedimentDeposit: Float32Array;
+  /** Water flow accumulation mask: how much water passed through each point */
+  waterFlow: Float32Array;
+  /** Width of the mask grid */
+  width: number;
+  /** Height of the mask grid */
+  height: number;
+}
+
+/**
+ * Result of an erosion simulation including the modified heightmap and analysis masks.
+ */
+export interface ErosionResult {
+  /** Modified heightmap (same as getHeightmap()) */
+  heightmap: Float32Array;
+  /** Erosion masks for downstream consumption */
+  masks: ErosionMasks;
+}
 
 export interface ErosionParams {
   // Thermal erosion
@@ -43,6 +73,10 @@ export interface ErosionParams {
   // General
   maxErosionDepth: number;
   seed: number;
+
+  // Mask output
+  /** Whether to compute and output erosion masks alongside the heightmap (default: true) */
+  enableMaskOutput: boolean;
 }
 
 const DEFAULT_EROSION_PARAMS: ErosionParams = {
@@ -66,6 +100,8 @@ const DEFAULT_EROSION_PARAMS: ErosionParams = {
   
   maxErosionDepth: 50,
   seed: 42,
+
+  enableMaskOutput: true,
 };
 
 /**
@@ -92,8 +128,11 @@ export class ThermalErosion {
   
   /**
    * Run thermal erosion simulation
+   * 
+   * @param erosionMask - Optional mask to accumulate erosion amounts (positive values where material was removed)
+   * @param depositMask - Optional mask to accumulate deposit amounts (positive values where material was deposited)
    */
-  simulate(): void {
+  simulate(erosionMask?: Float32Array, depositMask?: Float32Array): void {
     const talusTan = Math.tan(this.params.talusAngle);
     const iterations = this.params.thermalIterations;
     
@@ -130,6 +169,11 @@ export class ThermalErosion {
                 if (transfer > 0.001) {
                   this.heightmap[idx] += transfer;
                   this.heightmap[nIdx] -= transfer;
+
+                  // Accumulate into masks if provided
+                  if (depositMask) depositMask[idx] += transfer;
+                  if (erosionMask) erosionMask[nIdx] += transfer;
+
                   changed = true;
                 }
               }
@@ -178,8 +222,11 @@ export class RiverFormation {
   
   /**
    * Generate river network
+   * 
+   * @param erosionMask - Optional mask to accumulate erosion amounts (positive values where material was removed)
+   * @param waterFlowMask - Optional mask to accumulate water flow (higher values where more water passed through)
    */
-  simulate(): void {
+  simulate(erosionMask?: Float32Array, waterFlowMask?: Float32Array): void {
     const sourceCount = this.params.riverSourceCount;
     const riverLength = this.params.riverLength;
     const erosionMultiplier = this.params.riverErosionMultiplier;
@@ -208,14 +255,24 @@ export class RiverFormation {
     
     // Carve rivers from each source
     for (const source of sources) {
-      this.carveRiver(source.x, source.y, riverLength, erosionMultiplier);
+      this.carveRiver(source.x, source.y, riverLength, erosionMultiplier, erosionMask, waterFlowMask);
     }
   }
   
   /**
    * Carve a single river channel
+   * 
+   * @param startX - Starting X coordinate
+   * @param startY - Starting Y coordinate
+   * @param length - Maximum number of river steps
+   * @param erosionMult - Erosion multiplier for channel depth
+   * @param erosionMask - Optional mask to accumulate erosion amounts
+   * @param waterFlowMask - Optional mask to accumulate water flow
    */
-  private carveRiver(startX: number, startY: number, length: number, erosionMult: number): void {
+  private carveRiver(
+    startX: number, startY: number, length: number, erosionMult: number,
+    erosionMask?: Float32Array, waterFlowMask?: Float32Array
+  ): void {
     let x = startX;
     let y = startY;
     let prevX = x;
@@ -224,6 +281,12 @@ export class RiverFormation {
     const riverWidth = 2 + Math.floor(this.rng.next() * 3);
     
     for (let step = 0; step < length; step++) {
+      // Track water flow at the river center point
+      if (waterFlowMask) {
+        const centerIdx = x + y * this.width;
+        waterFlowMask[centerIdx] += 1;
+      }
+
       // Find lowest neighbor
       let lowestX = x;
       let lowestY = y;
@@ -278,6 +341,12 @@ export class RiverFormation {
           const idx = rxPos + ryPos * this.width;
           const erosionAmount = (1 - dist / riverWidth) * 0.5 * erosionMult;
           this.heightmap[idx] -= erosionAmount;
+
+          // Accumulate erosion into mask
+          if (erosionMask) erosionMask[idx] += erosionAmount;
+
+          // Accumulate water flow in the channel area (weighted by proximity to center)
+          if (waterFlowMask) waterFlowMask[idx] += (1 - dist / riverWidth) * 0.5;
         }
       }
     }
@@ -298,6 +367,9 @@ export class RiverFormation {
  * - Hydraulic erosion → ErosionEnhanced (from ErosionEnhanced.ts)
  * - Thermal erosion   → ThermalErosion (defined above)
  * - River formation   → RiverFormation (defined above)
+ *
+ * P2-2: Now supports outputting erosion masks (erosion rate, sediment deposit,
+ * water flow) as separate Float32Array channels via `simulateWithMasks()`.
  */
 export class ErosionSystem {
   private params: ErosionParams;
@@ -309,6 +381,13 @@ export class ErosionSystem {
   private riverFormation?: RiverFormation;
   private hydraulicErosion?: ErosionEnhanced;
   
+  /** Original heightmap stored before erosion for mask computation */
+  private originalHeightmap: Float32Array;
+  /** Accumulated sediment deposit mask */
+  private sedimentMask: Float32Array;
+  /** Accumulated water flow mask */
+  private waterFlowMask: Float32Array;
+  
   constructor(
     heightmap: Float32Array,
     width: number,
@@ -319,6 +398,11 @@ export class ErosionSystem {
     this.width = width;
     this.height = height;
     this.params = { ...DEFAULT_EROSION_PARAMS, ...params };
+    
+    const size = width * height;
+    this.originalHeightmap = new Float32Array(size);
+    this.sedimentMask = new Float32Array(size);
+    this.waterFlowMask = new Float32Array(size);
     
     this.initialize();
   }
@@ -361,7 +445,10 @@ export class ErosionSystem {
   }
   
   /**
-   * Run complete erosion simulation
+   * Run complete erosion simulation (backward compatible).
+   * 
+   * This method modifies the heightmap in-place and returns void, matching the
+   * original API. Use `simulateWithMasks()` when you need erosion mask data.
    */
   simulate(): void {
     console.log('Starting erosion simulation...');
@@ -394,10 +481,195 @@ export class ErosionSystem {
   }
   
   /**
+   * Run complete erosion simulation with mask output.
+   * 
+   * Stores the original heightmap before erosion, runs the full simulation
+   * (hydraulic → thermal → river), then computes:
+   * - **Erosion rate mask**: `originalHeightmap - modifiedHeightmap` (positive = erosion)
+   * - **Sediment deposit mask**: accumulated deposits from thermal and hydraulic erosion
+   * - **Water flow mask**: flow accumulation from river formation + D8 flow routing
+   * 
+   * This is the preferred method when downstream consumers need erosion analysis data.
+   * The existing `simulate()` method remains backward compatible for callers that
+   * only need the modified heightmap.
+   * 
+   * @returns ErosionResult containing the modified heightmap and analysis masks
+   */
+  simulateWithMasks(): ErosionResult {
+    const size = this.width * this.height;
+    
+    // Reset mask accumulators
+    this.sedimentMask = new Float32Array(size);
+    this.waterFlowMask = new Float32Array(size);
+    
+    // Store original heightmap snapshot before any erosion
+    this.originalHeightmap = new Float32Array(this.heightmap);
+    
+    console.log('Starting erosion simulation with mask output...');
+    
+    // --- Hydraulic erosion (most impactful) ---
+    if (this.params.hydraulicErosionEnabled && this.hydraulicErosion) {
+      console.log('Running hydraulic erosion...');
+      // Snapshot before hydraulic to detect deposits
+      const preHydraulic = new Float32Array(this.heightmap);
+      
+      const erosionData: ErosionData = {
+        heightMap: this.heightmap,
+        width: this.width,
+        height: this.height,
+        scale: 1,
+      };
+      this.hydraulicErosion.erode(erosionData);
+      
+      // Compute hydraulic contribution to sediment deposit mask:
+      // where the heightmap increased relative to pre-hydraulic = deposit
+      for (let i = 0; i < size; i++) {
+        const diff = this.heightmap[i] - preHydraulic[i];
+        if (diff > 0) {
+          this.sedimentMask[i] += diff;
+        }
+      }
+    }
+    
+    // --- Thermal erosion (slope stabilization) ---
+    if (this.params.thermalErosionEnabled && this.thermalErosion) {
+      console.log('Running thermal erosion...');
+      // Pass deposit mask so ThermalErosion can accumulate its deposits
+      this.thermalErosion.simulate(undefined, this.sedimentMask);
+    }
+    
+    // --- River formation ---
+    if (this.params.riverFormationEnabled && this.riverFormation) {
+      console.log('Carving rivers...');
+      // Pass water flow mask so RiverFormation can accumulate its flow data
+      this.riverFormation.simulate(undefined, this.waterFlowMask);
+    }
+    
+    // Compute general water flow accumulation on the eroded terrain
+    this.computeWaterFlowAccumulation();
+    
+    // Compute erosion rate mask: original - modified (positive = erosion, negative = deposit)
+    const erosionRate = new Float32Array(size);
+    for (let i = 0; i < size; i++) {
+      erosionRate[i] = this.originalHeightmap[i] - this.heightmap[i];
+    }
+    
+    console.log('Erosion simulation with masks complete.');
+    
+    return {
+      heightmap: this.heightmap,
+      masks: {
+        erosionRate,
+        sedimentDeposit: this.sedimentMask,
+        waterFlow: this.waterFlowMask,
+        width: this.width,
+        height: this.height,
+      },
+    };
+  }
+  
+  /**
+   * Compute water flow accumulation using the D8 flow direction algorithm.
+   * 
+   * For each cell, routes flow to the steepest downhill neighbor. Cells are
+   * processed from highest to lowest so that upstream flow is fully accumulated
+   * before reaching downstream cells. The result is normalized and added to
+   * the `waterFlowMask`.
+   */
+  private computeWaterFlowAccumulation(): void {
+    const size = this.width * this.height;
+    
+    // Initialize with unit rainfall at each cell
+    const flowAccum = new Float32Array(size);
+    for (let i = 0; i < size; i++) {
+      flowAccum[i] = 1;
+    }
+    
+    // Sort cells by height (highest first) for proper flow accumulation
+    const indices = Array.from({ length: size }, (_, i) => i);
+    indices.sort((a, b) => this.heightmap[b] - this.heightmap[a]);
+    
+    // For each cell (highest to lowest), route its accumulated flow
+    // to the steepest downhill neighbor (D8 algorithm)
+    for (const idx of indices) {
+      const x = idx % this.width;
+      const y = Math.floor(idx / this.width);
+      
+      let lowestIdx = idx;
+      let maxSlope = 0;
+      
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          
+          const nx = x + dx;
+          const ny = y + dy;
+          
+          if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+            const nIdx = ny * this.width + nx;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const slope = (this.heightmap[idx] - this.heightmap[nIdx]) / distance;
+            
+            if (slope > maxSlope) {
+              maxSlope = slope;
+              lowestIdx = nIdx;
+            }
+          }
+        }
+      }
+      
+      // Route flow to the steepest downhill neighbor
+      if (lowestIdx !== idx) {
+        flowAccum[lowestIdx] += flowAccum[idx];
+      }
+    }
+    
+    // Normalize flow accumulation to [0, 1] range and add to water flow mask
+    let maxFlow = 0;
+    for (let i = 0; i < size; i++) {
+      if (flowAccum[i] > maxFlow) maxFlow = flowAccum[i];
+    }
+    
+    if (maxFlow > 0) {
+      for (let i = 0; i < size; i++) {
+        this.waterFlowMask[i] += flowAccum[i] / maxFlow;
+      }
+    }
+  }
+  
+  /**
    * Get modified heightmap
    */
   getHeightmap(): Float32Array {
     return this.heightmap;
+  }
+  
+  /**
+   * Get erosion masks from the last simulation.
+   * 
+   * Returns the masks computed by the most recent `simulateWithMasks()` call.
+   * If `simulateWithMasks()` has not been called yet, returns masks with
+   * zero-filled erosion rate and sediment deposit, and a water flow mask
+   * based on the current heightmap (via `computeWaterFlowAccumulation`).
+   * 
+   * @returns ErosionMasks with erosion rate, sediment deposit, and water flow data
+   */
+  getMasks(): ErosionMasks {
+    const size = this.width * this.height;
+    
+    // Compute erosion rate from stored original vs current heightmap
+    const erosionRate = new Float32Array(size);
+    for (let i = 0; i < size; i++) {
+      erosionRate[i] = this.originalHeightmap[i] - this.heightmap[i];
+    }
+    
+    return {
+      erosionRate,
+      sedimentDeposit: this.sedimentMask,
+      waterFlow: this.waterFlowMask,
+      width: this.width,
+      height: this.height,
+    };
   }
   
   /**
@@ -434,6 +706,12 @@ export class ErosionSystem {
    */
   reset(heightmap: Float32Array): void {
     this.heightmap = heightmap;
+    
+    const size = this.width * this.height;
+    this.originalHeightmap = new Float32Array(size);
+    this.sedimentMask = new Float32Array(size);
+    this.waterFlowMask = new Float32Array(size);
+    
     this.initialize();
   }
 }

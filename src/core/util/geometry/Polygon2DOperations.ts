@@ -515,4 +515,4 @@ export const PolygonOps = {
  * `import { Polygon2DOperations } from './Polygon2DOperations'` both work.
  */
 export { PolygonOps as Polygon2DOperations };
-export default Polygon2DOperations;
+export default PolygonOps;

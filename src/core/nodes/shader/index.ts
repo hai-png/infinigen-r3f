@@ -55,3 +55,23 @@ export type {
   TextureCoordinateNode,
   MappingNode,
 } from './PrincipledNodes';
+
+// Shader mixing nodes (MixShader, LightPath, Fresnel, TransparentOverlay)
+export {
+  MixShaderNode as MixShaderNodeClass,
+  LightPathNode,
+  FresnelNode,
+  TransparentOverlayNode,
+  ShaderMixingSystem,
+  shaderMixingSystem,
+  createDefaultShaderOutput,
+} from './ShaderMixingNodes';
+
+export type {
+  BlendMode,
+  RayType,
+  LightPathContext,
+  ShaderOutput as ShaderMixOutput,
+  LightPathOutput,
+  RegisteredMixShader,
+} from './ShaderMixingNodes';

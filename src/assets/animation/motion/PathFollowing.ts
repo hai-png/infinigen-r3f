@@ -641,4 +641,4 @@ export function generateCameraPath(
  * `import { PathFollowing } from './PathFollowing'` both work.
  */
 export { PathFollower as PathFollowing };
-export default PathFollowing;
+export default PathFollower;

@@ -14,6 +14,7 @@
 export {
   GTFlatShadingMaterial,
   GTDepthMaterial,
+  GTFloatDepthMaterial,
   GTNormalMaterial,
   GTPositionMaterial,
   GTUVMaterial,
@@ -23,6 +24,7 @@ export {
   GTRoughnessMaterial,
   GTMetalnessMaterial,
   GTEmissionMaterial,
+  GTMRTMaterials,
   createGTMaterial,
   applyGTMaterialsToScene,
   restoreOriginalMaterials,

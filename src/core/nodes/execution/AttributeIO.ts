@@ -697,4 +697,4 @@ export function newAttrData(
  * AttributeIO is an alias for the primary class AttributeManager.
  */
 export { AttributeManager as AttributeIO };
-export default AttributeIO;
+export default AttributeManager;

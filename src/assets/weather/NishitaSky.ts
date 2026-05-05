@@ -645,4 +645,4 @@ export class NishitaSkyHelper {
  * `import { NishitaSky } from './NishitaSky'` both work.
  */
 export { NishitaSkyHelper as NishitaSky };
-export default NishitaSky;
+export default NishitaSkyHelper;

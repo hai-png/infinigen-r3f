@@ -22,6 +22,11 @@ import {
   TerrainSurfaceConfig,
   DEFAULT_TERRAIN_SURFACE_CONFIG,
 } from '../gpu/TerrainSurfaceShaderPipeline';
+import {
+  ElementRegistry,
+  CompositionOperation,
+  buildSDFFromElements as buildSDFFromElementsFn,
+} from './TerrainElementSystem';
 
 /**
  * Configuration for SDF terrain generation
@@ -678,6 +683,31 @@ export class SDFTerrainGenerator {
    */
   public getSurfaceShaderPipeline(): TerrainSurfaceShaderPipeline | null {
     return this.surfaceShaderPipeline;
+  }
+
+  /**
+   * Build an SDF from an ElementRegistry using the unified element composition system.
+   *
+   * When an ElementRegistry is provided, this method uses the composable element
+   * system (Ground, Mountains, Caves, VoronoiRocks, Waterbody) to evaluate the
+   * SDF at each voxel point. Falls back to the legacy buildSDF() behavior if
+   * the registry is null.
+   *
+   * @param registry - Configured ElementRegistry with initialized elements
+   * @param operation - Composition operation (default: DIFFERENCE for terrain - caves - water)
+   * @returns SignedDistanceField ready for isosurface extraction
+   */
+  public buildSDFFromElements(
+    registry: ElementRegistry | null,
+    operation: CompositionOperation = CompositionOperation.DIFFERENCE
+  ): SignedDistanceField {
+    if (!registry) {
+      // Fallback to legacy behavior
+      return this.buildSDF();
+    }
+
+    const { bounds, resolution } = this.config;
+    return buildSDFFromElementsFn(registry, bounds, resolution, operation);
   }
 
   /**

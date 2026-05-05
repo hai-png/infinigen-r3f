@@ -60,6 +60,9 @@ export interface OcMesherConfig extends SphericalMesherConfig {
   enableAdaptiveLOD: boolean;
   /** Number of ray-marching steps per ray (default 8) */
   rayMarchSteps: number;
+  /** Number of bisection refinement steps when a sign change is detected (default 10).
+   *  Set to 0 to disable refinement, matching the original coarse hit behavior. */
+  bisectionSteps: number;
 }
 
 /** Sensible defaults */
@@ -72,6 +75,7 @@ export const DEFAULT_OC_MESHER_CONFIG: OcMesherConfig = {
   cullBackFaces: true,
   enableAdaptiveLOD: true,
   rayMarchSteps: 8,
+  bisectionSteps: 10,
   base90dResolution: 64,
   rMin: 0.5,
   rMax: 100,
@@ -610,6 +614,76 @@ export class OcclusionMesher extends SphericalMesher {
   }
 
   // -----------------------------------------------------------------------
+  // Internal: bisection refinement for sub-voxel surface precision
+  // -----------------------------------------------------------------------
+
+  /**
+   * Perform bisection (binary search) refinement between two ray parameters
+   * to locate the SDF zero-crossing with sub-step precision.
+   *
+   * When a ray-marching step detects a sign change in the SDF (prevSDF > 0,
+   * currentSDF < 0), the isosurface lies somewhere between the two sample
+   * points. This method narrows the interval by repeatedly evaluating the
+   * SDF at the midpoint and discarding the half that does not contain the
+   * sign change.
+   *
+   * @param evaluateSDF Function that returns the SDF value at a given point
+   * @param rayOrigin   Origin of the ray (camera position)
+   * @param rayDir      Normalized direction of the ray
+   * @param tNear       Ray parameter at the start of the interval (SDF > 0)
+   * @param tFar        Ray parameter at the end of the interval (SDF < 0)
+   * @param steps       Number of bisection iterations (each halves the interval)
+   * @returns Object with the refined `t` parameter and a `hit` boolean.
+   *          `hit` is true when the zero-crossing was located successfully.
+   */
+  protected bisectionRefinement(
+    evaluateSDF: (point: Vector3) => number,
+    rayOrigin: Vector3,
+    rayDir: Vector3,
+    tNear: number,
+    tFar: number,
+    steps: number,
+  ): { t: number; hit: boolean } {
+    let lo = tNear;
+    let hi = tFar;
+
+    // Evaluate SDF at the bounds to confirm a sign change exists
+    const pointLo = rayOrigin.clone().add(rayDir.clone().multiplyScalar(lo));
+    const sdfLo = evaluateSDF(pointLo);
+    const pointHi = rayOrigin.clone().add(rayDir.clone().multiplyScalar(hi));
+    const sdfHi = evaluateSDF(pointHi);
+
+    // No sign change → cannot bisect
+    if (sdfLo * sdfHi > 0) {
+      return { t: hi, hit: false };
+    }
+
+    for (let i = 0; i < steps; i++) {
+      const mid = (lo + hi) * 0.5;
+      const pointMid = rayOrigin.clone().add(rayDir.clone().multiplyScalar(mid));
+      const sdfMid = evaluateSDF(pointMid);
+
+      if (Math.abs(sdfMid) < 1e-8) {
+        // Converged to near-zero — exact zero crossing found
+        return { t: mid, hit: true };
+      }
+
+      // Keep the half-interval that contains the sign change
+      if (sdfLo * sdfMid <= 0) {
+        hi = mid;
+        // sdfHi = sdfMid; // not needed — we only track lo's sign for the decision
+      } else {
+        lo = mid;
+        // sdfLo = sdfMid;
+      }
+    }
+
+    // Return the midpoint of the final interval as the best estimate
+    const tResult = (lo + hi) * 0.5;
+    return { t: tResult, hit: true };
+  }
+
+  // -----------------------------------------------------------------------
   // Internal: mesh a single octree leaf
   // -----------------------------------------------------------------------
 
@@ -798,15 +872,41 @@ export class OcclusionMesher extends SphericalMesher {
         let t = rMin;
         const dt = (rMax - rMin) / steps;
         let hit = false;
+        let prevSDF = Infinity;   // SDF at previous march step (starts positive/outside)
+        let prevT = rMin;         // ray parameter at previous march step
 
         for (let s = 0; s < steps; s++) {
           const point = cameraPos.clone().add(worldDir.clone().multiplyScalar(t));
           const sdf = evaluateSDF(point);
 
+          // Direct hit: SDF is close enough to zero
           if (sdf < 0.001) {
             hit = true;
             break;
           }
+
+          // Sign change detected: ray crossed from outside (prevSDF > 0) to
+          // inside (sdf < 0) the surface — apply bisection refinement for
+          // sub-voxel precision.
+          if (prevSDF > 0 && sdf < 0 && this.ocConfig.bisectionSteps > 0) {
+            const refined = this.bisectionRefinement(
+              evaluateSDF,
+              cameraPos,
+              worldDir,
+              prevT,
+              t,
+              this.ocConfig.bisectionSteps,
+            );
+            if (refined.hit) {
+              t = refined.t;
+              hit = true;
+              break;
+            }
+          }
+
+          // Remember this step's values for sign-change detection
+          prevSDF = sdf;
+          prevT = t;
 
           // Sphere tracing: advance by SDF value
           t += Math.max(sdf, dt * 0.1);

@@ -664,4 +664,4 @@ export class LavaFlowSimulation {
  * `import { LavaFlowPatterns } from './LavaFlowPatterns'` both work.
  */
 export { LavaFlowSimulation as LavaFlowPatterns };
-export default LavaFlowPatterns;
+export default LavaFlowSimulation;
