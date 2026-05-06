@@ -9,6 +9,12 @@
  *
  * For complex texture generation (full PBR bake pipeline), use TextureBakePipeline.
  * This bridge is for individual texture channel generation from node graph parameters.
+ *
+ * Key methods:
+ * - `convert()` — Convert a TextureNodeOutput (direct) to a Three.js Texture
+ * - `convertFromEvaluatorOutput()` — Convert NodeEvaluator texture output to a Texture
+ * - `convertToScalarMap()` — Generate a grayscale texture for roughnessMap, metalnessMap, etc.
+ * - `convertToColorMap()` — Generate an RGB texture for map, emissiveMap, etc.
  */
 
 import * as THREE from 'three';
@@ -38,6 +44,36 @@ export interface TextureNodeOutput {
   parameters: Record<string, any>;
 }
 
+/**
+ * Result of converting an evaluator texture output.
+ * Contains the texture plus metadata about what kind of output it is.
+ */
+export interface TextureConversionResult {
+  /** The generated Three.js texture */
+  texture: THREE.Texture;
+  /** Whether this is a color (RGB) or scalar (grayscale) texture */
+  isColor: boolean;
+  /** Suggested material slot (map, normalMap, roughnessMap, etc.) */
+  suggestedSlot: string;
+}
+
+/**
+ * Output format produced by the NodeEvaluator's texture node executors.
+ * E.g., from executeNoiseTexture: { Fac: { type: 'noise_texture', scale, ... }, Color: { type: 'noise_texture', ... } }
+ */
+export interface EvaluatorTextureOutput {
+  /** Fac output — scalar value */
+  Fac?: Record<string, any>;
+  /** Color output — RGB color */
+  Color?: Record<string, any>;
+  /** Distance output (Voronoi) — scalar */
+  Distance?: Record<string, any>;
+  /** Position output (Voronoi) — vector */
+  Position?: Record<string, any>;
+  /** Any other output keys */
+  [key: string]: any;
+}
+
 // ============================================================================
 // NodeGraphTextureBridge
 // ============================================================================
@@ -46,7 +82,8 @@ export class NodeGraphTextureBridge {
   private defaultSize = 512;
 
   /**
-   * Convert a texture node output to a Three.js Texture
+   * Convert a texture node output to a Three.js Texture.
+   * This is the direct conversion method for TextureNodeOutput objects.
    */
   convert(textureOutput: TextureNodeOutput): THREE.Texture {
     const type = this.normalizeType(textureOutput.type);
@@ -70,6 +107,163 @@ export class NodeGraphTextureBridge {
         console.warn(`NodeGraphTextureBridge: Unknown texture type "${textureOutput.type}", generating fallback noise`);
         return this.generateNoiseTexture(textureOutput);
     }
+  }
+
+  /**
+   * Convert a NodeEvaluator texture output to a Three.js Texture.
+   *
+   * The NodeEvaluator produces outputs like:
+   * - `{ Fac: { type: 'noise_texture', scale: 5, detail: 2, ... } }`
+   * - `{ Color: { type: 'voronoi_texture', scale: 5, ... }, Distance: { ... } }`
+   *
+   * This method extracts the appropriate output and converts it.
+   *
+   * @param evaluatorOutput - The raw output from NodeEvaluator for a texture node
+   * @param outputSocket - Which socket to use: 'Color', 'Fac', 'Distance', or 'auto'
+   *   - 'auto' (default): prefers Color if available, otherwise Fac, otherwise Distance
+   *   - 'Color': use the Color output (RGB)
+   *   - 'Fac': use the Fac output (scalar as grayscale)
+   *   - 'Distance': use the Distance output (scalar as grayscale)
+   * @param width - Texture resolution width (default 512)
+   * @param height - Texture resolution height (default 512)
+   * @returns A TextureConversionResult with the texture and metadata
+   */
+  convertFromEvaluatorOutput(
+    evaluatorOutput: EvaluatorTextureOutput,
+    outputSocket: 'auto' | 'Color' | 'Fac' | 'Distance' = 'auto',
+    width: number = 512,
+    height: number = 512,
+  ): TextureConversionResult {
+    // Determine which output to use
+    let selectedOutput: Record<string, any> | undefined;
+    let isColor = false;
+    let suggestedSlot = 'map';
+
+    if (outputSocket === 'auto') {
+      // Prefer Color output (RGB), then Fac (scalar), then Distance (scalar)
+      if (evaluatorOutput.Color && typeof evaluatorOutput.Color === 'object' && 'type' in evaluatorOutput.Color) {
+        selectedOutput = evaluatorOutput.Color;
+        isColor = true;
+        suggestedSlot = 'map';
+      } else if (evaluatorOutput.Fac && typeof evaluatorOutput.Fac === 'object' && 'type' in evaluatorOutput.Fac) {
+        selectedOutput = evaluatorOutput.Fac;
+        isColor = false;
+        suggestedSlot = 'roughnessMap';
+      } else if (evaluatorOutput.Distance && typeof evaluatorOutput.Distance === 'object' && 'type' in evaluatorOutput.Distance) {
+        selectedOutput = evaluatorOutput.Distance;
+        isColor = false;
+        suggestedSlot = 'roughnessMap';
+      } else {
+        // Try to find any object with a type field
+        for (const [key, value] of Object.entries(evaluatorOutput)) {
+          if (value && typeof value === 'object' && 'type' in value) {
+            selectedOutput = value;
+            isColor = key === 'Color';
+            suggestedSlot = isColor ? 'map' : 'roughnessMap';
+            break;
+          }
+        }
+      }
+    } else {
+      const socketData = evaluatorOutput[outputSocket];
+      if (socketData && typeof socketData === 'object' && 'type' in socketData) {
+        selectedOutput = socketData;
+        isColor = outputSocket === 'Color';
+        suggestedSlot = isColor ? 'map' : 'roughnessMap';
+      }
+    }
+
+    if (!selectedOutput) {
+      // Fallback: generate a 1x1 placeholder
+      const data = new Float32Array([1, 0, 1, 1]);
+      const texture = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat, THREE.FloatType);
+      texture.needsUpdate = true;
+      texture.name = 'Bridge_EvaluatorFallback';
+      console.warn('NodeGraphTextureBridge: Could not extract texture from evaluator output, returning placeholder');
+      return { texture, isColor: false, suggestedSlot: 'map' };
+    }
+
+    // Convert the evaluator output format to TextureNodeOutput
+    const textureNodeOutput = this.evaluatorOutputToTextureNodeOutput(selectedOutput, width, height);
+    const texture = this.convert(textureNodeOutput);
+
+    return { texture, isColor, suggestedSlot };
+  }
+
+  /**
+   * Generate a scalar (grayscale) texture from an evaluator output.
+   * Useful for roughnessMap, metalnessMap, aoMap, etc.
+   */
+  convertToScalarMap(
+    evaluatorOutput: EvaluatorTextureOutput,
+    outputSocket: 'Fac' | 'Distance' = 'Fac',
+    width: number = 512,
+    height: number = 512,
+  ): THREE.Texture {
+    const result = this.convertFromEvaluatorOutput(evaluatorOutput, outputSocket, width, height);
+    return result.texture;
+  }
+
+  /**
+   * Generate a color (RGB) texture from an evaluator output.
+   * Useful for map, emissiveMap, etc.
+   */
+  convertToColorMap(
+    evaluatorOutput: EvaluatorTextureOutput,
+    width: number = 512,
+    height: number = 512,
+  ): THREE.Texture {
+    const result = this.convertFromEvaluatorOutput(evaluatorOutput, 'Color', width, height);
+    return result.texture;
+  }
+
+  /**
+   * Generate a normal map from a bump/displacement evaluator output.
+   * Uses Sobel filter on the scalar height field.
+   */
+  convertToNormalMap(
+    evaluatorOutput: EvaluatorTextureOutput,
+    outputSocket: 'Fac' | 'Distance' = 'Fac',
+    strength: number = 1.0,
+    width: number = 512,
+    height: number = 512,
+  ): THREE.DataTexture {
+    // First generate the height field
+    const heightTexture = this.convertToScalarMap(evaluatorOutput, outputSocket, width, height);
+
+    // Read the height data back — since we just created it, read from the internal data
+    // We need to re-generate the height values for Sobel filter
+    const heightData = this.generateHeightField(evaluatorOutput, outputSocket, width, height);
+    const normalData = new Float32Array(width * height * 4);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const left = heightData[y * width + Math.max(0, x - 1)];
+        const right = heightData[y * width + Math.min(width - 1, x + 1)];
+        const top = heightData[Math.max(0, y - 1) * width + x];
+        const bottom = heightData[Math.min(height - 1, y + 1) * width + x];
+
+        const dx = (right - left) * strength;
+        const dy = (bottom - top) * strength;
+
+        // Normal map format: [dx, dy, 1] normalized, remapped to [0,1]
+        const len = Math.sqrt(dx * dx + dy * dy + 1);
+        normalData[idx] = (dx / len) * 0.5 + 0.5;
+        normalData[idx + 1] = (dy / len) * 0.5 + 0.5;
+        normalData[idx + 2] = (1.0 / len) * 0.5 + 0.5;
+        normalData[idx + 3] = 1.0;
+      }
+    }
+
+    const texture = new THREE.DataTexture(normalData, width, height, THREE.RGBAFormat, THREE.FloatType);
+    texture.needsUpdate = true;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.name = 'Bridge_NormalMap';
+    return texture;
   }
 
   // ==========================================================================
@@ -513,6 +707,151 @@ export class NodeGraphTextureBridge {
   }
 
   // ==========================================================================
+  // Evaluator Output Conversion
+  // ==========================================================================
+
+  /**
+   * Convert a NodeEvaluator texture output descriptor to TextureNodeOutput format.
+   *
+   * The NodeEvaluator produces objects like:
+   *   { type: 'noise_texture', scale: 5, detail: 2, roughness: 0.5, distortion: 0, vector: {x,y,z} }
+   *
+   * The TextureNodeOutput format is:
+   *   { type: 'noise', width: 512, height: 512, parameters: { scale: 5, detail: 2, ... } }
+   */
+  private evaluatorOutputToTextureNodeOutput(
+    evaluatorTexDesc: Record<string, any>,
+    width: number,
+    height: number,
+  ): TextureNodeOutput {
+    const rawType = evaluatorTexDesc.type ?? 'noise_texture';
+    const normalizedType = this.normalizeType(rawType);
+
+    // Extract known parameters and put the rest in `parameters`
+    const { type, vector, ...restParams } = evaluatorTexDesc;
+
+    return {
+      type: normalizedType,
+      width,
+      height,
+      parameters: restParams,
+    };
+  }
+
+  /**
+   * Generate a height field array from an evaluator output.
+   * Returns a Float32Array of [0,1] values, size width*height.
+   */
+  private generateHeightField(
+    evaluatorOutput: EvaluatorTextureOutput,
+    outputSocket: 'Fac' | 'Distance',
+    width: number,
+    height: number,
+  ): Float32Array {
+    const socketData = evaluatorOutput[outputSocket];
+    if (!socketData || typeof socketData !== 'object' || !('type' in socketData)) {
+      // Return flat height field
+      return new Float32Array(width * height).fill(0.5);
+    }
+
+    const textureNodeOutput = this.evaluatorOutputToTextureNodeOutput(socketData, width, height);
+    const params = textureNodeOutput.parameters;
+    const type = this.normalizeType(textureNodeOutput.type);
+    const size = width * height;
+    const heightData = new Float32Array(size);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const nx = x / width;
+        const ny = y / height;
+        let value = 0.5;
+
+        switch (type) {
+          case 'noise': {
+            const scale = params.scale ?? 5.0;
+            const detail = params.detail ?? 4;
+            const roughness = params.roughness ?? 0.5;
+            const distortion = params.distortion ?? 0.0;
+            const seed = params.seed ?? 0;
+            value = (seededFbm(nx * scale, ny * scale, 0, detail, 2.0, roughness, seed) + 1) / 2;
+            if (distortion > 0) {
+              value += seededNoise3D(nx * scale * 2, ny * scale * 2, 0, 1.0, seed + 1) * distortion * 0.3;
+            }
+            break;
+          }
+          case 'voronoi': {
+            const scale = params.scale ?? 5.0;
+            const seed = params.seed ?? 0;
+            value = Math.min(1, seededVoronoi2D(nx, ny, scale, seed));
+            break;
+          }
+          case 'musgrave': {
+            const scale = params.scale ?? 5.0;
+            const detail = params.detail ?? 4;
+            const dimension = params.dimension ?? 2.0;
+            const lacunarity = params.lacunarity ?? 2.0;
+            const musgraveType = params.musgraveType ?? 'fbm';
+            const seed = params.seed ?? 0;
+            const gain = Math.pow(0.5, 2 - dimension);
+            if (musgraveType === 'ridged_multifractal') {
+              value = seededRidgedMultifractal(nx * scale, ny * scale, 0, detail, lacunarity, gain, 0.5, seed);
+            } else {
+              value = (seededFbm(nx * scale, ny * scale, 0, detail, lacunarity, gain, seed) + 1) / 2;
+            }
+            break;
+          }
+          case 'gradient': {
+            const gradientType = params.gradientType ?? 'linear';
+            switch (gradientType) {
+              case 'quadratic': value = nx * nx; break;
+              case 'diagonal': value = (nx + ny) / 2; break;
+              case 'spherical':
+              case 'radial': {
+                const dx = nx - 0.5;
+                const dy = ny - 0.5;
+                value = 1.0 - Math.min(1, 2 * Math.sqrt(dx * dx + dy * dy));
+                break;
+              }
+              case 'easing': value = nx * nx * (3 - 2 * nx); break;
+              default: value = nx;
+            }
+            break;
+          }
+          case 'brick': {
+            const scale = params.scale ?? 5.0;
+            const mortarSize = params.mortarSize ?? 0.05;
+            const brickWidth = params.brickWidth ?? 1.0;
+            const brickHeight = params.brickHeight ?? 0.5;
+            const nnx = nx * scale;
+            const nny = ny * scale;
+            const row = Math.floor(nny / brickHeight);
+            const offset = (row % 2) * 0.5 * brickWidth;
+            const adjX = nnx + offset;
+            const localX = ((adjX % brickWidth) + brickWidth) % brickWidth;
+            const localY = ((nny % brickHeight) + brickHeight) % brickHeight;
+            const inMortar = localX < mortarSize || localX > brickWidth - mortarSize || localY < mortarSize || localY > brickHeight - mortarSize;
+            value = inMortar ? 0.0 : 1.0;
+            break;
+          }
+          case 'checker': {
+            const scale = params.scale ?? 5.0;
+            const cx = Math.floor(nx * scale);
+            const cy = Math.floor(ny * scale);
+            value = (cx + cy) % 2 === 0 ? 1.0 : 0.0;
+            break;
+          }
+          default:
+            value = 0.5;
+        }
+
+        heightData[y * width + x] = Math.max(0, Math.min(1, value));
+      }
+    }
+
+    return heightData;
+  }
+
+  // ==========================================================================
   // Helpers
   // ==========================================================================
 
@@ -520,27 +859,29 @@ export class NodeGraphTextureBridge {
    * Normalize texture type strings (support both Blender-style and short names)
    */
   private normalizeType(type: string): TextureNodeType {
-    if (type.startsWith('ShaderNodeTex') || type.endsWith('_texture')) {
-      // ShaderNodeTexNoise → noise, noise_texture → noise
-      const map: Record<string, TextureNodeType> = {
-        'ShaderNodeTexNoise': 'noise',
-        'ShaderNodeTexVoronoi': 'voronoi',
-        'ShaderNodeTexMusgrave': 'musgrave',
-        'ShaderNodeTexGradient': 'gradient',
-        'ShaderNodeTexBrick': 'brick',
-        'ShaderNodeTexChecker': 'checker',
-        'ShaderNodeTexImage': 'image',
-        'noise_texture': 'noise',
-        'voronoi_texture': 'voronoi',
-        'musgrave_texture': 'musgrave',
-        'gradient_texture': 'gradient',
-        'brick_texture': 'brick',
-        'checker_texture': 'checker',
-        'image_texture': 'image',
-      };
-      return map[type] ?? 'noise';
+    // Direct match
+    if (['noise', 'voronoi', 'musgrave', 'gradient', 'brick', 'checker', 'image'].includes(type)) {
+      return type as TextureNodeType;
     }
-    return type as TextureNodeType;
+
+    // Map Blender-style and underscore-style names to short names
+    const map: Record<string, TextureNodeType> = {
+      'ShaderNodeTexNoise': 'noise',
+      'ShaderNodeTexVoronoi': 'voronoi',
+      'ShaderNodeTexMusgrave': 'musgrave',
+      'ShaderNodeTexGradient': 'gradient',
+      'ShaderNodeTexBrick': 'brick',
+      'ShaderNodeTexChecker': 'checker',
+      'ShaderNodeTexImage': 'image',
+      'noise_texture': 'noise',
+      'voronoi_texture': 'voronoi',
+      'musgrave_texture': 'musgrave',
+      'gradient_texture': 'gradient',
+      'brick_texture': 'brick',
+      'checker_texture': 'checker',
+      'image_texture': 'image',
+    };
+    return map[type] ?? 'noise';
   }
 
   /**

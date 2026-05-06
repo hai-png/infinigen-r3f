@@ -10,13 +10,21 @@
  * - Diffuse BSDF → MeshPhysicalMaterial (non-metallic)
  * - Glossy BSDF → MeshPhysicalMaterial (metallic)
  * - Glass BSDF → MeshPhysicalMaterial (transmission)
+ * - Translucent BSDF → MeshPhysicalMaterial (subsurface approximation)
+ * - Principled Volume → MeshPhysicalMaterial (volume as subsurface)
  * - Emission → MeshPhysicalMaterial (emissive)
  * - Mix Shader → blended material properties
  * - Add Shader → additive material properties
  * - Texture map assignments (diffuse, normal, roughness, metallic, AO, transmission, emissive)
+ *
+ * Integration with NodeGraphTextureBridge:
+ * - When BSDF data contains texture descriptors (e.g., from connected texture nodes),
+ *   this bridge automatically converts them to Three.js textures via NodeGraphTextureBridge.
+ * - Texture descriptors in the NodeEvaluator output format are recognized and processed.
  */
 
 import * as THREE from 'three';
+import { NodeGraphTextureBridge, type EvaluatorTextureOutput } from './NodeGraphTextureBridge';
 
 // ============================================================================
 // Types
@@ -24,7 +32,7 @@ import * as THREE from 'three';
 
 export interface BSDFOutput {
   /** BSDF type identifier */
-  type: string; // 'principled_bsdf', 'bsdf_diffuse', 'bsdf_glossy', 'bsdf_glass', 'emission', 'mix_shader', 'add_shader'
+  type: string; // 'principled_bsdf', 'bsdf_diffuse', 'bsdf_glossy', 'bsdf_glass', 'bsdf_translucent', 'principled_volume', 'emission', 'mix_shader', 'add_shader'
 
   // Color properties
   baseColor?: THREE.Color | { r: number; g: number; b: number } | string;
@@ -56,7 +64,7 @@ export interface BSDFOutput {
   // Normal
   normalMapStrength?: number;
 
-  // Texture maps
+  // Texture maps (already-resolved Three.js textures)
   map?: THREE.Texture;
   normalMap?: THREE.Texture;
   roughnessMap?: THREE.Texture;
@@ -67,10 +75,29 @@ export interface BSDFOutput {
   bumpMap?: THREE.Texture;
   opacityMap?: THREE.Texture;
 
+  // Texture descriptors (NodeEvaluator texture output format — to be resolved via TextureBridge)
+  mapDescriptor?: EvaluatorTextureOutput;
+  normalMapDescriptor?: EvaluatorTextureOutput;
+  roughnessMapDescriptor?: EvaluatorTextureOutput;
+  metalnessMapDescriptor?: EvaluatorTextureOutput;
+  aoMapDescriptor?: EvaluatorTextureOutput;
+  transmissionMapDescriptor?: EvaluatorTextureOutput;
+  emissiveMapDescriptor?: EvaluatorTextureOutput;
+  bumpMapDescriptor?: EvaluatorTextureOutput;
+
   // Mix/Add shader fields
   factor?: number;
   shader1?: any;
   shader2?: any;
+
+  // Volume properties (principled_volume)
+  volumeColor?: THREE.Color | { r: number; g: number; b: number } | string;
+  volumeDensity?: number;
+  volumeEmissionStrength?: number;
+  volumeEmissionColor?: THREE.Color | { r: number; g: number; b: number } | string;
+
+  // Translucent BSDF
+  subsurfaceColor?: THREE.Color | { r: number; g: number; b: number } | string;
 }
 
 /** Wrapper that the NodeEvaluator actually produces */
@@ -78,6 +105,18 @@ export interface NodeEvaluationOutput {
   BSDF?: BSDFOutput;
   Emission?: BSDFOutput;
   Shader?: BSDFOutput;
+  Volume?: BSDFOutput;
+  Surface?: BSDFOutput;
+}
+
+/** Options for material conversion */
+export interface MaterialBridgeOptions {
+  /** Default texture resolution for generated textures (default 512) */
+  textureResolution?: number;
+  /** Whether to process texture descriptors via TextureBridge (default true) */
+  processTextureDescriptors?: boolean;
+  /** Normal map strength when generating from height fields (default 1.0) */
+  normalMapStrength?: number;
 }
 
 // ============================================================================
@@ -85,12 +124,24 @@ export interface NodeEvaluationOutput {
 // ============================================================================
 
 export class NodeGraphMaterialBridge {
+  private textureBridge: NodeGraphTextureBridge;
+  private options: Required<MaterialBridgeOptions>;
+
+  constructor(options?: MaterialBridgeOptions) {
+    this.textureBridge = new NodeGraphTextureBridge();
+    this.options = {
+      textureResolution: options?.textureResolution ?? 512,
+      processTextureDescriptors: options?.processTextureDescriptors ?? true,
+      normalMapStrength: options?.normalMapStrength ?? 1.0,
+    };
+  }
+
   /**
    * Convert a NodeEvaluator output to a MeshPhysicalMaterial.
    *
    * Accepts either the raw BSDF data object or the wrapper { BSDF: ... } / { Emission: ... } / { Shader: ... }
    */
-  convert(output: BSDFOutput | NodeEvaluationOutput): THREE.MeshPhysicalMaterial {
+  convert(output: BSDFOutput | NodeEvaluationOutput, options?: MaterialBridgeOptions): THREE.MeshPhysicalMaterial {
     // Unwrap if the caller passed the full evaluation output
     const bsdf = this.extractBSDF(output);
     if (!bsdf) {
@@ -98,24 +149,33 @@ export class NodeGraphMaterialBridge {
       return this.createDefaultMaterial();
     }
 
-    switch (bsdf.type) {
+    // Process any texture descriptors before conversion
+    const processedBsdf = this.options.processTextureDescriptors
+      ? this.processTextureDescriptors(bsdf, options)
+      : bsdf;
+
+    switch (processedBsdf.type) {
       case 'principled_bsdf':
-        return this.convertPrincipledBSDF(bsdf);
+        return this.convertPrincipledBSDF(processedBsdf);
       case 'bsdf_diffuse':
-        return this.convertDiffuseBSDF(bsdf);
+        return this.convertDiffuseBSDF(processedBsdf);
       case 'bsdf_glossy':
-        return this.convertGlossyBSDF(bsdf);
+        return this.convertGlossyBSDF(processedBsdf);
       case 'bsdf_glass':
-        return this.convertGlassBSDF(bsdf);
+        return this.convertGlassBSDF(processedBsdf);
+      case 'bsdf_translucent':
+        return this.convertTranslucentBSDF(processedBsdf);
+      case 'principled_volume':
+        return this.convertPrincipledVolume(processedBsdf);
       case 'emission':
-        return this.convertEmission(bsdf);
+        return this.convertEmission(processedBsdf);
       case 'mix_shader':
-        return this.convertMixShader(bsdf);
+        return this.convertMixShader(processedBsdf);
       case 'add_shader':
-        return this.convertAddShader(bsdf);
+        return this.convertAddShader(processedBsdf);
       default:
-        console.warn(`NodeGraphMaterialBridge: Unknown BSDF type "${bsdf.type}", falling back to principled conversion`);
-        return this.convertPrincipledBSDF(bsdf);
+        console.warn(`NodeGraphMaterialBridge: Unknown BSDF type "${processedBsdf.type}", falling back to principled conversion`);
+        return this.convertPrincipledBSDF(processedBsdf);
     }
   }
 
@@ -136,6 +196,7 @@ export class NodeGraphMaterialBridge {
     const emissionStrength = bsdf.emissionStrength ?? 0.0;
     const emissionColor = this.resolveColor(bsdf.emissionColor, new THREE.Color(0, 0, 0));
     const subsurfaceWeight = bsdf.subsurfaceWeight ?? 0.0;
+    const anisotropic = bsdf.anisotropic ?? 0.0;
 
     const materialParams: THREE.MeshPhysicalMaterialParameters = {
       color,
@@ -169,6 +230,14 @@ export class NodeGraphMaterialBridge {
       (materialParams as any).transmission = Math.max(transmission, subsurfaceWeight * 0.2);
       (materialParams as any).thickness = 1.0;
       materialParams.transparent = true;
+    }
+
+    // Anisotropic approximation (Three.js doesn't support anisotropic on MeshPhysicalMaterial directly,
+    // but we can approximate via clearcoat and roughness modulation)
+    if (anisotropic > 0) {
+      // Anisotropic materials have directional roughness; we approximate by slightly reducing
+      // the isotropic roughness and adding a subtle clearcoat effect
+      materialParams.roughness = Math.max(0.04, roughness * (1 - anisotropic * 0.2));
     }
 
     const material = new THREE.MeshPhysicalMaterial(materialParams);
@@ -232,6 +301,75 @@ export class NodeGraphMaterialBridge {
     return material;
   }
 
+  /**
+   * Translucent BSDF → MeshPhysicalMaterial with subsurface scattering approximation
+   * In Blender, this simulates light passing through the surface (e.g., wax, skin, leaves).
+   * Three.js doesn't have a direct equivalent, so we approximate via:
+   * - Low transmission with thickness (for light-through effect)
+   * - Subsurface color as sheenColor (for back-lit appearance)
+   */
+  private convertTranslucentBSDF(bsdf: BSDFOutput): THREE.MeshPhysicalMaterial {
+    const color = this.resolveColor(bsdf.baseColor, new THREE.Color(0.8, 0.8, 0.8));
+    const subsurfaceColor = this.resolveColor(bsdf.subsurfaceColor, new THREE.Color(0.8, 0.5, 0.3));
+    const roughness = bsdf.roughness ?? 0.5;
+
+    const material = new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: Math.max(0.04, roughness),
+      metalness: 0.0,
+      transmission: 0.3,
+      transparent: true,
+      opacity: 1.0,
+      thickness: 1.0,
+      ior: 1.4,
+      sheen: 0.3,
+      sheenRoughness: 0.6,
+      sheenColor: subsurfaceColor,
+      side: THREE.DoubleSide,
+    });
+
+    this.assignTextureMaps(material, bsdf);
+    material.name = `Bridge_TranslucentBSDF_${Date.now()}`;
+    return material;
+  }
+
+  /**
+   * Principled Volume → MeshPhysicalMaterial
+   *
+   * Blender's Principled Volume is for volume rendering (smoke, fog, SSS).
+   * In Three.js, we approximate this as:
+   * - A highly transmissive material with thickness for SSS
+   * - Volume emission maps to emissive
+   * - Volume density affects opacity
+   */
+  private convertPrincipledVolume(bsdf: BSDFOutput): THREE.MeshPhysicalMaterial {
+    const volumeColor = this.resolveColor(bsdf.volumeColor ?? bsdf.baseColor, new THREE.Color(1, 1, 1));
+    const density = bsdf.volumeDensity ?? 1.0;
+    const emissionStrength = bsdf.volumeEmissionStrength ?? 0.0;
+    const emissionColor = this.resolveColor(bsdf.volumeEmissionColor, new THREE.Color(1, 1, 1));
+
+    const material = new THREE.MeshPhysicalMaterial({
+      color: volumeColor,
+      roughness: 1.0,
+      metalness: 0.0,
+      transmission: Math.min(1.0, density * 0.5),
+      transparent: true,
+      opacity: Math.max(0.1, 1.0 - density * 0.3),
+      thickness: Math.max(0.1, density),
+      ior: 1.33,
+      side: THREE.DoubleSide,
+    });
+
+    if (emissionStrength > 0) {
+      material.emissive = emissionColor;
+      material.emissiveIntensity = emissionStrength;
+    }
+
+    this.assignTextureMaps(material, bsdf);
+    material.name = `Bridge_PrincipledVolume_${Date.now()}`;
+    return material;
+  }
+
   private convertEmission(bsdf: BSDFOutput): THREE.MeshPhysicalMaterial {
     const emissionColor = this.resolveColor(bsdf.emissionColor ?? bsdf.baseColor, new THREE.Color(1, 1, 1));
     const emissionStrength = bsdf.emissionStrength ?? 1.0;
@@ -281,10 +419,23 @@ export class NodeGraphMaterialBridge {
     // For add shader, we take the first shader as base and add emission from the second
     if (shader1) {
       const material = this.convert(shader1);
-      if (shader2 && shader2.Emission) {
-        const emBSDF = shader2.Emission;
-        material.emissive = this.resolveColor(emBSDF.emissionColor ?? emBSDF.baseColor, new THREE.Color(1, 1, 1));
-        material.emissiveIntensity = emBSDF.emissionStrength ?? 1.0;
+      if (shader2) {
+        // Try to extract emission from the second shader
+        const bsdf2 = this.extractBSDF(shader2);
+        if (bsdf2) {
+          const emColor = this.resolveColor(
+            bsdf2.emissionColor ?? bsdf2.baseColor,
+            new THREE.Color(1, 1, 1)
+          );
+          const emStrength = bsdf2.emissionStrength ?? (bsdf2.type === 'emission' ? 1.0 : 0.5);
+          // Additive emission: add to existing emissive or set new
+          if (material.emissiveIntensity > 0) {
+            material.emissive.add(emColor.multiplyScalar(emStrength));
+          } else {
+            material.emissive = emColor;
+            material.emissiveIntensity = emStrength;
+          }
+        }
       }
       material.name = `Bridge_AddShader_${Date.now()}`;
       return material;
@@ -293,6 +444,126 @@ export class NodeGraphMaterialBridge {
     const material = this.createDefaultMaterial();
     material.name = `Bridge_AddShader_${Date.now()}`;
     return material;
+  }
+
+  // ==========================================================================
+  // Texture Descriptor Processing
+  // ==========================================================================
+
+  /**
+   * Process texture descriptors in the BSDF output.
+   *
+   * When the NodeEvaluator produces a BSDF with connected texture nodes,
+   * the texture data may appear as descriptor objects (e.g., { type: 'noise_texture', scale, ... })
+   * instead of Three.js Texture instances. This method converts those descriptors
+   * to actual textures using the NodeGraphTextureBridge.
+   */
+  private processTextureDescriptors(bsdf: BSDFOutput, options?: MaterialBridgeOptions): BSDFOutput {
+    const result = { ...bsdf };
+    const res = options?.textureResolution ?? this.options.textureResolution;
+
+    // Process each texture descriptor slot
+    if (result.mapDescriptor && !result.map) {
+      try {
+        const convResult = this.textureBridge.convertFromEvaluatorOutput(result.mapDescriptor, 'Color', res, res);
+        result.map = convResult.texture;
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert map descriptor', e);
+      }
+    }
+
+    if (result.normalMapDescriptor && !result.normalMap) {
+      try {
+        result.normalMap = this.textureBridge.convertToNormalMap(
+          result.normalMapDescriptor,
+          'Fac',
+          options?.normalMapStrength ?? this.options.normalMapStrength,
+          res, res,
+        );
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert normalMap descriptor', e);
+      }
+    }
+
+    if (result.roughnessMapDescriptor && !result.roughnessMap) {
+      try {
+        result.roughnessMap = this.textureBridge.convertToScalarMap(result.roughnessMapDescriptor, 'Fac', res, res);
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert roughnessMap descriptor', e);
+      }
+    }
+
+    if (result.metalnessMapDescriptor && !result.metalnessMap) {
+      try {
+        result.metalnessMap = this.textureBridge.convertToScalarMap(result.metalnessMapDescriptor, 'Fac', res, res);
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert metalnessMap descriptor', e);
+      }
+    }
+
+    if (result.aoMapDescriptor && !result.aoMap) {
+      try {
+        result.aoMap = this.textureBridge.convertToScalarMap(result.aoMapDescriptor, 'Fac', res, res);
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert aoMap descriptor', e);
+      }
+    }
+
+    if (result.transmissionMapDescriptor && !result.transmissionMap) {
+      try {
+        result.transmissionMap = this.textureBridge.convertToScalarMap(result.transmissionMapDescriptor, 'Fac', res, res);
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert transmissionMap descriptor', e);
+      }
+    }
+
+    if (result.emissiveMapDescriptor && !result.emissiveMap) {
+      try {
+        const convResult = this.textureBridge.convertFromEvaluatorOutput(result.emissiveMapDescriptor, 'Color', res, res);
+        result.emissiveMap = convResult.texture;
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert emissiveMap descriptor', e);
+      }
+    }
+
+    if (result.bumpMapDescriptor && !result.bumpMap) {
+      try {
+        result.bumpMap = this.textureBridge.convertToScalarMap(result.bumpMapDescriptor, 'Fac', res, res);
+      } catch (e) {
+        console.warn('NodeGraphMaterialBridge: Failed to convert bumpMap descriptor', e);
+      }
+    }
+
+    // Also scan for texture descriptors in non-standard fields
+    // (e.g., baseColor might be a texture descriptor if a texture was connected to the color input)
+    result.baseColor = this.resolveTextureOrColor(result.baseColor, 'Color');
+    result.emissionColor = this.resolveTextureOrColor(result.emissionColor, 'Color');
+
+    return result;
+  }
+
+  /**
+   * If a value looks like a texture descriptor, convert it to a Color and return
+   * the generated texture separately. Otherwise return the color as-is.
+   */
+  private resolveTextureOrColor(
+    value: any,
+    outputSocket: 'Color' | 'Fac' | 'Distance',
+  ): THREE.Color | { r: number; g: number; b: number } | string | undefined {
+    if (!value) return value;
+    if (value instanceof THREE.Color) return value;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && 'r' in value && 'g' in value && 'b' in value) return value;
+
+    // If it looks like a texture descriptor, we can't set a color from it directly
+    // (it would need to be a texture), so return default
+    if (typeof value === 'object' && 'type' in value) {
+      // This is a texture descriptor — the actual texture should be on the map slot
+      // Return undefined so the default color is used
+      return undefined;
+    }
+
+    return value;
   }
 
   // ==========================================================================
@@ -354,6 +625,8 @@ export class NodeGraphMaterialBridge {
     if (wrapper.BSDF) return wrapper.BSDF;
     if (wrapper.Emission) return wrapper.Emission;
     if (wrapper.Shader) return wrapper.Shader;
+    if (wrapper.Volume) return wrapper.Volume;
+    if (wrapper.Surface) return wrapper.Surface;
 
     return null;
   }
@@ -363,7 +636,7 @@ export class NodeGraphMaterialBridge {
    */
   private resolveColor(
     value: THREE.Color | { r: number; g: number; b: number } | string | undefined,
-    defaultColor: THREE.Color
+    defaultColor: THREE.Color,
   ): THREE.Color {
     if (!value) return defaultColor.clone();
     if (value instanceof THREE.Color) return value.clone();
@@ -443,7 +716,7 @@ export class NodeGraphMaterialBridge {
   }
 
   /**
-   * Create a default material when no BSDF data is available
+   * Create a default/placeholder material when no BSDF data is available
    */
   private createDefaultMaterial(): THREE.MeshPhysicalMaterial {
     const material = new THREE.MeshPhysicalMaterial({

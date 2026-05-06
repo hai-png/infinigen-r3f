@@ -19,6 +19,8 @@ import * as AddExecutors from './AdditionalNodeExecutors';
 import * as ExpExecutors from './ExpandedNodeExecutors';
 import * as EssentialExecutors from './EssentialNodeExecutors';
 import * as SpecializedExecutors from './SpecializedNodeExecutors';
+import * as P1Executors from './P1NodeExecutors';
+import * as P2Executors from './P2NodeExecutors';
 
 // ============================================================================
 // Types
@@ -349,6 +351,30 @@ export class NodeEvaluator {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Special handling for CaptureAttribute: evaluate Value field per-vertex
+    //
+    // In Blender's geometry nodes, CaptureAttribute evaluates the Value
+    // input field at EACH element of the geometry. The upstream node
+    // (e.g., Position, Normal, Index) produces per-element data that
+    // must be collected for every vertex/face.
+    //
+    // If the Value input's upstream node already returned a per-element
+    // array (which our Position/Normal executors do), the array is
+    // passed through directly. If it returned a single scalar, we wrap
+    // it in a field evaluator that the CaptureAttribute executor can
+    // call for each element.
+    // -----------------------------------------------------------------------
+    const nodeType = node.type;
+    const isCaptureAttr = nodeType === 'CaptureAttribute'
+      || nodeType === 'CaptureAttributeNode'
+      || nodeType === 'capture_attribute'
+      || nodeType === 'GeometryNodeCaptureAttribute';
+
+    if (isCaptureAttr) {
+      this.enhanceCaptureAttributeInputs(node, graph, resolvedInputs);
+    }
+
     // Execute the node
     const result = this.executeNodeByType(node, resolvedInputs);
 
@@ -356,6 +382,246 @@ export class NodeEvaluator {
     this.cache.set(cacheKey, result);
 
     return result;
+  }
+
+  /**
+   * Enhance the resolved inputs for a CaptureAttribute node so the Value
+   * field is evaluated per-element rather than as a single global value.
+   *
+   * If the Value input's upstream node returned a per-element array, it
+   * is passed through. If it returned a single value, we create a field
+   * evaluator function that the CaptureAttribute executor can call per-element.
+   */
+  private enhanceCaptureAttributeInputs(
+    node: NodeInstance,
+    graph: NodeGraph,
+    resolvedInputs: Record<string, any>,
+  ): void {
+    // If Value is already an array or function, it's per-vertex capable — skip
+    const value = resolvedInputs.Value ?? resolvedInputs.value;
+    if (value !== undefined && value !== null) {
+      if (Array.isArray(value) || typeof value === 'function') {
+        return; // Already per-element or field evaluator
+      }
+      // Check if it's an AttributeStream
+      if (typeof value === 'object' && 'getFloat' in value && 'size' in value) {
+        return; // Already a stream
+      }
+    }
+
+    // Find the upstream node connected to the "Value" input
+    let valueUpstreamNodeId: string | null = null;
+    let valueUpstreamSocket: string | null = null;
+    for (const link of graph.links) {
+      if (link.toNode === node.id && (link.toSocket === 'Value' || link.toSocket === 'value')) {
+        valueUpstreamNodeId = link.fromNode;
+        valueUpstreamSocket = link.fromSocket;
+        break;
+      }
+    }
+
+    if (valueUpstreamNodeId && valueUpstreamSocket) {
+      // Get the geometry from the resolved inputs
+      const geometry = resolvedInputs.Geometry ?? resolvedInputs.geometry ?? null;
+      if (geometry && typeof geometry === 'object' && 'getAttribute' in geometry) {
+        // Create a field evaluator function that will evaluate the upstream
+        // node per-vertex. The CaptureAttribute executor will call this
+        // function for each element.
+        const evaluator = this.createFieldEvaluator(
+          valueUpstreamNodeId,
+          valueUpstreamSocket,
+          graph,
+          geometry as THREE.BufferGeometry,
+        );
+        if (evaluator) {
+          resolvedInputs.Value = evaluator;
+        }
+      }
+    }
+  }
+
+  /**
+   * Create a field evaluator function for the Value input of CaptureAttribute.
+   *
+   * The evaluator takes (index, position, normal) and returns the value
+   * of the upstream node when evaluated with that per-vertex context.
+   *
+   * For known input nodes (Position, Normal, Index), we directly return
+   * per-vertex data from the geometry. For other nodes, we re-evaluate
+   * the upstream subgraph with per-vertex overrides.
+   */
+  private createFieldEvaluator(
+    upstreamNodeId: string,
+    upstreamSocket: string,
+    graph: NodeGraph,
+    geometry: THREE.BufferGeometry,
+  ): ((index: number, position: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => any) | null {
+    const upstreamNode = graph.nodes.get(upstreamNodeId);
+    if (!upstreamNode) return null;
+
+    const upstreamType = upstreamNode.type;
+    const posAttr = geometry.getAttribute('position');
+    const normalAttr = geometry.getAttribute('normal');
+
+    // For Position input nodes, directly return per-vertex position
+    if (
+      upstreamType === 'GeometryNodeInputPosition' || upstreamType === 'input_position'
+      || upstreamType === 'InputPositionNode' || upstreamType === 'Position'
+    ) {
+      return (index: number) => {
+        if (posAttr && index < posAttr.count) {
+          return { x: posAttr.getX(index), y: posAttr.getY(index), z: posAttr.getZ(index) };
+        }
+        return { x: 0, y: 0, z: 0 };
+      };
+    }
+
+    // For Normal input nodes, directly return per-vertex normal
+    if (
+      upstreamType === 'GeometryNodeInputNormal' || upstreamType === 'input_normal'
+      || upstreamType === 'InputNormalNode' || upstreamType === 'Normal'
+    ) {
+      return (_index: number, _position: any, normal: { x: number; y: number; z: number }) => {
+        return normal;
+      };
+    }
+
+    // For Index input nodes, return the index itself
+    if (
+      upstreamType === 'GeometryNodeInputIndex' || upstreamType === 'input_index'
+      || upstreamType === 'IndexNode' || upstreamType === 'Index'
+    ) {
+      return (index: number) => index;
+    }
+
+    // For ID input nodes, return the index (ID = index for now)
+    if (
+      upstreamType === 'GeometryNodeInputID' || upstreamType === 'input_id'
+      || upstreamType === 'IDNode' || upstreamType === 'InputID'
+    ) {
+      return (index: number) => index;
+    }
+
+    // For other nodes, try to re-evaluate per-vertex by overriding
+    // the Position/Normal/Index inputs in the upstream subgraph
+    return (index: number, position: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => {
+      try {
+        // Temporarily override the cache for position/normal/index nodes
+        // that feed into the upstream subgraph
+        const overrides: Map<string, any> = new Map();
+        this.overridePerVertexInputs(upstreamNodeId, graph, index, position, normal, overrides);
+
+        // Re-evaluate the upstream node (clear its cache first)
+        const cacheKey = `node:${upstreamNodeId}`;
+        const prevCache = this.cache.get(cacheKey);
+        this.cache.delete(cacheKey);
+
+        // Also clear any transitive upstream nodes that were overridden
+        for (const key of overrides.keys()) {
+          this.cache.delete(key);
+        }
+
+        const result = this.evaluateNode(upstreamNode, graph);
+        const outputValue = result instanceof Map
+          ? result.get(upstreamSocket)
+          : typeof result === 'object' && result !== null
+            ? (result as any)[upstreamSocket]
+            : result;
+
+        // Restore the original cache
+        if (prevCache !== undefined) {
+          this.cache.set(cacheKey, prevCache);
+        }
+        for (const [key, prevValue] of overrides.entries()) {
+          if (prevValue === undefined) {
+            this.cache.delete(key);
+          } else {
+            this.cache.set(key, prevValue);
+          }
+        }
+
+        return outputValue;
+      } catch {
+        return 0;
+      }
+    };
+  }
+
+  /**
+   * Override per-vertex input nodes in the upstream subgraph with
+   * per-element values. This allows re-evaluation of the subgraph
+   * with different vertex contexts.
+   */
+  private overridePerVertexInputs(
+    rootNodeId: string,
+    graph: NodeGraph,
+    elementIndex: number,
+    position: { x: number; y: number; z: number },
+    normal: { x: number; y: number; z: number },
+    overrides: Map<string, any>,
+  ): void {
+    // Find all input nodes that feed into the upstream subgraph
+    // and override their outputs with per-vertex values
+    const visited = new Set<string>();
+    const stack = [rootNodeId];
+
+    while (stack.length > 0) {
+      const nodeId = stack.pop()!;
+      if (visited.has(nodeId)) continue;
+      visited.add(nodeId);
+
+      const node = graph.nodes.get(nodeId);
+      if (!node) continue;
+
+      const nodeType = node.type;
+
+      // Override Position node output
+      if (
+        nodeType === 'GeometryNodeInputPosition' || nodeType === 'input_position'
+        || nodeType === 'InputPositionNode' || nodeType === 'Position'
+      ) {
+        const cacheKey = `node:${nodeId}`;
+        overrides.set(cacheKey, this.cache.get(cacheKey));
+        this.cache.set(cacheKey, { Position: position });
+      }
+
+      // Override Normal node output
+      if (
+        nodeType === 'GeometryNodeInputNormal' || nodeType === 'input_normal'
+        || nodeType === 'InputNormalNode' || nodeType === 'Normal'
+      ) {
+        const cacheKey = `node:${nodeId}`;
+        overrides.set(cacheKey, this.cache.get(cacheKey));
+        this.cache.set(cacheKey, { Normal: normal });
+      }
+
+      // Override Index node output
+      if (
+        nodeType === 'GeometryNodeInputIndex' || nodeType === 'input_index'
+        || nodeType === 'IndexNode' || nodeType === 'Index'
+      ) {
+        const cacheKey = `node:${nodeId}`;
+        overrides.set(cacheKey, this.cache.get(cacheKey));
+        this.cache.set(cacheKey, { Index: elementIndex });
+      }
+
+      // Override ID node output
+      if (
+        nodeType === 'GeometryNodeInputID' || nodeType === 'input_id'
+        || nodeType === 'IDNode' || nodeType === 'InputID'
+      ) {
+        const cacheKey = `node:${nodeId}`;
+        overrides.set(cacheKey, this.cache.get(cacheKey));
+        this.cache.set(cacheKey, { ID: elementIndex });
+      }
+
+      // Walk upstream
+      for (const link of graph.links) {
+        if (link.toNode === nodeId) {
+          stack.push(link.fromNode);
+        }
+      }
+    }
   }
 
   /**
@@ -409,16 +675,16 @@ export class NodeEvaluator {
       return this.executeGradientTexture(inputs);
     }
     if (nodeType === 'ShaderNodeTexBrick' || nodeType === 'brick_texture' || nodeType === 'BrickTextureNode') {
-      return this.executeBrickTexture(inputs);
+      return P1Executors.executeBrickTexture(inputs);
     }
     if (nodeType === 'ShaderNodeTexChecker' || nodeType === 'checker_texture' || nodeType === 'CheckerTextureNode') {
-      return this.executeCheckerTexture(inputs);
+      return P1Executors.executeCheckerTexture(inputs);
     }
     if (nodeType === 'ShaderNodeTexMagic' || nodeType === 'magic_texture' || nodeType === 'MagicTextureNode') {
-      return this.executeMagicTexture(inputs);
+      return P1Executors.executeMagicTexture(inputs);
     }
     if (nodeType === 'ShaderNodeTexImage' || nodeType === 'image_texture' || nodeType === 'ImageTextureNode') {
-      return this.executeImageTexture(inputs);
+      return P1Executors.executeImageTexture(inputs, node.settings);
     }
 
     // Color nodes
@@ -429,13 +695,13 @@ export class NodeEvaluator {
       return this.executeColorRamp(inputs);
     }
     if (nodeType === 'ShaderNodeHueSaturation' || nodeType === 'hue_saturation' || nodeType === 'HueSaturationNode') {
-      return this.executeHueSaturationValue(inputs);
+      return P1Executors.executeHueSaturationValue(inputs);
     }
     if (nodeType === 'ShaderNodeInvert' || nodeType === 'invert' || nodeType === 'InvertNode') {
-      return this.executeInvert(inputs);
+      return P1Executors.executeInvertColor(inputs);
     }
     if (nodeType === 'CompositorNodeBrightContrast' || nodeType === 'bright_contrast' || nodeType === 'BrightContrastNode') {
-      return this.executeBrightContrast(inputs);
+      return P1Executors.executeBrightContrast(inputs);
     }
 
     // Math nodes
@@ -457,13 +723,13 @@ export class NodeEvaluator {
       return this.executeSeparateXYZ(inputs);
     }
     if (nodeType === 'ShaderNodeBump' || nodeType === 'bump' || nodeType === 'BumpNode') {
-      return this.executeBump(inputs);
+      return P1Executors.executeBump(inputs);
     }
     if (nodeType === 'ShaderNodeDisplacement' || nodeType === 'displacement' || nodeType === 'DisplacementNode') {
-      return this.executeDisplacement(inputs);
+      return P1Executors.executeDisplacement(inputs);
     }
     if (nodeType === 'ShaderNodeNormalMap' || nodeType === 'normal_map' || nodeType === 'NormalMapNode') {
-      return this.executeNormalMap(inputs);
+      return P1Executors.executeNormalMap(inputs);
     }
 
     // Texture coordinate
@@ -473,13 +739,13 @@ export class NodeEvaluator {
 
     // Input nodes
     if (nodeType === 'GeometryNodeObjectInfo' || nodeType === 'object_info' || nodeType === 'ObjectInfoNode') {
-      return this.executeObjectInfo(inputs, node.settings);
+      return P1Executors.executeObjectInfo(inputs, node.settings);
     }
     if (nodeType === 'ShaderNodeValue' || nodeType === 'value' || nodeType === 'ValueNode') {
-      return this.executeValue(inputs, node.settings);
+      return P1Executors.executeValueNode(inputs, node.settings);
     }
     if (nodeType === 'ShaderNodeRGB' || nodeType === 'rgb' || nodeType === 'RGBNode') {
-      return this.executeRGB(inputs, node.settings);
+      return P1Executors.executeRGBNode(inputs, node.settings);
     }
 
     // =========================================================================
@@ -589,7 +855,7 @@ export class NodeEvaluator {
       return ExtExecutors.executeCollectionInfo(inputs);
     }
     if (nodeType === 'SelfObject' || nodeType === 'SelfObjectNode' || nodeType === 'GeometryNodeSelfObject' || nodeType === 'self_object') {
-      return ExtExecutors.executeSelfObject(inputs);
+      return P1Executors.executeSelfObject(inputs);
     }
     if (nodeType === 'input_vector' || nodeType === 'GeometryNodeInputVector' || nodeType === 'NodeInputVector' || nodeType === 'InputVectorNode') {
       return ExtExecutors.executeInputVector(inputs, node.settings);
@@ -612,7 +878,7 @@ export class NodeEvaluator {
       return ExtExecutors.executeClamp(inputs);
     }
     if (nodeType === 'map_range' || nodeType === 'ShaderNodeMapRange' || nodeType === 'GeometryNodeMapRange' || nodeType === 'MapRangeNode') {
-      return ExtExecutors.executeMapRange(inputs);
+      return P1Executors.executeMapRange(inputs);
     }
     if (nodeType === 'float_to_int' || nodeType === 'GeometryNodeFloatToInt' || nodeType === 'ShaderNodeFloatToInt' || nodeType === 'FloatToIntNode') {
       return ExtExecutors.executeFloatToInt(inputs);
@@ -702,16 +968,16 @@ export class NodeEvaluator {
 
     // Texture/Evaluation Nodes
     if (nodeType === 'BrickTexture' || nodeType === 'BrickTextureNode' || nodeType === 'brick_texture' || nodeType === 'ShaderNodeTexBrick') {
-      return AddExecutors.executeBrickTexture(inputs);
+      return P1Executors.executeBrickTexture(inputs);
     }
     if (nodeType === 'CheckerTexture' || nodeType === 'CheckerTextureNode' || nodeType === 'checker_texture' || nodeType === 'ShaderNodeTexChecker') {
-      return AddExecutors.executeCheckerTexture(inputs);
+      return P1Executors.executeCheckerTexture(inputs);
     }
     if (nodeType === 'GradientTexture' || nodeType === 'GradientTextureNode' || nodeType === 'gradient_texture' || nodeType === 'ShaderNodeTexGradient') {
       return AddExecutors.executeGradientTexture(inputs);
     }
     if (nodeType === 'MagicTexture' || nodeType === 'MagicTextureNode' || nodeType === 'magic_texture' || nodeType === 'ShaderNodeTexMagic') {
-      return AddExecutors.executeMagicTexture(inputs);
+      return P1Executors.executeMagicTexture(inputs);
     }
     if (nodeType === 'WaveTexture' || nodeType === 'WaveTextureNode' || nodeType === 'wave_texture' || nodeType === 'ShaderNodeTexWave') {
       return AddExecutors.executeWaveTexture(inputs);
@@ -1133,7 +1399,91 @@ export class NodeEvaluator {
       return SpecializedExecutors.executeRGBToBW(inputs);
     }
     if (nodeType === 'FloatCurve' || nodeType === 'float_curve' || nodeType === 'ShaderNodeFloatCurve' || nodeType === 'FloatCurveNode') {
-      return SpecializedExecutors.executeFloatCurve(inputs);
+      return P1Executors.executeFloatCurve(inputs);
+    }
+
+    // =========================================================================
+    // P2 Node Executors (from P2NodeExecutors.ts)
+    // Shader BSDF, geometry, texture, curve, and vector nodes.
+    // =========================================================================
+
+    // Shader BSDF Nodes
+    if (nodeType === 'SubsurfaceScattering' || nodeType === 'SubsurfaceScatteringNode' || nodeType === 'subsurface_scattering' || nodeType === 'ShaderNodeSubsurfaceScattering') {
+      return P2Executors.executeSubsurfaceScattering(inputs);
+    }
+    if (nodeType === 'ToonBSDF' || nodeType === 'ToonBSDFNode' || nodeType === 'toon_bsdf' || nodeType === 'ShaderNodeBsdfToon') {
+      return P2Executors.executeToonBSDF(inputs);
+    }
+    if (nodeType === 'HairBSDF' || nodeType === 'HairBSDFNode' || nodeType === 'hair_bsdf' || nodeType === 'ShaderNodeBsdfHair') {
+      return P2Executors.executeHairBSDF(inputs);
+    }
+    if (nodeType === 'GlassBSDFNode' || nodeType === 'glass_bsdf_p2' || nodeType === 'ShaderNodeBsdfGlassP2') {
+      return P2Executors.executeGlassBSDF(inputs);
+    }
+    if (nodeType === 'RefractionBSDF' || nodeType === 'RefractionBSDFNode' || nodeType === 'refraction_bsdf' || nodeType === 'ShaderNodeBsdfRefraction') {
+      return P2Executors.executeRefractionBSDF(inputs);
+    }
+    if (nodeType === 'Fresnel' || nodeType === 'FresnelNode' || nodeType === 'fresnel' || nodeType === 'ShaderNodeFresnel') {
+      return P2Executors.executeFresnel(inputs);
+    }
+
+    // Geometry Nodes
+    if (nodeType === 'Subdivide' || nodeType === 'SubdivideNode' || nodeType === 'subdivide' || nodeType === 'GeometryNodeSubdivide') {
+      return P2Executors.executeSubdivide(inputs);
+    }
+    if (nodeType === 'Boolean' || nodeType === 'BooleanNode' || nodeType === 'boolean_operation' || nodeType === 'GeometryNodeBoolean') {
+      return P2Executors.executeBoolean(inputs);
+    }
+    if (nodeType === 'Extrude' || nodeType === 'ExtrudeNode' || nodeType === 'extrude' || nodeType === 'GeometryNodeExtrude') {
+      return P2Executors.executeExtrude(inputs);
+    }
+    if (nodeType === 'TransformGeometry' || nodeType === 'TransformGeometryNode' || nodeType === 'transform_geometry' || nodeType === 'GeometryNodeTransformGeometry') {
+      return P2Executors.executeTransformGeometry(inputs);
+    }
+    if (nodeType === 'JoinGeometry' || nodeType === 'JoinGeometryNode' || nodeType === 'join_geometry_p2' || nodeType === 'GeometryNodeJoinGeometryP2') {
+      return P2Executors.executeJoinGeometry(inputs);
+    }
+
+    // Texture Nodes (P2 dedicated)
+    if (nodeType === 'GradientTexture' || nodeType === 'GradientTextureNode' || nodeType === 'gradient_texture_p2' || nodeType === 'ShaderNodeTexGradientP2') {
+      return P2Executors.executeGradientTexture(inputs);
+    }
+    if (nodeType === 'VoronoiTexture' || nodeType === 'VoronoiTextureNode' || nodeType === 'voronoi_texture_p2' || nodeType === 'ShaderNodeTexVoronoiP2') {
+      return P2Executors.executeVoronoiTexture(inputs);
+    }
+    if (nodeType === 'WaveTexture' || nodeType === 'WaveTextureNode' || nodeType === 'wave_texture_p2' || nodeType === 'ShaderNodeTexWaveP2') {
+      return P2Executors.executeWaveTexture(inputs);
+    }
+    if (nodeType === 'WhiteNoiseTexture' || nodeType === 'WhiteNoiseTextureNode' || nodeType === 'white_noise_texture_p2' || nodeType === 'ShaderNodeTexWhiteNoiseP2') {
+      return P2Executors.executeWhiteNoiseTexture(inputs);
+    }
+    if (nodeType === 'ColorRampP2' || nodeType === 'color_ramp_p2' || nodeType === 'ShaderNodeValToRGBP2') {
+      return P2Executors.executeColorRamp(inputs);
+    }
+
+    // Curve Nodes (P2 dedicated)
+    if (nodeType === 'CurveToMeshP2' || nodeType === 'curve_to_mesh_p2' || nodeType === 'GeometryNodeCurveToMeshP2') {
+      return P2Executors.executeCurveToMesh(inputs);
+    }
+    if (nodeType === 'CurveLineP2' || nodeType === 'curve_line_p2' || nodeType === 'GeometryNodeCurveLineP2') {
+      return P2Executors.executeCurveLine(inputs);
+    }
+    if (nodeType === 'BezierSegmentP2' || nodeType === 'bezier_segment_p2' || nodeType === 'GeometryNodeBezierSegmentP2') {
+      return P2Executors.executeBezierSegment(inputs);
+    }
+    if (nodeType === 'QuadraticBezierP2' || nodeType === 'quadratic_bezier_p2' || nodeType === 'GeometryNodeQuadraticBezierP2') {
+      return P2Executors.executeQuadraticBezier(inputs);
+    }
+
+    // Vector Nodes (P2 dedicated)
+    if (nodeType === 'VectorMathP2' || nodeType === 'vector_math_p2' || nodeType === 'ShaderNodeVectorMathP2') {
+      return P2Executors.executeVectorMath(inputs);
+    }
+    if (nodeType === 'VectorRotateP2' || nodeType === 'vector_rotate_p2' || nodeType === 'ShaderNodeVectorRotateP2') {
+      return P2Executors.executeVectorRotate(inputs);
+    }
+    if (nodeType === 'CurveLengthP2' || nodeType === 'curve_length_p2' || nodeType === 'GeometryNodeCurveLengthP2') {
+      return P2Executors.executeCurveLength(inputs);
     }
 
     // =========================================================================

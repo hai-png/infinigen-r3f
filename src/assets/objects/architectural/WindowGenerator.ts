@@ -9,9 +9,10 @@
  */
 
 import {
-  Group, Mesh, BoxGeometry, CylinderGeometry, BufferGeometry,
-  Float32BufferAttribute, MeshStandardMaterial, Color, Vector3
+  Group, Mesh, BoxGeometry, CylinderGeometry, BufferGeometry, SphereGeometry,
+  Float32BufferAttribute, MeshStandardMaterial, Color, Vector3, PlaneGeometry
 } from 'three';
+import * as THREE from 'three';
 import { SeededRandom } from '../../../core/util/math/index';
 import { BaseObjectGenerator, BaseGeneratorConfig } from '../utils/BaseObjectGenerator';
 
@@ -28,6 +29,12 @@ export interface WindowParams extends BaseGeneratorConfig {
   frameMaterial: 'wood' | 'metal' | 'vinyl' | 'aluminum';
   glassType: 'clear' | 'frosted' | 'tinted' | 'stained';
   sillDepth: number;
+  /** Optional curtain: 'none' (default), 'rod', 'roman', 'roller' */
+  curtainType: 'none' | 'rod' | 'roman' | 'roller';
+  /** Curtain fabric color as hex number */
+  curtainColor: number;
+  /** Curtain open amount: 0 = fully closed, 1 = fully open */
+  curtainOpenAmount: number;
 }
 
 /**
@@ -47,6 +54,9 @@ export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
       frameMaterial: this.rng.choice(['wood', 'metal', 'vinyl', 'aluminum']),
       glassType: this.rng.choice(['clear', 'frosted', 'tinted', 'stained']),
       sillDepth: 0.1 + this.rng.range(0, 0.15),
+      curtainType: 'none',
+      curtainColor: 0xf5f0e8,
+      curtainOpenAmount: 0,
     };
   }
 
@@ -88,6 +98,12 @@ export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
     // Add window sill (for all types)
     const sill = this.createSill(params);
     group.add(sill);
+
+    // Add curtain if requested
+    if (params.curtainType !== 'none') {
+      const curtain = this.createCurtain(params);
+      group.add(curtain);
+    }
 
     return group;
   }
@@ -566,6 +582,137 @@ export class WindowGenerator extends BaseObjectGenerator<WindowParams> {
     sill.receiveShadow = true;
     sill.name = 'sill';
     return sill;
+  }
+
+  // ===== CURTAIN: Rod, Roman, or Roller curtain =====
+  private createCurtain(params: WindowParams): Group {
+    const curtainGroup = new Group();
+    curtainGroup.name = `curtain_${params.curtainType}`;
+    const curtainMat = new MeshStandardMaterial({
+      color: params.curtainColor,
+      roughness: 0.9,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+
+    const curtainZ = params.depth / 2 + 0.02; // Just in front of the window
+    const openWidth = params.width * params.curtainOpenAmount;
+    const closedWidth = params.width - openWidth;
+
+    switch (params.curtainType) {
+      case 'rod': {
+        // Curtain rod (metal bar across the top)
+        const rodMat = new MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.3 });
+        const rodGeo = new CylinderGeometry(0.015, 0.015, params.width + 0.2, 12);
+        const rod = new Mesh(rodGeo, rodMat);
+        rod.rotation.z = Math.PI / 2;
+        rod.position.set(0, params.height / 2 + 0.05, curtainZ);
+        rod.name = 'curtain_rod';
+        curtainGroup.add(rod);
+
+        // Finials (decorative ends)
+        for (const side of [-1, 1]) {
+          const finialGeo = new SphereGeometry(0.025, 12, 12);
+          const finial = new Mesh(finialGeo, rodMat);
+          finial.position.set(side * (params.width / 2 + 0.1), params.height / 2 + 0.05, curtainZ);
+          finial.name = `finial_${side === -1 ? 'left' : 'right'}`;
+          curtainGroup.add(finial);
+        }
+
+        // Curtain fabric panels (gathered, two panels that open from center)
+        const panelWidth = closedWidth / 2;
+        const curtainHeight = params.height * 0.95;
+
+        if (panelWidth > 0.02) {
+          for (const side of [-1, 1]) {
+            // Gathered curtain panel
+            const panelGeo = new THREE.PlaneGeometry(panelWidth, curtainHeight, 8, 1);
+            // Add slight waviness for gathering effect
+            const positions = panelGeo.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+              const x = positions[i];
+              positions[i + 2] += Math.sin(x * 20) * 0.01; // Subtle gathers
+            }
+            panelGeo.attributes.position.needsUpdate = true;
+            panelGeo.computeVertexNormals();
+
+            const panel = new Mesh(panelGeo, curtainMat);
+            const xCenter = side * (openWidth / 2 + panelWidth / 2);
+            panel.position.set(xCenter, 0, curtainZ);
+            panel.name = `curtain_panel_${side === -1 ? 'left' : 'right'}`;
+            curtainGroup.add(panel);
+          }
+        }
+        break;
+      }
+
+      case 'roman': {
+        // Roman shade: flat fabric panel with horizontal folds
+        const shadeWidth = params.width * 0.95;
+        const shadeHeight = params.height * (1 - params.curtainOpenAmount * 0.7);
+
+        const shadeGeo = new THREE.PlaneGeometry(shadeWidth, shadeHeight, 1, 12);
+        // Add fold lines
+        const positions = shadeGeo.attributes.position.array;
+        const foldCount = 5;
+        for (let i = 0; i < positions.length; i += 3) {
+          const y = positions[i + 1];
+          const foldT = (y / shadeHeight + 0.5); // 0 at bottom, 1 at top
+          const fold = Math.sin(foldT * foldCount * Math.PI) * 0.008;
+          positions[i + 2] += fold;
+        }
+        shadeGeo.attributes.position.needsUpdate = true;
+        shadeGeo.computeVertexNormals();
+
+        const shade = new Mesh(shadeGeo, curtainMat);
+        shade.position.set(0, params.height / 2 - shadeHeight / 2, curtainZ);
+        shade.name = 'roman_shade';
+        curtainGroup.add(shade);
+
+        // Headrail
+        const headrailMat = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+        const headrailGeo = new BoxGeometry(shadeWidth + 0.04, 0.03, 0.03);
+        const headrail = new Mesh(headrailGeo, headrailMat);
+        headrail.position.set(0, params.height / 2 + 0.015, curtainZ);
+        headrail.name = 'roman_headrail';
+        curtainGroup.add(headrail);
+        break;
+      }
+
+      case 'roller': {
+        // Roller shade: cylindrical roller at top + flat fabric panel
+        const shadeHeight = params.height * (1 - params.curtainOpenAmount * 0.8);
+        const shadeWidth = params.width * 0.95;
+
+        // Roller tube
+        const tubeMat = new MeshStandardMaterial({ color: 0xdddddd, metalness: 0.3, roughness: 0.5 });
+        const tubeGeo = new CylinderGeometry(0.02, 0.02, shadeWidth, 16);
+        const tube = new Mesh(tubeGeo, tubeMat);
+        tube.rotation.z = Math.PI / 2;
+        tube.position.set(0, params.height / 2 + 0.02, curtainZ);
+        tube.name = 'roller_tube';
+        curtainGroup.add(tube);
+
+        // Fabric panel
+        if (shadeHeight > 0.05) {
+          const shadeGeo = new THREE.PlaneGeometry(shadeWidth, shadeHeight);
+          const shade = new Mesh(shadeGeo, curtainMat);
+          shade.position.set(0, params.height / 2 - shadeHeight / 2, curtainZ);
+          shade.name = 'roller_fabric';
+          curtainGroup.add(shade);
+        }
+
+        // Bottom bar
+        const barGeo = new BoxGeometry(shadeWidth, 0.015, 0.01);
+        const bar = new Mesh(barGeo, tubeMat);
+        bar.position.set(0, params.height / 2 - shadeHeight, curtainZ);
+        bar.name = 'roller_bottom_bar';
+        curtainGroup.add(bar);
+        break;
+      }
+    }
+
+    return curtainGroup;
   }
 
   private getGlassMaterial(params: WindowParams): MeshStandardMaterial {

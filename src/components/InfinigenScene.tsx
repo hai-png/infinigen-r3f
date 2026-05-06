@@ -4,23 +4,12 @@ import React, { useRef, useMemo, useEffect, useState, useCallback, Suspense } fr
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sky } from '@react-three/drei';
 import * as THREE from 'three';
-import { TerrainGenerator } from '@/terrain/core/TerrainGenerator';
 import { OceanSurface } from '@/terrain/water/OceanSystem';
 import { SSGIPass, type SSGIConfig } from '@/core/rendering/postprocess/SSGIPass';
 import { SSAOPass, type SSAOConfig } from '@/core/rendering/postprocess/SSAOPass';
 import { ExposureControl, type ToneMappingPreset } from '@/core/rendering/lighting/ExposureControl';
 
-// Vegetation imports
-import { LSystemEngine, LSystemPresets, generateLSystemTree } from '@/assets/objects/vegetation/trees/LSystemEngine';
-import { FernGenerator, type FernSpecies, FernSpeciesPresets } from '@/assets/objects/vegetation/plants/FernGenerator';
-import { FlowerGenerator, type FlowerType, FlowerSpeciesPresets } from '@/assets/objects/vegetation/plants/FlowerGenerator';
-import { MushroomGenerator, type MushroomSpecies, MushroomSpeciesPresets } from '@/assets/objects/vegetation/plants/MushroomGenerator';
-import { IvyClimbingSystem, type ClimbingPlantType } from '@/assets/objects/vegetation/climbing/IvyClimbingSystem';
-import { ForestFloorScatter, type Season } from '@/assets/objects/vegetation/scatter/ForestFloorScatter';
-import { WindAnimationController } from '@/assets/objects/vegetation/WindAnimationController';
-import { VegetationLODSystem } from '@/assets/objects/vegetation/VegetationLODSystem';
-
-// Composition system imports
+// Composition system imports — single source of truth
 import {
   NatureSceneComposer,
   type NatureSceneResult,
@@ -28,11 +17,16 @@ import {
   ALL_PRESETS,
   getPreset,
   type ScenePreset,
+  SceneObjectFactory,
+  type NatureSceneObjects,
+  type LightingObjectConfig,
+  type CameraObjectConfig,
 } from '@/assets/composition';
 
-// Creature imports (Phase 3.2)
-import { MammalGenerator } from '@/assets/objects/creatures/MammalGenerator';
-import { BirdGenerator } from '@/assets/objects/creatures/BirdGenerator';
+// Wind animation controller — needed for per-frame updates
+import { WindAnimationController } from '@/assets/objects/vegetation/WindAnimationController';
+
+// Swarm system — needed for per-frame fish animation
 import { SwarmSystem, type SwarmConfig } from '@/assets/objects/creatures/swarm/SwarmSystem';
 
 // Phase 4.1 — Camera System
@@ -54,6 +48,16 @@ import { AnnotationExporter } from '@/datagen/pipeline/AnnotationExporter';
 // Phase 3.3 — Material & Texture Pipeline
 import { MaterialPresetLibrary, type MaterialCategory } from '@/assets/materials/MaterialPresetLibrary';
 import { WearGenerator, type WearParams } from '@/assets/materials/wear/WearGenerator';
+
+// Ivy climbing system — used in material preview mode
+import { IvyClimbingSystem } from '@/assets/objects/vegetation/climbing/IvyClimbingSystem';
+
+// Indoor scene composer
+import {
+  IndoorSceneComposer,
+  type IndoorSceneResult,
+  type RoomType,
+} from '@/assets/composition';
 
 // ---------------------------------------------------------------------------
 // Feature toggles (controlled via keyboard shortcuts)
@@ -79,197 +83,102 @@ interface FeatureFlags {
 type VegetationSeason = 'spring' | 'summer' | 'autumn' | 'winter';
 
 // ---------------------------------------------------------------------------
-// Terrain Component — procedural heightmap with biome vertex colors
+// Factory-Driven Nature Scene Component
+//
+// Uses SceneObjectFactory to convert NatureSceneComposer output into
+// Three.js objects. The component is now a thin wrapper:
+//   preset → compose() → factory → render
 // ---------------------------------------------------------------------------
 
-const BIOME_COLORS: Record<number, [number, number, number]> = {
-  0: [0.06, 0.15, 0.40], // Deep water
-  1: [0.12, 0.30, 0.50], // Shore
-  2: [0.76, 0.72, 0.48], // Beach
-  3: [0.28, 0.55, 0.18], // Plains
-  4: [0.38, 0.45, 0.20], // Hills
-  5: [0.18, 0.44, 0.12], // Forest
-  6: [0.28, 0.36, 0.14], // Mountain forest
-  7: [0.48, 0.43, 0.38], // Mountain
-  8: [0.90, 0.92, 0.96], // Snow peak
-};
+function FactoryNatureScene({ sceneConfig }: { sceneConfig: NatureSceneResult }) {
+  const factory = useMemo(() => new SceneObjectFactory(), []);
+  const sceneObjects = useMemo(() => factory.createNatureScene(sceneConfig), [factory, sceneConfig]);
 
-interface TerrainProps {
-  seed: number;
-  scale: number;
-  seaLevel: number;
-}
+  // Fish school needs per-frame animation
+  const swarmRef = useRef<SwarmSystem | null>(sceneObjects.fishSchool);
+  const fishGroupRef = useRef<THREE.Group | null>(null);
 
-function TerrainMesh({ seed, scale, seaLevel }: TerrainProps) {
-  const { geometry } = useMemo(() => {
-    const generator = new TerrainGenerator({
-      seed,
-      width: 128,
-      height: 128,
-      scale,
-      octaves: 6,
-      persistence: 0.5,
-      lacunarity: 2.0,
-      erosionStrength: 0.3,
-      erosionIterations: 10,
-      tectonicPlates: 3,
-      seaLevel,
-    });
-
-    const terrainData = generator.generate();
-    const { data: heightData, width, height } = terrainData.heightMap;
-    const { biomeMask } = terrainData;
-
-    const worldSize = 200;
-    const heightScale = 35;
-
-    const geo = new THREE.PlaneGeometry(worldSize, worldSize, width - 1, height - 1);
-    geo.rotateX(-Math.PI / 2);
-
-    const positions = geo.attributes.position as THREE.BufferAttribute;
-    const colorArray = new Float32Array(positions.count * 3);
-
-    for (let i = 0; i < positions.count; i++) {
-      const h = heightData[i] ?? 0;
-      positions.setY(i, h * heightScale);
-
-      const biome = biomeMask[i] ?? 3;
-      const [r, g, b] = BIOME_COLORS[biome] ?? BIOME_COLORS[3];
-      colorArray[i * 3] = r;
-      colorArray[i * 3 + 1] = g;
-      colorArray[i * 3 + 2] = b;
+  useEffect(() => {
+    if (sceneObjects.fishSchool) {
+      swarmRef.current = sceneObjects.fishSchool;
+      fishGroupRef.current = sceneObjects.fishSchool.getGroup();
     }
+    return () => {
+      swarmRef.current?.dispose();
+    };
+  }, [sceneObjects.fishSchool]);
 
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colorArray, 3));
-    geo.computeVertexNormals();
+  useFrame((_, delta) => {
+    if (swarmRef.current) {
+      swarmRef.current.update(delta);
+    }
+  });
 
-    return { geometry: geo };
-  }, [seed, scale, seaLevel]);
+  // Ocean animation — find the ocean mesh inside the water group
+  const oceanRef = useRef<OceanSurface | null>(null);
+  const { camera, scene } = useThree();
+
+  useEffect(() => {
+    const oceanMesh = sceneObjects.water.getObjectByName('ocean');
+    if (oceanMesh) {
+      const surface = oceanMesh.userData._oceanSurface as OceanSurface | undefined;
+      if (surface) oceanRef.current = surface;
+    }
+  }, [sceneObjects.water]);
+
+  useFrame((_, delta) => {
+    if (oceanRef.current) {
+      oceanRef.current.update(delta);
+      oceanRef.current.setCameraPosition(camera.position);
+    }
+  });
+
+  // Apply atmosphere (fog) from factory to the scene
+  useEffect(() => {
+    const fog = sceneObjects.atmosphere.userData.fog as THREE.Fog | undefined;
+    if (fog) {
+      scene.fog = fog;
+    }
+    return () => {
+      scene.fog = null;
+    };
+  }, [sceneObjects.atmosphere, scene]);
 
   return (
-    <mesh geometry={geometry} receiveShadow castShadow>
-      <meshStandardMaterial vertexColors side={THREE.FrontSide} flatShading={false} />
-    </mesh>
+    <group>
+      {sceneObjects.terrain && <primitive object={sceneObjects.terrain} />}
+      <primitive object={sceneObjects.water} />
+      <primitive object={sceneObjects.vegetation} />
+      <primitive object={sceneObjects.boulders} />
+      <primitive object={sceneObjects.creatures} />
+      <primitive object={sceneObjects.groundCover} />
+      <primitive object={sceneObjects.rivers} />
+      <primitive object={sceneObjects.clouds} />
+      <primitive object={sceneObjects.weatherParticles} />
+      <primitive object={sceneObjects.windEffector} />
+      <primitive object={sceneObjects.lighting} />
+      {fishGroupRef.current && <primitive object={fishGroupRef.current} />}
+    </group>
   );
 }
 
 // ---------------------------------------------------------------------------
-// L-System Trees Component
+// FactoryIndoorScene — renders IndoorSceneComposer output via SceneObjectFactory
 // ---------------------------------------------------------------------------
 
-function LSystemTrees({ density }: { density: number }) {
-  const group = useMemo(() => {
-    const g = new THREE.Group();
+function FactoryIndoorScene({ indoorConfig }: { indoorConfig: IndoorSceneResult }) {
+  const factory = useMemo(() => new SceneObjectFactory(), []);
+  const indoorObjects = useMemo(() => factory.createIndoorScene(indoorConfig), [factory, indoorConfig]);
 
-    const treeCount = Math.max(1, Math.round(density * 10));
-    const presets = ['oak', 'conifer', 'birch'] as const;
-
-    for (let i = 0; i < treeCount; i++) {
-      const preset = presets[i % presets.length];
-      const angle = (i / treeCount) * Math.PI * 2;
-      const radius = 15 + i * 3;
-      const tree = generateLSystemTree(preset, 100 + i);
-      tree.position.set(
-        Math.cos(angle) * radius,
-        0,
-        Math.sin(angle) * radius,
-      );
-      tree.scale.setScalar(0.5 + Math.random() * 0.3);
-      tree.castShadow = true;
-      g.add(tree);
-    }
-
-    return g;
-  }, [density]);
-
-  return <primitive object={group} />;
-}
-
-// ---------------------------------------------------------------------------
-// Enhanced Plants Component
-// ---------------------------------------------------------------------------
-
-function EnhancedPlants({ flowerDensity, mushroomDensity }: { flowerDensity: number; mushroomDensity: number }) {
-  const group = useMemo(() => {
-    const g = new THREE.Group();
-
-    // Ferns
-    const fernGenerator = new FernGenerator(42);
-    const fernSpecies: FernSpecies[] = ['boston', 'maidenhair', 'staghorn'];
-    const fernPositions = [
-      new THREE.Vector3(-5, 0, 3),
-      new THREE.Vector3(-3, 0, 5),
-      new THREE.Vector3(8, 0, -8),
-    ];
-
-    for (let i = 0; i < fernPositions.length; i++) {
-      const fern = fernGenerator.generate({
-        species: fernSpecies[i],
-        size: 0.8 + Math.random() * 0.4,
-      });
-      fern.position.copy(fernPositions[i]);
-      fern.rotation.y = Math.random() * Math.PI * 2;
-      g.add(fern);
-    }
-
-    // Flowers
-    const flowerGenerator = new FlowerGenerator();
-    const flowerTypes: FlowerType[] = ['rose', 'daisy', 'tulip', 'sunflower'];
-    const flowerPositions = [
-      new THREE.Vector3(3, 0, 5),
-      new THREE.Vector3(5, 0, 3),
-      new THREE.Vector3(-8, 0, -3),
-      new THREE.Vector3(7, 0, -5),
-    ];
-
-    for (let i = 0; i < flowerTypes.length; i++) {
-      const flower = flowerGenerator.generateFlower({
-        variety: flowerTypes[i],
-      }, 1000 + i);
-      flower.position.copy(flowerPositions[i]);
-      g.add(flower);
-    }
-
-    // Flower field (instanced) - scaled by density
-    const flowerField = flowerGenerator.generateFlowerField({
-      variety: 'daisy',
-      count: Math.round(flowerDensity * 100),
-      spreadArea: { width: 15, depth: 15 },
-      density: flowerDensity,
-    }, 5000);
-    g.add(flowerField);
-
-    // Mushrooms
-    const mushroomGenerator = new MushroomGenerator(42);
-    const mushroomSpecies: MushroomSpecies[] = ['agaric', 'chanterelle', 'morel', 'bolete'];
-    const mushroomPositions = [
-      new THREE.Vector3(-4, 0, -2),
-      new THREE.Vector3(6, 0, 4),
-      new THREE.Vector3(-7, 0, 7),
-      new THREE.Vector3(2, 0, -6),
-    ];
-
-    const mushroomCount = Math.max(1, Math.round(mushroomDensity * 4));
-    for (let i = 0; i < mushroomCount && i < mushroomSpecies.length; i++) {
-      const mushroom = mushroomGenerator.generate({
-        species: mushroomSpecies[i],
-      });
-      mushroom.position.copy(mushroomPositions[i]);
-      mushroom.scale.setScalar(1.5);
-      g.add(mushroom);
-    }
-
-    // Mushroom cluster
-    if (mushroomDensity > 0.05) {
-      const cluster = mushroomGenerator.generateCluster({ species: 'button' }, 5, 0.2);
-      cluster.position.set(4, 0, -3);
-      g.add(cluster);
-    }
-
-    return g;
-  }, [flowerDensity, mushroomDensity]);
-
-  return <primitive object={group} />;
+  return (
+    <group>
+      {indoorObjects.rooms.map((room, i) => <primitive key={i} object={room} />)}
+      <primitive object={indoorObjects.furniture} />
+      <primitive object={indoorObjects.lights} />
+      <primitive object={indoorObjects.doors} />
+      <primitive object={indoorObjects.windows} />
+    </group>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -354,188 +263,13 @@ function MaterialInfoPanel({ selectedObject }: { selectedObject: THREE.Object3D 
   );
 }
 
-// ---------------------------------------------------------------------------
-// Ivy on Rock Component
-// ---------------------------------------------------------------------------
+// IvyOnRock removed — now handled by SceneObjectFactory.createVegetation()
 
-function IvyOnRock({ usePBR }: { usePBR: boolean }) {
-  const group = useMemo(() => {
-    const g = new THREE.Group();
+// Creatures fallback removed — handled by SceneObjectFactory.createCreatures()
 
-    // Simple rock
-    const rockGeo = new THREE.DodecahedronGeometry(1.5, 1);
-    const positions = rockGeo.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
-      const z = positions.getZ(i);
-      positions.setX(i, x * (0.8 + Math.random() * 0.4));
-      positions.setY(i, y * (0.6 + Math.random() * 0.4));
-      positions.setZ(i, z * (0.8 + Math.random() * 0.4));
-    }
-    rockGeo.computeVertexNormals();
+// FishSchool fallback removed — handled by SceneObjectFactory.createFishSchool()
 
-    // Phase 3.3: Apply PBR material with wear to the rock
-    let rockMat: THREE.Material;
-    if (usePBR) {
-      try {
-        const library = new MaterialPresetLibrary(256);
-        const pbrMat = library.getSimpleMaterial('mossy_stone', { age: 0.3, wear: 0.4 });
-        if (pbrMat) {
-          // Apply wear effects to the rock
-          const wearGen = new WearGenerator();
-          wearGen.applyToMaterial(pbrMat, wearGen.getStoneWearParams(), 42);
-          rockMat = pbrMat;
-        } else {
-          rockMat = new THREE.MeshStandardMaterial({
-            color: 0x808080,
-            roughness: 0.9,
-            metalness: 0.0,
-          });
-        }
-      } catch (err) {
-        // Silently fall back - rock material generation failed, using simple material
-        if (process.env.NODE_ENV === 'development') console.debug('[InfinigenScene] rock material fallback:', err);
-        rockMat = new THREE.MeshStandardMaterial({
-          color: 0x808080,
-          roughness: 0.9,
-          metalness: 0.0,
-        });
-      }
-    } else {
-      rockMat = new THREE.MeshStandardMaterial({
-        color: 0x808080,
-        roughness: 0.9,
-        metalness: 0.0,
-      });
-    }
-
-    const rock = new THREE.Mesh(rockGeo, rockMat);
-    rock.position.set(20, 0.8, -10);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    rock.userData = { materialPreset: 'mossy_stone', materialCategory: 'terrain' };
-    g.add(rock);
-
-    // Ivy climbing on the rock
-    const ivySystem = new IvyClimbingSystem(42, { plantType: 'ivy' });
-    const ivy = ivySystem.generateOnWall(
-      new THREE.Vector3(20, 0.5, -10),
-      new THREE.Vector3(0, 0, 1),
-      2
-    );
-    g.add(ivy);
-
-    return g;
-  }, [usePBR]);
-
-  return <primitive object={group} />;
-}
-
-// ---------------------------------------------------------------------------
-// Creatures Component (Phase 3.2)
-// ---------------------------------------------------------------------------
-
-function Creatures({ visible }: { visible: boolean }) {
-  const group = useMemo(() => {
-    const g = new THREE.Group();
-    g.name = 'creatures';
-
-    // Quadruped (deer-like mammal on the plains)
-    const mammalGen = new MammalGenerator(101);
-    const mammal = mammalGen.generate('deer');
-    mammal.position.set(-10, 0.5, 8);
-    mammal.scale.setScalar(0.5);
-    mammal.rotation.y = Math.PI * 0.3;
-    g.add(mammal);
-
-    // Second mammal (dog-like)
-    const dogGen = new MammalGenerator(202);
-    const dog = dogGen.generate('dog');
-    dog.position.set(-6, 0.3, 12);
-    dog.scale.setScalar(0.4);
-    dog.rotation.y = -Math.PI * 0.2;
-    g.add(dog);
-
-    // Bird
-    const birdGen = new BirdGenerator(303);
-    const bird = birdGen.generate('sparrow');
-    bird.position.set(5, 8, -3);
-    bird.scale.setScalar(2.0);
-    bird.rotation.y = -Math.PI * 0.4;
-    g.add(bird);
-
-    return g;
-  }, []);
-
-  if (!visible) return null;
-  return <primitive object={group} />;
-}
-
-// ---------------------------------------------------------------------------
-// Fish School Swarm Component (Phase 3.2)
-// ---------------------------------------------------------------------------
-
-function FishSchool({ visible, waterLevel }: { visible: boolean; waterLevel: number }) {
-  const swarmRef = useRef<SwarmSystem | null>(null);
-  const groupRef = useRef<THREE.Group | null>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-
-    const swarm = new SwarmSystem({
-      count: 80,
-      speed: 1.5,
-      separationStrength: 1.8,
-      alignmentStrength: 1.2,
-      cohesionStrength: 0.8,
-      boundaryStrength: 2.5,
-      center: new THREE.Vector3(15, waterLevel * 35 - 2, -15),
-      bounds: new THREE.Vector3(12, 3, 12),
-      individualSize: 0.12,
-      color: new THREE.Color(0x4682b4),
-      secondaryColor: new THREE.Color(0xc0c0c0),
-      swarmType: 'fish',
-      separationDistance: 0.6,
-      neighborRadius: 2.5,
-    }, 42);
-
-    swarmRef.current = swarm;
-    groupRef.current = swarm.getGroup();
-
-    return () => {
-      swarm.dispose();
-    };
-  }, [visible, waterLevel]);
-
-  useFrame((_, delta) => {
-    if (swarmRef.current && visible) {
-      swarmRef.current.update(delta);
-    }
-  });
-
-  if (!visible || !groupRef.current) return null;
-  return <primitive object={groupRef.current} />;
-}
-
-// ---------------------------------------------------------------------------
-// Forest Floor Scatter Component
-// ---------------------------------------------------------------------------
-
-function ForestFloorScatterComponent({ season }: { season: VegetationSeason }) {
-  const group = useMemo(() => {
-    const scatter = new ForestFloorScatter(42, {
-      areaSize: 40,
-      density: 0.7,
-      biome: 'forest',
-      season: season as Season,
-      maxInstancesPerType: 200,
-    });
-    return scatter.generate();
-  }, [season]);
-
-  return <primitive object={group} />;
-}
+// ForestFloorScatterComponent fallback removed — handled by SceneObjectFactory
 
 // ---------------------------------------------------------------------------
 // Wind Animation Component
@@ -579,44 +313,7 @@ function WindAnimation({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Ocean Component — Gerstner-wave animated ocean surface
-// ---------------------------------------------------------------------------
-
-function OceanMesh({ waterLevel }: { waterLevel: number }) {
-  const oceanRef = useRef<OceanSurface | null>(null);
-  const { camera } = useThree();
-
-  const mesh = useMemo(() => {
-    const ocean = new OceanSurface({
-      size: 500,
-      resolution: 64,
-      waveHeight: 1.2,
-      waveLength: 25,
-      windDirection: [1.0, 0.3],
-      windSpeed: 8,
-    });
-    oceanRef.current = ocean;
-    const m = ocean.getMesh();
-    m.position.y = waterLevel * 35;
-    return m;
-  }, [waterLevel]);
-
-  useFrame((_, delta) => {
-    if (oceanRef.current) {
-      oceanRef.current.update(delta);
-      oceanRef.current.setCameraPosition(camera.position);
-    }
-  });
-
-  useEffect(() => {
-    return () => {
-      oceanRef.current?.dispose();
-    };
-  }, []);
-
-  return <primitive object={mesh} />;
-}
+// OceanMesh fallback removed — handled by SceneObjectFactory.createWater()
 
 // ---------------------------------------------------------------------------
 // Lighting Component — outdoor daylight setup with cascaded shadows
@@ -1026,86 +723,90 @@ interface SceneContentProps {
   features: FeatureFlags;
   season: VegetationSeason;
   sceneConfig: NatureSceneResult | null;
+  indoorConfig: IndoorSceneResult | null;
   trajectoryPlaying: boolean;
   trajectorySamples: TrajectorySample[];
   onTrajectoryToggle: () => void;
   onGTCapture: () => void;
 }
 
-function SceneContent({ features, season, sceneConfig, trajectoryPlaying, trajectorySamples, onTrajectoryToggle, onGTCapture }: SceneContentProps) {
-  const terrainSeed = sceneConfig?.terrainParams.seed ?? 42;
-  const terrainScale = sceneConfig?.terrainParams.scale ?? 60;
-  const seaLevel = sceneConfig?.waterConfig.waterLevel ?? 0.3;
-  const treeDensity = sceneConfig?.vegetationConfig.treeDensity ?? 0.4;
-  const flowerDensity = sceneConfig?.vegetationConfig.flowerDensity ?? 0.2;
-  const mushroomDensity = sceneConfig?.vegetationConfig.mushroomDensity ?? 0.1;
+function SceneContent({ features, season, sceneConfig, indoorConfig, trajectoryPlaying, trajectorySamples, onTrajectoryToggle, onGTCapture }: SceneContentProps) {
+  // ── Factory-driven rendering path ──────────────────────────────────────
+  // When sceneConfig is available, use SceneObjectFactory to create all
+  // Three.js objects from the composer output. This replaces the ad-hoc
+  // components. The flow is: preset → compose() → factory → render.
+  const factoryAvailable = sceneConfig !== null || indoorConfig !== null;
+
+  // Extract lighting config for Sky component (still needed for R3F Sky)
+  const lightingProps: LightingProps = useMemo(() => {
+    if (sceneConfig) {
+      const lc = sceneConfig.lightingConfig;
+      return {
+        sunPosition: lc.sunPosition,
+        sunIntensity: lc.sunIntensity,
+        sunColor: lc.sunColor,
+        ambientIntensity: lc.ambientIntensity,
+        ambientColor: lc.ambientColor,
+        hemisphereSkyColor: lc.hemisphereSkyColor,
+        hemisphereGroundColor: lc.hemisphereGroundColor,
+        hemisphereIntensity: lc.hemisphereIntensity,
+      };
+    }
+    return {
+      sunPosition: new THREE.Vector3(60, 100, 40),
+      sunIntensity: 1.8,
+      sunColor: '#fffbe6',
+      ambientIntensity: 0.4,
+      ambientColor: '#b8d4e8',
+      hemisphereSkyColor: '#87ceeb',
+      hemisphereGroundColor: '#3a5f0b',
+      hemisphereIntensity: 0.35,
+    };
+  }, [sceneConfig]);
+
   const cameraPos = sceneConfig?.cameraConfig.position ?? new THREE.Vector3(80, 60, 80);
   const cameraTarget = sceneConfig?.cameraConfig.target ?? new THREE.Vector3(0, 5, 0);
-
-  const lightingProps: LightingProps = sceneConfig ? {
-    sunPosition: sceneConfig.lightingConfig.sunPosition,
-    sunIntensity: sceneConfig.lightingConfig.sunIntensity,
-    sunColor: sceneConfig.lightingConfig.sunColor,
-    ambientIntensity: sceneConfig.lightingConfig.ambientIntensity,
-    ambientColor: sceneConfig.lightingConfig.ambientColor,
-    hemisphereSkyColor: sceneConfig.lightingConfig.hemisphereSkyColor,
-    hemisphereGroundColor: sceneConfig.lightingConfig.hemisphereGroundColor,
-    hemisphereIntensity: sceneConfig.lightingConfig.hemisphereIntensity,
-  } : {
-    sunPosition: new THREE.Vector3(60, 100, 40),
-    sunIntensity: 1.8,
-    sunColor: '#fffbe6',
-    ambientIntensity: 0.4,
-    ambientColor: '#b8d4e8',
-    hemisphereSkyColor: '#87ceeb',
-    hemisphereGroundColor: '#3a5f0b',
-    hemisphereIntensity: 0.35,
-  };
-
-  const showOcean = sceneConfig?.waterConfig.oceanEnabled ?? true;
+  const isIndoor = indoorConfig !== null && sceneConfig === null;
 
   return (
     <>
-      <CameraSetup position={cameraPos} target={cameraTarget} />
-      <LightingSystem {...lightingProps} />
-      <Sky
-        distance={450000}
-        sunPosition={[lightingProps.sunPosition.x, lightingProps.sunPosition.y, lightingProps.sunPosition.z]}
-        inclination={0.52}
-        azimuth={0.25}
-        rayleigh={2}
-        turbidity={8}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.8}
-      />
-      <Suspense fallback={null}>
-        <TerrainMesh seed={terrainSeed} scale={terrainScale} seaLevel={seaLevel} />
-      </Suspense>
+      <CameraSetup position={isIndoor ? new THREE.Vector3(0, 3, 6) : cameraPos} target={isIndoor ? new THREE.Vector3(0, 1, 0) : cameraTarget} />
+
+      {/* ── Nature scene: factory-driven content with Sky + outdoor lighting ── */}
+      {sceneConfig && (
+        <>
+          <LightingSystem {...lightingProps} />
+          <Sky
+            distance={450000}
+            sunPosition={[lightingProps.sunPosition.x, lightingProps.sunPosition.y, lightingProps.sunPosition.z]}
+            inclination={0.52}
+            azimuth={0.25}
+            rayleigh={2}
+            turbidity={8}
+            mieCoefficient={0.005}
+            mieDirectionalG={0.8}
+          />
+          <Suspense fallback={null}>
+            <FactoryNatureScene sceneConfig={sceneConfig} />
+          </Suspense>
+        </>
+      )}
+
+      {/* ── Indoor scene: factory-driven content with indoor lighting ── */}
+      {indoorConfig && (
+        <Suspense fallback={null}>
+          <FactoryIndoorScene indoorConfig={indoorConfig} />
+        </Suspense>
+      )}
+
+      {/* Default lighting when no scene is loaded */}
+      {!sceneConfig && !indoorConfig && <LightingSystem {...lightingProps} />}
+
       {/* Phase 3.3: Material preview spheres using MaterialPresetLibrary */}
       <Suspense fallback={null}>
         <MaterialPreviewSpheres visible={features.pbrMaterials} />
       </Suspense>
-      {showOcean && (
-        <Suspense fallback={null}>
-          <OceanMesh waterLevel={seaLevel} />
-        </Suspense>
-      )}
-      <Suspense fallback={null}>
-        <LSystemTrees density={treeDensity} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <EnhancedPlants flowerDensity={flowerDensity} mushroomDensity={mushroomDensity} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <IvyOnRock usePBR={features.pbrMaterials} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <ForestFloorScatterComponent season={season} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <Creatures visible={features.creatures} />
-      </Suspense>
-      <FishSchool visible={features.creatures} waterLevel={seaLevel} />
+
       <WindAnimation enabled={features.wind} />
       <PostProcessEffect features={features} />
       <ExposureControlEffect autoExposure={features.autoExposure} />
@@ -1116,12 +817,12 @@ function SceneContent({ features, season, sceneConfig, trajectoryPlaying, trajec
         makeDefault
         enableDamping
         dampingFactor={0.05}
-        minDistance={10}
-        maxDistance={400}
+        minDistance={isIndoor ? 2 : 10}
+        maxDistance={isIndoor ? 15 : 400}
         maxPolarAngle={Math.PI / 2 - 0.02}
-        target={[0, 5, 0]}
+        target={isIndoor ? [0, 1, 0] : [0, 5, 0]}
       />
-      <fog attach="fog" args={['#c8ddf0', 100, 350]} />
+      {!isIndoor && <fog attach="fog" args={['#c8ddf0', 100, 350]} />}
     </>
   );
 }
@@ -1521,6 +1222,7 @@ export default function InfinigenScene() {
               features={features}
               season={season}
               sceneConfig={sceneConfig}
+              indoorConfig={null}
               trajectoryPlaying={trajectoryPlaying}
               trajectorySamples={trajectorySamples}
               onTrajectoryToggle={handleTrajectoryToggle}

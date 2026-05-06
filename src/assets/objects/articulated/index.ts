@@ -14,6 +14,7 @@ export {
   type ArticulatedObjectResult,
   ArticulatedObjectBase,
   generateMJCF,
+  validateMJCF,
 } from './types';
 
 // URDF Export
@@ -27,7 +28,9 @@ export {
   type URDFJointLimit,
   type URDFJointDynamics,
   type URDFExportOptions,
+  type ValidationResult,
   generateURDF,
+  validateURDF,
   jointTypeToURDF,
   estimateInertia,
 } from './URDFExporter';

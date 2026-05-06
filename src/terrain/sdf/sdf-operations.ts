@@ -557,13 +557,15 @@ export function extractIsosurface(
           const t = Math.abs(diff) > 1e-10 ? (d0 - isolevel) / diff : 0.5;
 
           // World position of intersection point
-          const p0x = sdf.bounds.min.x + (cx + CORNER_OFFSETS[v0][0]) * sdf.voxelSize.x;
-          const p0y = sdf.bounds.min.y + (cy + CORNER_OFFSETS[v0][1]) * sdf.voxelSize.y;
-          const p0z = sdf.bounds.min.z + (cz + CORNER_OFFSETS[v0][2]) * sdf.voxelSize.z;
+          // NOTE: +0.5 offset matches SignedDistanceField.getPosition() convention
+          // where grid index (gx,gy,gz) maps to bounds.min + (gx+0.5)*voxelSize.
+          const p0x = sdf.bounds.min.x + (cx + CORNER_OFFSETS[v0][0] + 0.5) * sdf.voxelSize.x;
+          const p0y = sdf.bounds.min.y + (cy + CORNER_OFFSETS[v0][1] + 0.5) * sdf.voxelSize.y;
+          const p0z = sdf.bounds.min.z + (cz + CORNER_OFFSETS[v0][2] + 0.5) * sdf.voxelSize.z;
 
-          const p1x = sdf.bounds.min.x + (cx + CORNER_OFFSETS[v1][0]) * sdf.voxelSize.x;
-          const p1y = sdf.bounds.min.y + (cy + CORNER_OFFSETS[v1][1]) * sdf.voxelSize.y;
-          const p1z = sdf.bounds.min.z + (cz + CORNER_OFFSETS[v1][2]) * sdf.voxelSize.z;
+          const p1x = sdf.bounds.min.x + (cx + CORNER_OFFSETS[v1][0] + 0.5) * sdf.voxelSize.x;
+          const p1y = sdf.bounds.min.y + (cy + CORNER_OFFSETS[v1][1] + 0.5) * sdf.voxelSize.y;
+          const p1z = sdf.bounds.min.z + (cz + CORNER_OFFSETS[v1][2] + 0.5) * sdf.voxelSize.z;
 
           edgeVertexPositions[edge] = new THREE.Vector3(
             p0x + t * (p1x - p0x),

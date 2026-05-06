@@ -12,6 +12,8 @@ import * as THREE from 'three';
 import type { NodeGraph } from './NodeEvaluator';
 import { NodeEvaluator, EvaluationMode } from './NodeEvaluator';
 import { NodeShaderCompiler } from './ShaderCompiler';
+import { NodeGraphMaterialBridge, type MaterialBridgeOptions } from './NodeGraphMaterialBridge';
+import { evaluateToMaterial, type EvaluateToMaterialOptions } from './EvaluateToMaterial';
 
 // ============================================================================
 // Preset Parameter Types
@@ -365,15 +367,40 @@ export class MaterialFactory {
 
   /**
    * Create a simple material from a node graph using the ShaderCompiler
+   * or the NodeGraphMaterialBridge.
+   *
+   * When useShaderMaterial is true (default), attempts shader compilation first
+   * with MeshPhysicalMaterial fallback via the bridge.
+   * When useShaderMaterial is false, goes directly through the bridge pipeline
+   * (evaluateToMaterial) which always produces MeshPhysicalMaterial.
    */
-  createFromGraph(graph: NodeGraph): THREE.Material {
+  createFromGraph(graph: NodeGraph, options?: EvaluateToMaterialOptions): THREE.Material {
     if (this.useShaderMaterial) {
-      return this.compiler.compileWithFallback(graph);
+      try {
+        return this.compiler.compileWithFallback(graph);
+      } catch {
+        // Shader compilation failed — fall through to bridge
+      }
     }
 
-    // Use evaluator only (produces MeshPhysicalMaterial via fallback)
-    const result = this.evaluator.evaluate(graph, EvaluationMode.MATERIAL);
-    return this.compiler.compileWithFallback(graph);
+    // Use the bridge pipeline (always produces MeshPhysicalMaterial)
+    return evaluateToMaterial(graph, {
+      textureResolution: 512,
+      fallbackOnErrors: true,
+      ...options,
+    }).material;
+  }
+
+  /**
+   * Create a MeshPhysicalMaterial from a node graph using only the bridge pipeline.
+   * This bypasses the shader compiler entirely and always produces MeshPhysicalMaterial.
+   */
+  createFromGraphPhysical(graph: NodeGraph, options?: EvaluateToMaterialOptions): THREE.MeshPhysicalMaterial {
+    return evaluateToMaterial(graph, {
+      textureResolution: 512,
+      fallbackOnErrors: true,
+      ...options,
+    }).material;
   }
 
   /**

@@ -37,6 +37,8 @@ export interface MoveResult {
   success: boolean;
   energyChange: number;
   message?: string;
+  /** Change in hard constraint violations (negative = fewer violations) */
+  hardViolationChange?: number;
 }
 
 /**

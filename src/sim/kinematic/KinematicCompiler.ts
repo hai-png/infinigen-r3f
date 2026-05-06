@@ -672,6 +672,8 @@ export class RigidBodyNode {
   jointDynamics: { stiffness: number; damping: number; friction: number };
   /** Named path attribute identifying which mesh subset this body uses */
   meshSubset: string;
+  /** Shape category for fill-factor estimation (e.g. 'box', 'cylinder', 'sphere') */
+  category?: string;
   /** Child bodies */
   children: RigidBodyNode[];
 
@@ -683,6 +685,7 @@ export class RigidBodyNode {
     jointLimits?: { min: number; max: number };
     jointDynamics?: { stiffness: number; damping: number; friction: number };
     meshSubset?: string;
+    category?: string;
   }) {
     this.id = params.id;
     this.parentId = params.parentId ?? null;
@@ -691,6 +694,7 @@ export class RigidBodyNode {
     this.jointLimits = params.jointLimits ?? { min: 0, max: 0 };
     this.jointDynamics = params.jointDynamics ?? { stiffness: 0, damping: 0, friction: 0 };
     this.meshSubset = params.meshSubset ?? '';
+    this.category = params.category;
     this.children = [];
   }
 

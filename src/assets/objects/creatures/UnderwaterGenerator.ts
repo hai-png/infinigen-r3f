@@ -78,18 +78,135 @@ export class UnderwaterGenerator extends CreatureBase {
 
   generateBodyCore(): Object3D {
     const params = this._currentParams ?? this.getDefaultConfig();
-    const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
-    return new Mesh(this.createEllipsoidGeometry(0.15, 0.1, 0.2), mat);
+    const s = params.size;
+
+    switch (this._currentSpecies) {
+      case 'jellyfish': {
+        const mat = new MeshStandardMaterial({
+          color: params.primaryColor,
+          transparent: true, opacity: 0.7, roughness: 0.3, side: DoubleSide,
+        });
+        const bell = new Mesh(this.createShellGeometry(s * 0.2, s * 0.15), mat);
+        bell.name = 'bell';
+        return bell;
+      }
+      case 'octopus': {
+        const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.6 });
+        const mantle = new Mesh(this.createEllipsoidGeometry(s * 0.15, s * 0.18, s * 0.12), mat);
+        mantle.position.y = s * 0.1;
+        mantle.name = 'mantle';
+        return mantle;
+      }
+      case 'crab': {
+        const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.7 });
+        const body = new Mesh(this.createEllipsoidGeometry(s * 0.2, s * 0.06, s * 0.18), mat);
+        body.name = 'body';
+        return body;
+      }
+      case 'starfish': {
+        const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.8 });
+        const discGeo = this.createSphereGeometry(s * 0.06);
+        discGeo.scale(1, 0.4, 1);
+        const disc = new Mesh(discGeo, mat);
+        disc.name = 'disc';
+        return disc;
+      }
+      case 'whale':
+      case 'dolphin': {
+        const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.4 });
+        const body = new Mesh(this.createEllipsoidGeometry(s * 0.2, s * 0.12, s * 0.4), mat);
+        body.name = 'body';
+        return body;
+      }
+      default: {
+        const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
+        return new Mesh(this.createEllipsoidGeometry(0.15, 0.1, 0.2), mat);
+      }
+    }
   }
 
   generateHead(): Object3D {
     const params = this._currentParams ?? this.getDefaultConfig();
     const s = params.size;
-    const headMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
-    const headGeo = this.createEllipsoidGeometry(s * 0.08, s * 0.08, s * 0.12);
-    const head = new Mesh(headGeo, headMat);
-    head.name = 'head';
-    return head;
+
+    switch (this._currentSpecies) {
+      case 'jellyfish': {
+        // Jellyfish don't have a distinct head; the bell serves as both
+        const innerMat = new MeshStandardMaterial({
+          color: params.secondaryColor,
+          transparent: true, opacity: 0.4, roughness: 0.2, side: DoubleSide,
+        });
+        const inner = new Mesh(this.createShellGeometry(s * 0.15, s * 0.1), innerMat);
+        inner.position.y = -s * 0.01;
+        inner.name = 'innerBell';
+        return inner;
+      }
+      case 'crab': {
+        // Crab eyes on stalks
+        const group = new Group();
+        group.name = 'headGroup';
+        const stalkMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
+        const eyeMat = new MeshStandardMaterial({ color: 0x111111 });
+        for (const side of [-1, 1]) {
+          const stalkGeo = this.createCylinderGeometry(s * 0.01, s * 0.01, s * 0.08);
+          const stalk = new Mesh(stalkGeo, stalkMat);
+          stalk.position.set(side * s * 0.08, s * 0.08, s * 0.12);
+          group.add(stalk);
+          const eyeGeo = this.createSphereGeometry(s * 0.02);
+          const eye = new Mesh(eyeGeo, eyeMat);
+          eye.position.set(side * s * 0.08, s * 0.12, s * 0.12);
+          group.add(eye);
+        }
+        return group;
+      }
+      case 'octopus': {
+        // Eyes
+        const group = new Group();
+        group.name = 'headGroup';
+        const eyeMat = new MeshStandardMaterial({ color: 0x111111 });
+        const eyeGeo = this.createSphereGeometry(s * 0.04);
+        const leftEye = new Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-s * 0.1, s * 0.05, s * 0.08);
+        group.add(leftEye);
+        const rightEye = new Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(s * 0.1, s * 0.05, s * 0.08);
+        group.add(rightEye);
+        return group;
+      }
+      case 'whale':
+      case 'dolphin': {
+        // Eyes + beak/mouth
+        const group = new Group();
+        group.name = 'headGroup';
+        const eyeMat = new MeshStandardMaterial({ color: 0x111111 });
+        const eyeGeo = this.createSphereGeometry(s * 0.015);
+        const leftEye = new Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-s * 0.16, s * 0.03, s * 0.3);
+        group.add(leftEye);
+        const rightEye = new Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(s * 0.16, s * 0.03, s * 0.3);
+        group.add(rightEye);
+        if (this._currentSpecies === 'dolphin') {
+          const mat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.4 });
+          const beakGeo = this.createConeGeometry(s * 0.03, s * 0.12, 8);
+          const beak = new Mesh(beakGeo, mat);
+          beak.rotation.x = -Math.PI / 2;
+          beak.position.set(0, -s * 0.02, s * 0.45);
+          beak.name = 'beak';
+          group.add(beak);
+        }
+        return group;
+      }
+      case 'starfish':
+      default: {
+        // No distinct head for starfish
+        const headMat = new MeshStandardMaterial({ color: params.primaryColor, roughness: 0.5 });
+        const headGeo = this.createEllipsoidGeometry(s * 0.08, s * 0.08, s * 0.12);
+        const head = new Mesh(headGeo, headMat);
+        head.name = 'head';
+        return head;
+      }
+    }
   }
 
   /**
@@ -142,6 +259,19 @@ export class UnderwaterGenerator extends CreatureBase {
   }
 
   applySkin(materials: Material[]): Material[] {
+    const params = this._currentParams ?? this.getDefaultConfig();
+    // Apply transparency and underwater-appropriate material properties
+    for (const mat of materials) {
+      if (mat instanceof MeshStandardMaterial) {
+        // Underwater creatures tend to have smoother, more translucent skin
+        mat.roughness = Math.min(mat.roughness, 0.6);
+        if (this._currentSpecies === 'jellyfish') {
+          mat.transparent = true;
+          mat.opacity = Math.min(mat.opacity ?? 1.0, 0.75);
+          mat.side = DoubleSide;
+        }
+      }
+    }
     return materials;
   }
 

@@ -29,7 +29,7 @@ import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
 import { NoiseUtils, SeededNoiseGenerator, NoiseType } from '@/core/util/math/noise';
 import { TERRAIN_MATERIALS } from './SDFPrimitives';
-import { smoothUnion, sdfSubtraction, sdfUnion } from './SDFCombinators';
+import { smoothUnion, sdfSubtraction, sdfUnion, sdfIntersection } from './SDFCombinators';
 import { SignedDistanceField, extractIsosurface } from './sdf-operations';
 
 // ============================================================================
@@ -1148,6 +1148,181 @@ export class WaterbodyElement extends TerrainElement {
         LiquidCovered: isLiquidCovered,
         boundarySDF: Math.max(0, boundarySDF),
         waterPlaneHeight: waterSurfaceY,
+      },
+    };
+  }
+}
+
+// ============================================================================
+// UpsideDownMountainElement
+// ============================================================================
+
+/**
+ * Upside-Down Mountain terrain element — Floating island formations.
+ *
+ * Creates floating island formations by taking terrain SDF above a threshold
+ * height and inverting it. Uses SDFOperations subtraction: subtracts the
+ * original terrain from a horizontal plane SDF, then unions the inverted
+ * peaks back into the scene.
+ *
+ * Algorithm:
+ * 1. Evaluate the base terrain SDF (dependency: 'Ground' or 'Mountains')
+ * 2. Above the inversion threshold, create an inverted copy by reflecting
+ *    the query point across the threshold plane and re-evaluating
+ * 3. Use SDF subtraction to carve out the region above the threshold:
+ *    `carved = terrain - halfSpaceAbove`
+ * 4. Union the inverted peaks with the carved terrain:
+ *    `result = carved ∪ invertedPeaks`
+ *
+ * The result is terrain where peaks above the threshold appear to hang
+ * downward like stalactites or floating islands.
+ *
+ * Parameters:
+ * Float: thresholdHeight, minPeakHeight, blendRange, inversionDepth,
+ *        noiseScale, noiseStrength
+ * Int: seed
+ *
+ * @extends TerrainElement
+ */
+export class UpsideDownMountainElement extends TerrainElement {
+  readonly name = 'UpsideDownMountains';
+  readonly dependencies = ['Ground', 'Mountains'];
+
+  // Threshold height above which ridges are inverted (world Y)
+  private thresholdHeight: number = 15.0;
+  // Minimum height a peak must reach above threshold to be inverted
+  private minPeakHeight: number = 3.0;
+  // Smooth blend width at the inversion boundary
+  private blendRange: number = 2.0;
+  // How far the inverted region extends below the threshold
+  private inversionDepth: number = 8.0;
+  // Surface noise displacement scale
+  private noiseScale: number = 0.3;
+  // Surface noise displacement strength
+  private noiseStrength: number = 0.5;
+
+  // Noise generators (created in init, reused in evaluate)
+  private noise!: NoiseUtils;
+
+  init(params: Record<string, any>, rng: SeededRandom): void {
+    this.thresholdHeight = params.thresholdHeight ?? 15.0;
+    this.minPeakHeight = params.minPeakHeight ?? 3.0;
+    this.blendRange = params.blendRange ?? 2.0;
+    this.inversionDepth = params.inversionDepth ?? 8.0;
+    this.noiseScale = params.noiseScale ?? 0.3;
+    this.noiseStrength = params.noiseStrength ?? 0.5;
+
+    const noiseSeed = rng.nextInt(1, 999999);
+    this.noise = new NoiseUtils(noiseSeed);
+  }
+
+  evaluate(point: THREE.Vector3): ElementEvalResult {
+    // 1. Evaluate the base terrain from a dependency (Mountains or Ground)
+    let baseDist = Infinity;
+    let baseMaterialId: number = TERRAIN_MATERIALS.STONE;
+
+    const mountainElement = this.dependencyRefs.get('Mountains');
+    const groundElement = this.dependencyRefs.get('Ground');
+
+    if (mountainElement && mountainElement.enabled) {
+      const result = mountainElement.evaluate(point);
+      baseDist = result.distance;
+      baseMaterialId = result.materialId;
+    } else if (groundElement && groundElement.enabled) {
+      const result = groundElement.evaluate(point);
+      baseDist = result.distance;
+      baseMaterialId = result.materialId;
+    }
+
+    // If below threshold - blend range, return base terrain unchanged
+    if (point.y < this.thresholdHeight - this.blendRange) {
+      return {
+        distance: baseDist,
+        materialId: baseMaterialId,
+        auxiliary: { inverted: false },
+      };
+    }
+
+    // 2. Half-space SDF: everything above the threshold plane
+    //    Positive below the plane, negative above
+    const halfSpaceDist = point.y - this.thresholdHeight;
+
+    // 3. Carve out the region above the threshold:
+    //    carved = terrain - halfSpaceAbove
+    //    SDF subtraction: max(terrainDist, -halfSpaceDist)
+    const carvedDist = sdfSubtraction(baseDist, halfSpaceDist);
+
+    // 4. Compute inverted terrain:
+    //    Reflect point across the threshold plane, evaluate base terrain
+    const reflectedPoint = new THREE.Vector3(
+      point.x,
+      2 * this.thresholdHeight - point.y,
+      point.z,
+    );
+
+    let reflectedDist = Infinity;
+    if (mountainElement && mountainElement.enabled) {
+      const result = mountainElement.evaluate(reflectedPoint);
+      reflectedDist = result.distance;
+    } else if (groundElement && groundElement.enabled) {
+      const result = groundElement.evaluate(reflectedPoint);
+      reflectedDist = result.distance;
+    }
+
+    // Add inversion noise displacement
+    const inversionNoise = this.noise.fbm(
+      point.x * this.noiseScale,
+      point.y * this.noiseScale,
+      point.z * this.noiseScale,
+      3,
+    ) * this.noiseStrength;
+
+    // Clamp inverted depth so floating islands don't extend too far
+    const clampedInvertedDist = Math.max(
+      reflectedDist + inversionNoise,
+      -this.inversionDepth,
+    );
+
+    // 5. Only include inverted terrain above the threshold
+    //    Intersect with half-space: invertedAbove = inverted ∩ halfSpace
+    //    SDF intersection: max(invertedDist, halfSpaceDist)
+    const invertedAboveDist = sdfIntersection(clampedInvertedDist, halfSpaceDist);
+
+    // Only apply inversion if the peak is tall enough above the threshold
+    // Check: if the reflected terrain at the threshold plane is inside (negative),
+    // then there's a peak above the threshold
+    const thresholdPoint = new THREE.Vector3(point.x, this.thresholdHeight, point.z);
+    let peakHeightAboveThreshold = 0;
+    if (mountainElement && mountainElement.enabled) {
+      const thresholdResult = mountainElement.evaluate(thresholdPoint);
+      // If terrain is below the surface at the threshold, peak height is the gap
+      if (thresholdResult.distance < 0) {
+        peakHeightAboveThreshold = -thresholdResult.distance;
+      }
+    }
+
+    // 6. Union carved terrain with inverted peaks using smooth blending
+    let resultDist: number;
+    let resultMaterialId: number;
+
+    if (peakHeightAboveThreshold >= this.minPeakHeight) {
+      // Peak is tall enough to invert — blend carved and inverted
+      resultDist = smoothUnion(carvedDist, invertedAboveDist, this.blendRange);
+      resultMaterialId = invertedAboveDist < carvedDist
+        ? TERRAIN_MATERIALS.STONE
+        : baseMaterialId;
+    } else {
+      // Peak too short — just return carved terrain (removes the top)
+      resultDist = carvedDist;
+      resultMaterialId = baseMaterialId;
+    }
+
+    return {
+      distance: resultDist,
+      materialId: resultMaterialId,
+      auxiliary: {
+        inverted: point.y >= this.thresholdHeight && peakHeightAboveThreshold >= this.minPeakHeight,
+        peakHeight: peakHeightAboveThreshold,
       },
     };
   }

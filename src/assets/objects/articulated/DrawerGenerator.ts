@@ -1,9 +1,17 @@
 /**
- * Drawer Generator - Sliding articulated drawer
+ * Drawer Generator - Sliding articulated drawer (Sim-Ready)
+ *
+ * Sim-ready features:
+ * - Prismatic (slider) joint with limits [0, 0.35m]
+ * - Collision geometry for cabinet shell + drawer box
+ * - Mass/inertia estimated from geometry
+ * - URDF, MJCF, and USD export
  */
 
 import * as THREE from 'three';
-import { ArticulatedObjectBase, ArticulatedObjectConfig, ArticulatedObjectResult, JointInfo, generateMJCF } from './types';
+import { ArticulatedObjectBase, ArticulatedObjectConfig, ArticulatedObjectResult, JointInfo, SimReadyMetadata, generateMJCF } from './types';
+import { generateURDF, URDFExportOptions } from './URDFExporter';
+import { generateUSD } from './USDExporter';
 
 export class DrawerGenerator extends ArticulatedObjectBase {
   protected category = 'Drawer';
@@ -59,9 +67,33 @@ export class DrawerGenerator extends ArticulatedObjectBase {
       }),
     ];
 
-    const meshGeometries = new Map<string, { size: THREE.Vector3; pos: THREE.Vector3 }>();
+    const meshGeometries = new Map<string, { size: THREE.Vector3; pos: THREE.Vector3; mass?: number }>();
+    // Cabinet pieces (static)
     meshGeometries.set('cabinet_back', { size: new THREE.Vector3(0.5, 0.3, 0.02), pos: new THREE.Vector3(0, 0.15, -0.25) });
-    meshGeometries.set('drawer_front', { size: new THREE.Vector3(0.48, 0.28, 0.02), pos: new THREE.Vector3(0, 0.14, 0.24) });
+    meshGeometries.set('cabinet_left', { size: new THREE.Vector3(0.02, 0.3, 0.5), pos: new THREE.Vector3(-0.26, 0.15, 0) });
+    meshGeometries.set('cabinet_right', { size: new THREE.Vector3(0.02, 0.3, 0.5), pos: new THREE.Vector3(0.26, 0.15, 0) });
+    meshGeometries.set('cabinet_top', { size: new THREE.Vector3(0.5, 0.02, 0.5), pos: new THREE.Vector3(0, 0.3, 0) });
+    meshGeometries.set('cabinet_bottom', { size: new THREE.Vector3(0.5, 0.02, 0.5), pos: new THREE.Vector3(0, 0, 0) });
+    // Drawer (dynamic)
+    const drawerVolume = 0.48 * 0.28 * 0.02 + 0.44 * 0.01 * 0.42 + 0.01 * 0.12 * 0.42 * 2 + 0.44 * 0.12 * 0.01;
+    const drawerMass = drawerVolume * 600 * 0.5;
+    meshGeometries.set('drawer_front', { size: new THREE.Vector3(0.48, 0.28, 0.02), pos: new THREE.Vector3(0, 0.14, 0.24), mass: drawerMass });
+
+    const collisionHints = new Map<string, 'box' | 'sphere' | 'cylinder'>();
+    collisionHints.set('cabinet_back', 'box');
+    collisionHints.set('cabinet_left', 'box');
+    collisionHints.set('cabinet_right', 'box');
+    collisionHints.set('cabinet_top', 'box');
+    collisionHints.set('cabinet_bottom', 'box');
+    collisionHints.set('drawer_front', 'box');
+
+    const simReady: SimReadyMetadata = {
+      density: 600,
+      friction: 0.5,
+      restitution: 0.2,
+      rootBodyStatic: true,
+      collisionHints,
+    };
 
     return {
       group,
@@ -69,6 +101,10 @@ export class DrawerGenerator extends ArticulatedObjectBase {
       category: this.category,
       config: cfg,
       toMJCF: () => generateMJCF('drawer', joints, meshGeometries),
+      toURDF: (options?: URDFExportOptions) => generateURDF('drawer', joints, meshGeometries, { includeInertial: true, includeCollision: true, estimateMassFromGeometry: true, defaultDensity: 600, ...options }),
+      toUSD: () => generateUSD('drawer', joints, meshGeometries),
+      meshGeometries,
+      simReady,
     };
   }
 }

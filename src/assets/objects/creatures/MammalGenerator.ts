@@ -4,15 +4,22 @@ import { SeededRandom } from '@/core/util/MathUtils';
  * Generates various mammals with fur, body proportions, and limb structures
  * Now includes 4 legs with upper/lower segments and paws
  * Now supports shell-texture fur rendering for realistic fur appearance
+ *
+ * Geometry improvements:
+ * - Body uses LatheGeometry with species-specific profiles (like FruitGenerator)
+ *   instead of sphere/ellipsoid, producing smooth anatomically correct silhouettes
+ * - Head uses LatheGeometry with species-specific head profiles
+ * - Subdivision smoothing applied at body-head junction for smooth transitions
  */
 
-import { Object3D, Group, Mesh, Material, MeshStandardMaterial, Color, Vector3 } from 'three';
+import { Object3D, Group, Mesh, Material, MeshStandardMaterial, Color, Vector2, Vector3, LatheGeometry, Shape, ShapeGeometry } from 'three';
 import { CreatureBase, CreatureParams, CreatureType } from './CreatureBase';
 import {
   ShellTextureFurRenderer,
   createFurConfig,
   ShellTextureFurConfig,
 } from '../../materials/categories/Fur/ShellTextureFur';
+import { smoothCreatureJunction } from '../../../core/util/GeometryUtils';
 import type { PatternType } from './skin/CreatureSkinSystem';
 
 /** Configuration for shell-texture fur on mammals */
@@ -77,13 +84,13 @@ export class MammalGenerator extends CreatureBase {
     mammal.name = `Mammal_${species}`;
     mammal.userData.parameters = parameters;
 
-    // Body
-    const body = this.generateBody(parameters);
+    // Body - LatheGeometry with species-specific profile
+    const body = this.generateBody(parameters, species);
     const bodyFur = this.applyFurToMesh(body, parameters);
     mammal.add(bodyFur);
 
-    // Head
-    const head = this.generateHeadMesh(parameters);
+    // Head - LatheGeometry with species-specific head profile
+    const head = this.generateHeadMesh(parameters, species);
     head.position.set(0, s * 0.25, s * 0.45);
     head.name = 'head';
     // Apply fur to head meshes inside the head group
@@ -95,15 +102,18 @@ export class MammalGenerator extends CreatureBase {
     const eyeGeo = this.createSphereGeometry(s * 0.03);
     const leftEye = new Mesh(eyeGeo, eyeMat);
     leftEye.position.set(-s * 0.08, s * 0.32, s * 0.6);
+    leftEye.name = 'leftEye';
     mammal.add(leftEye);
     const rightEye = new Mesh(eyeGeo, eyeMat);
     rightEye.position.set(s * 0.08, s * 0.32, s * 0.6);
+    rightEye.name = 'rightEye';
     mammal.add(rightEye);
 
     // Nose
     const noseMat = new MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
     const nose = new Mesh(this.createSphereGeometry(s * 0.025), noseMat);
     nose.position.set(0, s * 0.22, s * 0.62);
+    nose.name = 'nose';
     mammal.add(nose);
 
     // 4 Legs with upper/lower segments + paws
@@ -128,11 +138,34 @@ export class MammalGenerator extends CreatureBase {
   }
 
   generateBodyCore(): Object3D {
-    return this.generateBody(this.getDefaultConfig());
+    return this.generateBody(this.getDefaultConfig(), 'dog');
   }
 
   generateHead(): Object3D {
-    return this.generateHeadMesh(this.getDefaultConfig());
+    const params = this.getDefaultConfig();
+    const s = params.size;
+    const headGroup = this.generateHeadMesh(params, 'dog');
+
+    // Eyes (needed for complete head via abstract method chain)
+    const eyeMat = new MeshStandardMaterial({ color: 0x222222, roughness: 0.3 });
+    const eyeGeo = this.createSphereGeometry(s * 0.03);
+    const leftEye = new Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-s * 0.08, s * 0.32, s * 0.6);
+    leftEye.name = 'leftEye';
+    headGroup.add(leftEye);
+    const rightEye = new Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(s * 0.08, s * 0.32, s * 0.6);
+    rightEye.name = 'rightEye';
+    headGroup.add(rightEye);
+
+    // Nose
+    const noseMat = new MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+    const nose = new Mesh(this.createSphereGeometry(s * 0.025), noseMat);
+    nose.position.set(0, s * 0.22, s * 0.62);
+    nose.name = 'nose';
+    headGroup.add(nose);
+
+    return headGroup;
   }
 
   generateLimbs(): Object3D[] {
@@ -280,7 +313,7 @@ export class MammalGenerator extends CreatureBase {
       tipColor: primaryColor.clone().lerp(new Color(0xffffff), 0.2),
       // Undercoat: slightly darker, towards secondary color
       undercoatColor: primaryColor.clone().lerp(secondaryColor, 0.3),
-      hairDirection: new Vector3(0, 1, 0),
+      hairDirection: new Vector3(0, 1, 0).normalize(),
       seed: partSeed,
     });
   }
@@ -322,33 +355,368 @@ export class MammalGenerator extends CreatureBase {
     }
   }
 
-  private generateBody(params: MammalParameters): Mesh {
+  /**
+   * Generate mammal body using LatheGeometry with species-specific profiles.
+   *
+   * Instead of a simple scaled sphere (ellipsoid), this uses a 2D profile
+   * revolved around the Y axis — exactly like how FruitGenerator creates
+   * smooth fruit shapes. The profile varies by species:
+   *   - Fox: elongated, slender
+   *   - Rabbit: compact, round
+   *   - Bear: broad, heavy
+   *   - Deer: slender with deep chest
+   *   - Elephant: massive, columnar
+   *   - Giraffe: very elongated with long neck base
+   */
+  private generateBody(params: MammalParameters, species: MammalSpecies): Mesh {
     const s = params.size;
-    const bodyGeometry = this.createEllipsoidGeometry(s * 0.3, s * 0.25, s * 0.4);
+    const bodyWidth = s * 0.3;  // Maximum half-width (radius)
+    const bodyHeight = s * 0.25; // Maximum half-height
+    const bodyLength = s * 0.8;  // Total body length
+
+    // Species-specific profile control points
+    // Each entry: [t along body, radius factor] where t goes from tail (0) to head (1)
+    const profileData = this.getBodyProfile(species);
+
+    const segments = 24;
+    const points: Vector2[] = [];
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      let r = 0;
+      for (let c = 0; c < profileData.length - 1; c++) {
+        const [t0, r0] = profileData[c];
+        const [t1, r1] = profileData[c + 1];
+        if (t >= t0 && t <= t1) {
+          const localT = (t - t0) / (t1 - t0);
+          const st = localT * localT * (3 - 2 * localT); // Smoothstep
+          r = r0 + (r1 - r0) * st;
+          break;
+        }
+      }
+      points.push(new Vector2(
+        Math.max(0.001, r * bodyWidth),
+        t * bodyLength - bodyLength * 0.5,
+      ));
+    }
+
+    const bodyGeometry = new LatheGeometry(points, 16);
+
+    // Scale to make elliptical cross-section (mammals are wider side-to-side
+    // than top-to-bottom at the belly, but the back is often taller)
+    bodyGeometry.scale(1, bodyHeight / bodyWidth, 1);
+
+    // Apply subdivision smoothing for smooth body silhouette
+    const smoothedGeo = smoothCreatureJunction(bodyGeometry, 1);
+
     const bodyMaterial = this.createFurMaterial(params.primaryColor, params.furLength, params.furPattern);
-    const mesh = new Mesh(bodyGeometry, bodyMaterial);
+    const mesh = new Mesh(smoothedGeo, bodyMaterial);
     mesh.name = 'body';
+
+    // Rotate so body is horizontal (LatheGeometry produces vertical shapes)
+    mesh.rotation.x = Math.PI / 2;
+
     return mesh;
   }
 
-  private generateHeadMesh(params: MammalParameters): Group {
+  /**
+   * Get species-specific body profile control points for LatheGeometry.
+   * Returns [t, radiusFactor] pairs where t goes from tail to head.
+   */
+  private getBodyProfile(species: MammalSpecies): [number, number][] {
+    switch (species) {
+      case 'fox':
+        // Elongated, slender body with deep chest
+        return [
+          [0.0,  0.10], // Tail base — narrow
+          [0.08, 0.30], // Hindquarters start
+          [0.20, 0.65], // Lower back
+          [0.35, 0.80], // Mid body — slender
+          [0.50, 0.90], // Ribcage
+          [0.65, 1.00], // Deep chest (widest)
+          [0.80, 0.70], // Shoulder
+          [0.92, 0.35], // Neck base
+          [1.0,  0.15], // Neck
+        ];
+      case 'rabbit':
+        // Compact, round body
+        return [
+          [0.0,  0.15], // Tail tuft area
+          [0.08, 0.45], // Hindquarters
+          [0.20, 0.80], // Round rear
+          [0.35, 0.95], // Belly
+          [0.50, 1.00], // Roundest point
+          [0.65, 0.90], // Chest
+          [0.80, 0.60], // Shoulder
+          [0.92, 0.30], // Neck base
+          [1.0,  0.12], // Neck
+        ];
+      case 'bear':
+        // Broad, heavy body with massive shoulders
+        return [
+          [0.0,  0.15], // Rear
+          [0.10, 0.55], // Hindquarters — wide
+          [0.25, 0.85], // Lower back
+          [0.40, 0.95], // Belly
+          [0.55, 1.00], // Widest
+          [0.70, 0.95], // Massive shoulders
+          [0.85, 0.65], // Shoulder/neck
+          [0.95, 0.35], // Neck
+          [1.0,  0.20], // Neck base
+        ];
+      case 'deer':
+        // Slender with deep chest
+        return [
+          [0.0,  0.08], // Tail base
+          [0.08, 0.30], // Hindquarters
+          [0.20, 0.55], // Slim waist
+          [0.35, 0.70], // Ribcage
+          [0.50, 0.85], // Deep chest
+          [0.65, 1.00], // Chest peak
+          [0.80, 0.60], // Shoulder
+          [0.92, 0.25], // Neck
+          [1.0,  0.10], // Long neck
+        ];
+      case 'elephant':
+        // Massive, columnar body
+        return [
+          [0.0,  0.25], // Rear — wide
+          [0.10, 0.65], // Hindquarters
+          [0.25, 0.90], // Massive belly
+          [0.40, 1.00], // Barrel body
+          [0.55, 0.95], // Continuing barrel
+          [0.70, 0.85], // Shoulder
+          [0.85, 0.55], // Neck
+          [0.95, 0.30], // Neck
+          [1.0,  0.20], // Head attachment
+        ];
+      case 'giraffe':
+        // Very elongated with sloping back
+        return [
+          [0.0,  0.08], // Tail
+          [0.08, 0.30], // Hindquarters
+          [0.20, 0.55], // Sloping back
+          [0.35, 0.65], // Body
+          [0.50, 0.70], // Ribcage
+          [0.65, 0.80], // Chest
+          [0.80, 0.50], // Shoulder
+          [0.92, 0.20], // Long neck base
+          [1.0,  0.08], // Neck
+        ];
+      case 'cat':
+        // Slender, flexible body
+        return [
+          [0.0,  0.08], // Tail base
+          [0.08, 0.35], // Hindquarters
+          [0.20, 0.70], // Lower back
+          [0.35, 0.90], // Ribcage
+          [0.50, 1.00], // Chest
+          [0.65, 0.85], // Shoulder
+          [0.80, 0.55], // Neck base
+          [0.92, 0.25], // Neck
+          [1.0,  0.10], // Head
+        ];
+      case 'dog':
+      default:
+        // Default dog-like body
+        return [
+          [0.0,  0.10], // Tail base
+          [0.08, 0.35], // Hindquarters
+          [0.20, 0.65], // Lower back
+          [0.35, 0.85], // Ribcage
+          [0.50, 1.00], // Chest (widest)
+          [0.65, 0.85], // Shoulder
+          [0.80, 0.55], // Neck base
+          [0.92, 0.25], // Neck
+          [1.0,  0.12], // Head attachment
+        ];
+    }
+  }
+
+  /**
+   * Generate head using LatheGeometry with species-specific head profiles.
+   *
+   * The head profile varies by species:
+   *   - Fox: long snout, pointed
+   *   - Rabbit: round with short nose
+   *   - Bear: broad, rounded
+   *   - Elephant: wide with trunk base
+   *   - Giraffe: elongated with long face
+   */
+  private generateHeadMesh(params: MammalParameters, species: MammalSpecies): Group {
     const s = params.size;
-    // Snout - elongated ellipsoid attached to head
     const headGroup = new Group();
     headGroup.name = 'headGroup';
 
-    const headGeo = this.createSphereGeometry(s * 0.15);
+    // Species-specific head using LatheGeometry
+    const headWidth = s * 0.15;
+    const headLength = s * 0.25;
+    const headProfile = this.getHeadProfile(species);
+
+    const segments = 20;
+    const points: Vector2[] = [];
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      let r = 0;
+      for (let c = 0; c < headProfile.length - 1; c++) {
+        const [t0, r0] = headProfile[c];
+        const [t1, r1] = headProfile[c + 1];
+        if (t >= t0 && t <= t1) {
+          const localT = (t - t0) / (t1 - t0);
+          const st = localT * localT * (3 - 2 * localT);
+          r = r0 + (r1 - r0) * st;
+          break;
+        }
+      }
+      points.push(new Vector2(
+        Math.max(0.001, r * headWidth),
+        t * headLength - headLength * 0.3,
+      ));
+    }
+
+    const headGeo = new LatheGeometry(points, 14);
+    // Apply subdivision for smooth head
+    const smoothedGeo = smoothCreatureJunction(headGeo, 1);
+
     const headMat = this.createFurMaterial(params.primaryColor, params.furLength * 0.8, params.furPattern);
-    const headMesh = new Mesh(headGeo, headMat);
+    const headMesh = new Mesh(smoothedGeo, headMat);
+    headMesh.name = 'head';
+    // Rotate to be horizontal
+    headMesh.rotation.x = Math.PI / 2;
     headGroup.add(headMesh);
 
-    // Snout
-    const snoutGeo = this.createEllipsoidGeometry(s * 0.06, s * 0.06, s * 0.12);
+    // Snout — species-specific using ExtrudeGeometry from a 2D profile
+    const snoutProfile = this.getSnoutProfile(species);
+    const snoutShape = new Shape();
+    snoutShape.moveTo(0, 0);
+    for (let i = 1; i < snoutProfile.length; i++) {
+      snoutShape.lineTo(snoutProfile[i][0] * s, snoutProfile[i][1] * s);
+    }
+    snoutShape.lineTo(0, 0);
+
+    const snoutGeo = new ShapeGeometry(snoutShape, 6);
     const snout = new Mesh(snoutGeo, headMat);
     snout.position.set(0, -s * 0.04, s * 0.14);
+    snout.rotation.x = -0.2;
+    snout.name = 'snout';
     headGroup.add(snout);
 
     return headGroup;
+  }
+
+  /**
+   * Get species-specific head profile control points for LatheGeometry.
+   * Returns [t, radiusFactor] pairs where t goes from back of head to snout.
+   */
+  private getHeadProfile(species: MammalSpecies): [number, number][] {
+    switch (species) {
+      case 'fox':
+        return [
+          [0.0,  0.30], // Back of head
+          [0.15, 0.80], // Braincase
+          [0.30, 1.00], // Widest
+          [0.50, 0.75], // Cheekbones
+          [0.70, 0.50], // Muzzle taper
+          [0.85, 0.25], // Snout
+          [1.0,  0.08], // Nose
+        ];
+      case 'rabbit':
+        return [
+          [0.0,  0.35], // Back of head
+          [0.15, 0.85], // Braincase
+          [0.30, 1.00], // Round head
+          [0.50, 0.85], // Cheeks
+          [0.70, 0.55], // Short muzzle
+          [0.90, 0.25], // Nose
+          [1.0,  0.12], // Nose tip
+        ];
+      case 'bear':
+        return [
+          [0.0,  0.40], // Back of head
+          [0.15, 0.85], // Braincase
+          [0.30, 1.00], // Wide head
+          [0.50, 0.90], // Cheeks — heavy
+          [0.70, 0.65], // Muzzle
+          [0.85, 0.45], // Snout
+          [1.0,  0.20], // Nose
+        ];
+      case 'elephant':
+        return [
+          [0.0,  0.35], // Back of head
+          [0.15, 0.80], // Braincase — large
+          [0.30, 1.00], // Wide head
+          [0.50, 0.90], // Forehead
+          [0.65, 0.70], // Face
+          [0.80, 0.50], // Trunk base
+          [0.95, 0.35], // Trunk
+          [1.0,  0.20], // Trunk tip
+        ];
+      case 'giraffe':
+        return [
+          [0.0,  0.20], // Back of head
+          [0.15, 0.60], // Braincase
+          [0.30, 0.80], // Head
+          [0.50, 0.65], // Long face
+          [0.70, 0.40], // Muzzle
+          [0.85, 0.22], // Snout
+          [1.0,  0.08], // Nose
+        ];
+      case 'deer':
+        return [
+          [0.0,  0.25], // Back of head
+          [0.15, 0.75], // Braincase
+          [0.30, 1.00], // Wide head
+          [0.50, 0.70], // Face
+          [0.70, 0.45], // Muzzle
+          [0.85, 0.22], // Snout
+          [1.0,  0.08], // Nose
+        ];
+      case 'cat':
+        return [
+          [0.0,  0.25], // Back of head
+          [0.15, 0.80], // Braincase
+          [0.30, 1.00], // Round head
+          [0.50, 0.75], // Cheeks
+          [0.70, 0.45], // Short muzzle
+          [0.85, 0.20], // Nose
+          [1.0,  0.06], // Nose tip
+        ];
+      case 'dog':
+      default:
+        return [
+          [0.0,  0.25], // Back of head
+          [0.15, 0.75], // Braincase
+          [0.30, 1.00], // Widest
+          [0.50, 0.70], // Cheekbones
+          [0.70, 0.50], // Muzzle
+          [0.85, 0.30], // Snout
+          [1.0,  0.10], // Nose
+        ];
+    }
+  }
+
+  /**
+   * Get snout profile as 2D points for ShapeGeometry.
+   * Returns [x, y] pairs defining the snout outline from side view.
+   */
+  private getSnoutProfile(species: MammalSpecies): [number, number][] {
+    const s = 1; // Will be scaled by params.size
+    switch (species) {
+      case 'fox':
+        return [[0, 0], [0.02, 0.06], [0.06, 0.04], [0.10, 0.02], [0.12, 0], [0, -0.02], [0, 0]];
+      case 'rabbit':
+        return [[0, 0], [0.02, 0.04], [0.04, 0.05], [0.05, 0.03], [0.04, 0], [0, -0.02], [0, 0]];
+      case 'bear':
+        return [[0, 0], [0.03, 0.08], [0.07, 0.08], [0.10, 0.05], [0.10, 0], [0, -0.04], [0, 0]];
+      case 'elephant':
+        return [[0, 0], [0.02, 0.06], [0.04, 0.08], [0.06, 0.06], [0.08, 0.03], [0.06, 0], [0, -0.03], [0, 0]];
+      case 'giraffe':
+        return [[0, 0], [0.015, 0.05], [0.04, 0.04], [0.07, 0.03], [0.09, 0.01], [0.08, 0], [0, -0.02], [0, 0]];
+      case 'dog':
+      default:
+        return [[0, 0], [0.02, 0.05], [0.05, 0.05], [0.08, 0.03], [0.08, 0], [0, -0.03], [0, 0]];
+    }
   }
 
   private generateLegs(params: MammalParameters): Group[] {
@@ -451,6 +819,7 @@ export class MammalGenerator extends CreatureBase {
       const innerGeo = this.createEarGeometry(earWidth * 0.6, earHeight * 0.7, earWidth * 0.2);
       const inner = new Mesh(innerGeo, innerMat);
       inner.position.z = earWidth * 0.1;
+      inner.name = 'inner';
       earGroup.add(inner);
 
       earGroup.position.set(side * s * 0.1, s * 0.38, s * 0.38);

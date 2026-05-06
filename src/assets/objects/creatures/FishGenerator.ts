@@ -123,7 +123,9 @@ export class FishGenerator extends CreatureBase {
 
   generateAppendages(): Object3D[] {
     const params = this.getDefaultConfig();
-    return [this.generateTailFin(params), this.generateDorsalFin(params), ...this.generatePectoralFins(params)];
+    // Tail fin and dorsal fin only; pectoral fins are already in generateLimbs()
+    const appendages: Object3D[] = [this.generateTailFin(params), this.generateDorsalFin(params)];
+    return appendages;
   }
 
   applySkin(materials: Material[]): Material[] {

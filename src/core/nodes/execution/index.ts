@@ -101,6 +101,7 @@ export {
 export type {
   BSDFOutput,
   NodeEvaluationOutput,
+  MaterialBridgeOptions,
 } from './NodeGraphMaterialBridge';
 
 // NodeGraphTextureBridge - Converts texture node output to Three.js Texture
@@ -111,7 +112,28 @@ export {
 export type {
   TextureNodeType,
   TextureNodeOutput,
+  TextureConversionResult,
+  EvaluatorTextureOutput,
 } from './NodeGraphTextureBridge';
+
+// EvaluateToMaterial - Convenience function for node graph → material conversion
+export {
+  evaluateToMaterial,
+  evaluateToMaterialQuick,
+  bsdfToMaterial,
+  evaluatorTextureToThreeTexture,
+} from './EvaluateToMaterial';
+
+export type {
+  EvaluateToMaterialOptions,
+  EvaluateToMaterialResult,
+} from './EvaluateToMaterial';
+
+// BridgeValidation - End-to-end validation of the bridge pipeline
+export {
+  runAllValidations,
+  validateBridgePipeline,
+} from './BridgeValidation';
 
 // SurfaceIntegration - Surface/material integration
 export {
@@ -360,3 +382,31 @@ export type {
 export {
   ALL_WGSL_NODE_FUNCTIONS,
 } from './gpu/WGSLNodeFunctions';
+
+// P1NodeExecutors - 16 P1 priority standalone executors for texture, color, vector, input, and utility nodes
+// Note: Some executors share names with other modules (e.g., BrickTexture, MapRange).
+// The P1 versions are the canonical implementations; re-exports from older modules
+// are kept for backward compatibility. Import from P1NodeExecutors for new code.
+export {
+  executeImageTexture,
+  executeHueSaturationValue,
+  executeInvertColor,
+  executeBrightContrast,
+  executeBump,
+  executeDisplacement,
+  executeNormalMap,
+  executeValueNode,
+  executeRGBNode,
+} from './P1NodeExecutors';
+
+// P1 executors that replace identically-named executors from older modules
+// (the P1 versions are now used in NodeEvaluator dispatch)
+export {
+  executeBrickTexture as executeBrickTextureP1,
+  executeCheckerTexture as executeCheckerTextureP1,
+  executeMagicTexture as executeMagicTextureP1,
+  executeObjectInfo as executeObjectInfoP1,
+  executeSelfObject as executeSelfObjectP1,
+  executeMapRange as executeMapRangeP1,
+  executeFloatCurve as executeFloatCurveP1,
+} from './P1NodeExecutors';

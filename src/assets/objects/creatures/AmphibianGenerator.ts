@@ -84,7 +84,27 @@ export class AmphibianGenerator extends CreatureBase {
   }
 
   generateHead(): Object3D {
-    return this.buildHead(this.getDefaultConfig(), this.createSkinMaterial(this.getDefaultConfig()));
+    const params = this.getDefaultConfig();
+    const s = params.size;
+    const headGroup = this.buildHead(params, this.createSkinMaterial(params));
+
+    // Eyes (needed for complete head via abstract method chain)
+    const eyeMat = new MeshStandardMaterial({ color: 0xaacc00, roughness: 0.3, metalness: 0.2 });
+    const pupilMat = new MeshStandardMaterial({ color: 0x111111 });
+    const eyeGeo = this.createSphereGeometry(s * 0.06);
+    const pupilGeo = this.createSphereGeometry(s * 0.025);
+    for (const side of [-1, 1]) {
+      const eye = new Mesh(eyeGeo, eyeMat);
+      eye.position.set(side * s * 0.15, s * 0.22, s * 0.32);
+      eye.name = side === -1 ? 'leftEye' : 'rightEye';
+      headGroup.add(eye);
+      const pupil = new Mesh(pupilGeo, pupilMat);
+      pupil.position.set(side * s * 0.17, s * 0.22, s * 0.36);
+      pupil.name = side === -1 ? 'leftPupil' : 'rightPupil';
+      headGroup.add(pupil);
+    }
+
+    return headGroup;
   }
 
   generateLimbs(): Object3D[] {

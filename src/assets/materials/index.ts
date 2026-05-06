@@ -51,7 +51,7 @@ export { ProceduralTextureGraph } from './textures/ProceduralTextureGraph';
 export type { TextureChannel, TextureGraph, TextureGraphOutput, GraphNode, GraphLink } from './textures/ProceduralTextureGraph';
 
 export { TextureBakePipeline } from './textures/TextureBakePipeline';
-export type { BakeResolution, PBRTextureSet, MaterialPBRParams } from './textures/TextureBakePipeline';
+export type { BakeResolution, PBRTextureSet, CanvasPBRTextureSet, MaterialPBRParams, PresetBakeOptions } from './textures/TextureBakePipeline';
 
 export { DecalSystem } from './decals/DecalSystem';
 export type { DecalParams, DecalPlacement } from './decals/DecalSystem';
@@ -62,7 +62,13 @@ export type { MaterialCategory, NodeMaterialParams, NodeMaterialResult } from '.
 
 // Unified material pipeline: preset library + node graph bridges + texture baker
 export { MaterialPipeline } from './MaterialPipeline';
-export type { TextureMaps } from './MaterialPipeline';
+export type {
+  TextureMaps,
+  MaterialInput,
+  TerrainMaterialConfig,
+  CreatureMaterialConfig,
+  IndoorMaterialConfig,
+} from './MaterialPipeline';
 
 // 3D Material Evaluation — runtime GLSL shader pipeline
 export { Material3DEvaluator, CoordinateSpace, DEFAULT_3D_CONFIG } from './Material3DEvaluator';

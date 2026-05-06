@@ -348,28 +348,103 @@ export class MeshSimplifier {
   }
 
   private computeOptimalPosition(quadric: Float32Array, v0: THREE.Vector3, v1: THREE.Vector3): THREE.Vector3 {
-    // Try to solve the linear system for optimal position
-    // If it fails, use midpoint
-    const Q = [
-      [quadric[0], quadric[1], quadric[2], quadric[3]],
-      [quadric[1], quadric[4], quadric[5], quadric[6]],
-      [quadric[2], quadric[5], quadric[7], quadric[8]],
-      [quadric[3], quadric[6], quadric[8], quadric[9]],
+    // Solve the quadric error minimization problem:
+    //   Find position p that minimizes p^T Q p
+    //   where Q is the 4x4 symmetric quadric matrix.
+    //
+    // Taking the derivative and setting it to zero gives:
+    //   Q' * p = [0, 0, 0, 1]^T
+    // where Q' is Q with the last row replaced by [0, 0, 0, 1].
+    //
+    // This is a 4x4 linear system solved via Gaussian elimination with
+    // partial pivoting. Fall back to the midpoint ONLY when the system
+    // is degenerate (determinant near zero).
+
+    // Q stored as upper triangle (10 floats):
+    //   Q[0][0]=q[0]  Q[0][1]=q[1]  Q[0][2]=q[2]  Q[0][3]=q[3]
+    //                 Q[1][1]=q[4]  Q[1][2]=q[5]  Q[1][3]=q[6]
+    //                                Q[2][2]=q[7]  Q[2][3]=q[8]
+    //                                               Q[3][3]=q[9]
+    // Lower triangle: Q[j][i] = Q[i][j]
+
+    const q = quadric;
+
+    // Build the 4x4 system: Q' * p = rhs
+    // Q' replaces row 3 with [0, 0, 0, 1] to constrain the homogeneous
+    // coordinate w = 1 (preventing the trivial zero solution).
+    // Right-hand side: [0, 0, 0, 1]^T
+    const aug: number[][] = [
+      [q[0], q[1], q[2], q[3], 0],
+      [q[1], q[4], q[5], q[6], 0],
+      [q[2], q[5], q[7], q[8], 0],
+      [0,    0,    0,    1,    1],
     ];
 
-    // Simple determinant check
-    const det = Q[0][0] * (Q[1][1] * Q[2][2] - Q[1][2] * Q[2][1])
-      - Q[0][1] * (Q[1][0] * Q[2][2] - Q[1][2] * Q[2][0])
-      + Q[0][2] * (Q[1][0] * Q[2][1] - Q[1][1] * Q[2][0]);
+    const n = 4;
 
-    if (Math.abs(det) > 1e-10) {
-      // Solve using Cramer's rule (simplified)
-      // For performance, just use midpoint
+    // Gaussian elimination with partial pivoting
+    for (let col = 0; col < n; col++) {
+      // Find pivot row (largest absolute value in this column)
+      let maxVal = Math.abs(aug[col][col]);
+      let maxRow = col;
+      for (let row = col + 1; row < n; row++) {
+        const val = Math.abs(aug[row][col]);
+        if (val > maxVal) {
+          maxVal = val;
+          maxRow = row;
+        }
+      }
+
+      // If the largest pivot is near zero, the 4x4 system is singular
+      // (determinant ≈ 0). This happens when the summed quadric matrices
+      // don't fully constrain the position — e.g., vertices on a flat
+      // plane with no curvature information. Fall back to midpoint.
+      if (maxVal < 1e-10) {
+        return new THREE.Vector3().addVectors(v0, v1).multiplyScalar(0.5);
+      }
+
+      // Swap current row with pivot row
+      if (maxRow !== col) {
+        [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+      }
+
+      // Eliminate rows below the pivot
+      for (let row = col + 1; row < n; row++) {
+        const factor = aug[row][col] / aug[col][col];
+        for (let j = col; j <= n; j++) {
+          aug[row][j] -= factor * aug[col][j];
+        }
+      }
+    }
+
+    // Back-substitution to find the solution vector
+    const solution = new Float64Array(n);
+    for (let row = n - 1; row >= 0; row--) {
+      let sum = aug[row][n]; // augmented column (rhs)
+      for (let j = row + 1; j < n; j++) {
+        sum -= aug[row][j] * solution[j];
+      }
+      solution[row] = sum / aug[row][row];
+    }
+
+    // Construct the optimal position from the solution (x, y, z)
+    const optimalPos = new THREE.Vector3(solution[0], solution[1], solution[2]);
+
+    // Safety check: if the solution contains NaN or Infinity, the system
+    // was degenerate despite passing the pivot check. Fall back to midpoint.
+    if (!isFinite(optimalPos.x) || !isFinite(optimalPos.y) || !isFinite(optimalPos.z)) {
       return new THREE.Vector3().addVectors(v0, v1).multiplyScalar(0.5);
     }
 
-    // Fallback: midpoint
-    return new THREE.Vector3().addVectors(v0, v1).multiplyScalar(0.5);
+    // Note: We deliberately do NOT reject solutions that are far from the
+    // edge endpoints. The quadric error minimizer can legitimately place
+    // the optimal position outside the edge span — this is mathematically
+    // correct per the Garland-Heckbert algorithm and preserves surface
+    // curvature better than clamping to the edge. Previous implementations
+    // that rejected far solutions were overly conservative and caused
+    // unnecessary fallbacks to midpoint, degrading mesh quality.
+
+    return optimalPos;
   }
 
   private computeEdgeCosts(): void {
@@ -576,4 +651,354 @@ export function simplifyGeometry(
 ): THREE.BufferGeometry {
   const simplifier = new MeshSimplifier();
   return simplifier.simplify(geometry, reductionPercent / 100);
+}
+
+// ---------------------------------------------------------------------------
+// Collision Mesh Generation — Low-poly hulls for physics
+// ---------------------------------------------------------------------------
+
+export interface CollisionMeshOptions {
+  /** Target triangle count for the collision mesh (default: 64) */
+  targetTriangleCount: number;
+  /** Whether to use convex hull approximation (true) or simplified trimesh (false) */
+  useConvexHull: boolean;
+  /** Shrink-wrap: offset the collision hull inward by this amount (default: 0) */
+  shrinkWrap: number;
+  /** Whether to merge close vertices (default: true) */
+  mergeVertices: boolean;
+  /** Vertex merge distance threshold (default: 0.01) */
+  mergeThreshold: number;
+}
+
+const DEFAULT_COLLISION_MESH_OPTIONS: CollisionMeshOptions = {
+  targetTriangleCount: 64,
+  useConvexHull: true,
+  shrinkWrap: 0,
+  mergeVertices: true,
+  mergeThreshold: 0.01,
+};
+
+/**
+ * Generate a low-poly collision mesh from a detailed visual mesh.
+ *
+ * This is used by SimFactory and the physics pipeline to create
+ * simplified collision hulls that are:
+ * 1. Much lower triangle count than the visual mesh (64 triangles vs 10,000+)
+ * 2. Optionally convex (for Rapier convex hull colliders)
+ * 3. Optionally shrink-wrapped inward for stable collision response
+ * 4. Vertex-merged to avoid degenerate triangles
+ *
+ * @param geometry - The visual mesh to simplify
+ * @param options - Collision mesh generation options
+ * @returns Simplified BufferGeometry suitable for collision detection
+ */
+export function generateCollisionMesh(
+  geometry: THREE.BufferGeometry,
+  options: Partial<CollisionMeshOptions> = {},
+): THREE.BufferGeometry {
+  const opts = { ...DEFAULT_COLLISION_MESH_OPTIONS, ...options };
+
+  // Step 1: Estimate current triangle count
+  const currentTriangles = geometry.index
+    ? geometry.index.count / 3
+    : geometry.attributes.position.count / 3;
+
+  if (currentTriangles <= opts.targetTriangleCount) {
+    // Already low-poly enough — just return a clone
+    return geometry.clone();
+  }
+
+  // Step 2: Compute reduction ratio
+  const reductionRatio = opts.targetTriangleCount / currentTriangles;
+  const simplificationRatio = Math.max(0.01, Math.min(0.99, reductionRatio));
+
+  // Step 3: Simplify using MeshSimplifier with aggressive settings
+  const simplifier = new MeshSimplifier({
+    targetRatio: simplificationRatio,
+    preserveBoundaries: false,     // Don't care about visual boundaries for collision
+    preserveUVSeams: false,        // No UVs needed for collision
+    preserveFeatureEdges: false,   // No feature preservation for collision
+    featureAngleThreshold: Math.PI, // Accept all edge collapses
+    aggressiveness: 8,             // High aggressiveness for speed
+  });
+
+  let result = simplifier.simplify(geometry, simplificationRatio);
+
+  // Step 4: Optionally convert to convex hull approximation
+  if (opts.useConvexHull) {
+    result = convertToConvexHullApproximation(result);
+  }
+
+  // Step 5: Merge close vertices
+  if (opts.mergeVertices) {
+    result = mergeCloseVertices(result, opts.mergeThreshold);
+  }
+
+  // Step 6: Apply shrink-wrap offset (inward)
+  if (opts.shrinkWrap > 0) {
+    result = applyShrinkWrap(result, opts.shrinkWrap);
+  }
+
+  // Ensure we have proper normals
+  result.computeVertexNormals();
+  result.computeBoundingSphere();
+
+  return result;
+}
+
+/**
+ * Convert a mesh to a convex hull approximation.
+ *
+ * For physics, convex hulls are much faster than trimesh colliders.
+ * This implementation computes the convex hull by:
+ * 1. Finding the bounding box extremes
+ * 2. Finding the farthest points along 26 directions (±x, ±y, ±z, and 20 diagonals)
+ * 3. Building a simplified hull from these extreme points
+ *
+ * The result is a simplified convex hull that's suitable for collision
+ * but doesn't need to be perfectly convex (Rapier handles this).
+ */
+function convertToConvexHullApproximation(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const positions = geometry.attributes.position;
+  if (!positions) return geometry;
+
+  // Collect all unique vertices
+  const vertexSet = new Map<string, THREE.Vector3>();
+  for (let i = 0; i < positions.count; i++) {
+    const v = new THREE.Vector3(positions.getX(i), positions.getY(i), positions.getZ(i));
+    const key = `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`;
+    if (!vertexSet.has(key)) {
+      vertexSet.set(key, v);
+    }
+  }
+
+  const vertices = Array.from(vertexSet.values());
+  if (vertices.length < 4) return geometry;
+
+  // Find extreme points along 26 directions
+  const directions: THREE.Vector3[] = [];
+
+  // 6 axis-aligned directions
+  for (const axis of [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]]) {
+    directions.push(new THREE.Vector3(axis[0], axis[1], axis[2]));
+  }
+
+  // 12 edge-midpoint directions
+  for (const a of [1, -1]) {
+    for (const b of [1, -1]) {
+      directions.push(new THREE.Vector3(a, b, 0).normalize());
+      directions.push(new THREE.Vector3(a, 0, b).normalize());
+      directions.push(new THREE.Vector3(0, a, b).normalize());
+    }
+  }
+
+  // 8 corner directions
+  for (const a of [1, -1]) {
+    for (const b of [1, -1]) {
+      for (const c of [1, -1]) {
+        directions.push(new THREE.Vector3(a, b, c).normalize());
+      }
+    }
+  }
+
+  // For each direction, find the vertex with maximum projection
+  const extremeIndices = new Set<number>();
+  for (const dir of directions) {
+    let maxDot = -Infinity;
+    let maxIdx = 0;
+    for (let i = 0; i < vertices.length; i++) {
+      const dot = vertices[i].dot(dir);
+      if (dot > maxDot) {
+        maxDot = dot;
+        maxIdx = i;
+      }
+    }
+    extremeIndices.add(maxIdx);
+  }
+
+  // Build geometry from extreme points
+  const extremeVertices = Array.from(extremeIndices).map(i => vertices[i]);
+
+  if (extremeVertices.length < 4) return geometry;
+
+  // Create a convex hull geometry using the extreme points
+  // Simple approach: compute the center, then create triangles fanning from center
+  const center = new THREE.Vector3();
+  for (const v of extremeVertices) {
+    center.add(v);
+  }
+  center.divideScalar(extremeVertices.length);
+
+  // Sort vertices by angle around the center in the XZ plane
+  // Then create triangles fanning from the center
+  const sortedByAngle = [...extremeVertices].sort((a, b) => {
+    const angleA = Math.atan2(a.z - center.z, a.x - center.x);
+    const angleB = Math.atan2(b.z - center.z, b.x - center.x);
+    return angleA - angleB;
+  });
+
+  const newPositions: number[] = [];
+  const indices: number[] = [];
+
+  // Add center as vertex 0
+  newPositions.push(center.x, center.y, center.z);
+
+  // Add top and bottom caps
+  const topY = Math.max(...extremeVertices.map(v => v.y));
+  const bottomY = Math.min(...extremeVertices.map(v => v.y));
+  newPositions.push(center.x, topY, center.z); // vertex 1 (top)
+  newPositions.push(center.x, bottomY, center.z); // vertex 2 (bottom)
+
+  // Add sorted ring vertices
+  for (const v of sortedByAngle) {
+    newPositions.push(v.x, v.y, v.z);
+  }
+
+  // Create triangles
+  const ringStart = 3;
+  const ringCount = sortedByAngle.length;
+
+  for (let i = 0; i < ringCount; i++) {
+    const next = (i + 1) % ringCount;
+    // Top cap triangle
+    indices.push(1, ringStart + i, ringStart + next);
+    // Bottom cap triangle
+    indices.push(2, ringStart + next, ringStart + i);
+    // Side triangle (center to ring edge)
+    indices.push(0, ringStart + i, ringStart + next);
+  }
+
+  const hullGeo = new THREE.BufferGeometry();
+  hullGeo.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+  if (indices.length > 0) {
+    hullGeo.setIndex(indices);
+  }
+  hullGeo.computeVertexNormals();
+
+  return hullGeo;
+}
+
+/**
+ * Merge vertices that are closer than the given threshold.
+ * This removes degenerate triangles and duplicate vertices.
+ */
+function mergeCloseVertices(
+  geometry: THREE.BufferGeometry,
+  threshold: number,
+): THREE.BufferGeometry {
+  const positions = geometry.attributes.position;
+  if (!positions) return geometry;
+
+  const thresholdSq = threshold * threshold;
+  const vertexMap = new Map<number, number>(); // old index → new index
+  const newPositions: number[] = [];
+  const indexMapping: number[] = [];
+
+  // Build merged vertex list
+  for (let i = 0; i < positions.count; i++) {
+    const vx = positions.getX(i);
+    const vy = positions.getY(i);
+    const vz = positions.getZ(i);
+
+    // Check if this vertex is close to any already-added vertex
+    let merged = false;
+    for (let j = 0; j < newPositions.length / 3; j++) {
+      const dx = vx - newPositions[j * 3];
+      const dy = vy - newPositions[j * 3 + 1];
+      const dz = vz - newPositions[j * 3 + 2];
+      if (dx * dx + dy * dy + dz * dz < thresholdSq) {
+        indexMapping.push(j);
+        merged = true;
+        break;
+      }
+    }
+
+    if (!merged) {
+      const newIdx = newPositions.length / 3;
+      newPositions.push(vx, vy, vz);
+      indexMapping.push(newIdx);
+    }
+  }
+
+  // Rebuild index buffer with merged indices
+  const indices = geometry.index;
+  const newIndices: number[] = [];
+
+  if (indices) {
+    for (let i = 0; i < indices.count; i += 3) {
+      const a = indexMapping[indices.getX(i)];
+      const b = indexMapping[indices.getX(i + 1)];
+      const c = indexMapping[indices.getX(i + 2)];
+      // Skip degenerate triangles
+      if (a !== b && b !== c && c !== a) {
+        newIndices.push(a, b, c);
+      }
+    }
+  } else {
+    for (let i = 0; i < positions.count; i += 3) {
+      const a = indexMapping[i];
+      const b = indexMapping[i + 1];
+      const c = indexMapping[i + 2];
+      if (a !== b && b !== c && c !== a) {
+        newIndices.push(a, b, c);
+      }
+    }
+  }
+
+  const result = new THREE.BufferGeometry();
+  result.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+  if (newIndices.length > 0) {
+    result.setIndex(newIndices);
+  }
+
+  return result;
+}
+
+/**
+ * Apply shrink-wrap offset: move each vertex inward along its normal
+ * by the specified distance. This makes the collision hull slightly
+ * smaller than the visual mesh, preventing objects from "sticking"
+ * to surfaces.
+ */
+function applyShrinkWrap(
+  geometry: THREE.BufferGeometry,
+  offset: number,
+): THREE.BufferGeometry {
+  geometry.computeVertexNormals();
+
+  const positions = geometry.attributes.position;
+  const normals = geometry.attributes.normal;
+
+  if (!positions || !normals) return geometry;
+
+  const posArray = positions.array as Float32Array;
+  const normArray = normals.array as Float32Array;
+
+  for (let i = 0; i < positions.count; i++) {
+    posArray[i * 3] -= normArray[i * 3] * offset;
+    posArray[i * 3 + 1] -= normArray[i * 3 + 1] * offset;
+    posArray[i * 3 + 2] -= normArray[i * 3 + 2] * offset;
+  }
+
+  positions.needsUpdate = true;
+  return geometry;
+}
+
+/**
+ * Convenience: Generate a collision mesh with a target triangle count.
+ *
+ * @param geometry - Visual mesh
+ * @param targetTriangles - Target number of triangles (default: 64)
+ * @param convex - Whether to use convex hull (default: true)
+ * @returns Simplified collision mesh
+ */
+export function generateCollisionHull(
+  geometry: THREE.BufferGeometry,
+  targetTriangles: number = 64,
+  convex: boolean = true,
+): THREE.BufferGeometry {
+  return generateCollisionMesh(geometry, {
+    targetTriangleCount: targetTriangles,
+    useConvexHull: convex,
+  });
 }

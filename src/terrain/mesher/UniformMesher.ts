@@ -159,38 +159,54 @@ export class UniformMesher {
    * Add boundary skirts and a bottom cap to make the mesh watertight.
    *
    * Algorithm:
-   * 1. Find all triangle edges that lie on a grid boundary plane
-   *    (xMin, xMax, zMin, zMax) where both endpoints are on the same plane.
-   * 2. For each such boundary edge, extrude a skirt quad straight down
+   * 1. Compute the effective boundary planes of the SDF grid.
+   *    Because SignedDistanceField.getPosition() places grid points at
+   *    voxel centres (offset by +0.5 × voxelSize from bounds), the
+   *    effective boundary of the isosurface is inset from the raw bounds
+   *    by approximately half a voxel.
+   * 2. Find all triangle edges where both endpoints lie on the *same*
+   *    effective boundary plane.
+   * 3. For each such boundary edge, extrude a vertical skirt quad down
    *    to a fixed depth below the grid minimum Y.
-   * 3. Add a flat rectangular bottom cap at that depth.
-   * 4. Recompute vertex normals so skirt normals are correct.
+   * 4. Add a flat rectangular bottom cap at that depth.
+   * 5. Recompute vertex normals so skirt normals are correct.
    */
   private encloseMesh(geometry: BufferGeometry): void {
     const posAttr = geometry.getAttribute('position');
     if (!posAttr || posAttr.count === 0) return;
 
     const [xMin, xMax, yMin, , zMin, zMax] = this.bounds;
-    const eps = this.voxelSize * 0.5;
+
+    // Effective boundary planes: isosurface vertices are placed at
+    // interpolated positions between grid-point centres, which start at
+    // bounds.min + 0.5 * voxelSize.  The outermost isosurface vertices
+    // will be approximately one voxel inside the raw bounds.
+    const halfVoxel = this.voxelSize * 0.5;
+    const effXMin = xMin + halfVoxel;
+    const effXMax = xMax - halfVoxel;
+    const effZMin = zMin + halfVoxel;
+    const effZMax = zMax - halfVoxel;
+
+    const eps = this.voxelSize;
     const bottomY = yMin - ENCLOSURE_SKIRT_DEPTH;
 
     // ---------- helpers ----------
-    /** Check whether a position is on a grid boundary plane. */
+    /** Check whether a position is on an effective boundary plane. */
     const isOnBoundaryPlane = (x: number, z: number): boolean =>
-      Math.abs(x - xMin) < eps ||
-      Math.abs(x - xMax) < eps ||
-      Math.abs(z - zMin) < eps ||
-      Math.abs(z - zMax) < eps;
+      Math.abs(x - effXMin) < eps ||
+      Math.abs(x - effXMax) < eps ||
+      Math.abs(z - effZMin) < eps ||
+      Math.abs(z - effZMax) < eps;
 
-    /** Check whether two vertices lie on the *same* boundary plane. */
+    /** Check whether two vertices lie on the *same* effective boundary plane. */
     const onSameBoundaryPlane = (
       ax: number, az: number,
       bx: number, bz: number
     ): boolean =>
-      (Math.abs(ax - xMin) < eps && Math.abs(bx - xMin) < eps) ||
-      (Math.abs(ax - xMax) < eps && Math.abs(bx - xMax) < eps) ||
-      (Math.abs(az - zMin) < eps && Math.abs(bz - zMin) < eps) ||
-      (Math.abs(az - zMax) < eps && Math.abs(bz - zMax) < eps);
+      (Math.abs(ax - effXMin) < eps && Math.abs(bx - effXMin) < eps) ||
+      (Math.abs(ax - effXMax) < eps && Math.abs(bx - effXMax) < eps) ||
+      (Math.abs(az - effZMin) < eps && Math.abs(bz - effZMin) < eps) ||
+      (Math.abs(az - effZMax) < eps && Math.abs(bz - effZMax) < eps);
 
     /** Position-based deduplication key for an edge (order-independent). */
     const edgeKey = (

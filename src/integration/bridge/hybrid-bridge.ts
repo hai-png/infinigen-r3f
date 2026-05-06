@@ -1,9 +1,39 @@
 /**
  * Hybrid Bridge: WebSocket RPC for Heavy Computations
- * 
+ *
  * Offloads expensive operations (Mesh Boolean, Physics Export, Complex Generation)
  * to a Python backend while keeping the constraint solver in the browser.
- * 
+ *
+ * --------------------------------------------------------------------------
+ * Python Bridge Setup
+ * --------------------------------------------------------------------------
+ *
+ * 1. Install dependencies:
+ *        pip install websockets trimesh numpy
+ *        # Optional (for full USD support):
+ *        pip install usd-core  # or  pip install pxr
+ *
+ * 2. Start the bridge server:
+ *        cd python/
+ *        python bridge_server.py --port 8765
+ *
+ * 3. The R3F app connects automatically via WebSocket (default ws://localhost:8765).
+ *    You can override the URL in the HybridBridgeConfig:
+ *        HybridBridge.connect('ws://my-server:8765');
+ *
+ * 4. Health check & capability discovery:
+ *    - GET health:   bridge.healthCheck()  →  { healthy, latency, serverInfo }
+ *    - GET caps:     bridge.getCapabilities()  →  { available, methods, formats }
+ *    The server responds to 'health_check' and 'get_capabilities' RPC methods.
+ *
+ * 5. USD Export:
+ *    - Requires the Python bridge + either pxr (usd-core) or trimesh.
+ *    - Call bridge.exportUSD(glbData, format, options) — sends GLB as a binary
+ *      frame with method='export_usd' and receives USD binary data back.
+ *    - SceneExporter.exportScene({format:'usd'}) uses this path automatically.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Features:
  * - Promise-based RPC
  * - Binary transfer support (for mesh data, images, heightmaps)
@@ -22,7 +52,8 @@ export type BridgeMethod =
   | 'mesh_boolean' | 'mesh_subdivide' | 'export_mjcf'
   | 'generate_procedural' | 'raycast_batch'
   | 'optimize_decoration' | 'optimize_trajectories'
-  | 'transfer_image' | 'transfer_geometry' | 'transfer_heightmap';
+  | 'transfer_image' | 'transfer_geometry' | 'transfer_heightmap'
+  | 'export_usd' | 'health_check' | 'get_capabilities';
 
 export interface BridgeRequest {
   id: string;
@@ -67,6 +98,52 @@ export interface HybridBridgeConfig {
   maxReconnectInterval: number; // max ms for exponential backoff
   requestTimeout: number;       // default ms before request times out
   maxPendingRequests: number;   // max concurrent pending requests
+}
+
+// ============================================================================
+// Health Check & USD Export Types
+// ============================================================================
+
+/** Result of a health check ping to the Python backend */
+export interface HealthCheckResult {
+  /** Whether the bridge is alive and responsive */
+  healthy: boolean;
+  /** Round-trip latency in milliseconds */
+  latency: number;
+  /** Server metadata (if healthy) */
+  serverInfo: {
+    version: string;
+    capabilities: string[];
+    uptime: number;
+  } | null;
+  /** Error message if health check failed */
+  error: string | null;
+}
+
+/** Capabilities reported by the Python backend */
+export interface BridgeCapabilities {
+  /** Whether the bridge is available */
+  available: boolean;
+  /** List of supported RPC methods */
+  methods: string[];
+  /** Format-specific capabilities */
+  formats: Record<string, { supported: boolean; quality?: string }>;
+  /** Error if capability query failed */
+  error: string | null;
+}
+
+/** Result of a USD export via the Python bridge */
+export interface USDExportResult {
+  /** Whether the export succeeded */
+  success: boolean;
+  /** USD binary data (if successful) */
+  data: ArrayBuffer | null;
+  /** Target format */
+  format: 'usda' | 'usdc' | 'usdz';
+  /** Vertex count of the exported scene */
+  vertexCount?: number;
+  /** Error message if export failed */
+  error: string | null;
 }
 
 const DEFAULT_CONFIG: HybridBridgeConfig = {
@@ -707,6 +784,269 @@ export class HybridBridge {
       queuedRequests: this.queue.length,
       reconnectAttempts: this.reconnectAttempts,
     };
+  }
+
+  // -----------------------------------------------------------------------
+  // Health Check & Capability Discovery
+  // -----------------------------------------------------------------------
+
+  /**
+   * Ping the Python backend to check if it's alive.
+   *
+   * Returns a HealthCheckResult with:
+   * - healthy: whether the bridge responded
+   * - latency: round-trip time in ms
+   * - serverInfo: server-provided metadata (version, capabilities, etc.)
+   * - error: if the health check failed
+   *
+   * If the bridge is not connected, attempts a one-shot connection first.
+   */
+  async healthCheck(timeout: number = 5000): Promise<HealthCheckResult> {
+    const startTime = performance.now();
+
+    // If not connected, try to connect
+    if (!this.connected) {
+      try {
+        await this.connect();
+      } catch (err) {
+        return {
+          healthy: false,
+          latency: performance.now() - startTime,
+          serverInfo: null,
+          error: `Connection failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
+    try {
+      const result = await this.request<{
+        status: string;
+        version?: string;
+        capabilities?: string[];
+        uptime?: number;
+      }>('health_check', {}, undefined, timeout);
+
+      return {
+        healthy: result.status === 'ok',
+        latency: performance.now() - startTime,
+        serverInfo: {
+          version: result.version ?? 'unknown',
+          capabilities: result.capabilities ?? [],
+          uptime: result.uptime ?? 0,
+        },
+        error: null,
+      };
+    } catch (err) {
+      return {
+        healthy: false,
+        latency: performance.now() - startTime,
+        serverInfo: null,
+        error: `Health check failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Query the Python backend for its capabilities.
+   *
+   * Returns a list of methods the server supports, plus
+   * format-specific capabilities (e.g., USD export quality levels).
+   */
+  async getCapabilities(timeout: number = 5000): Promise<BridgeCapabilities> {
+    if (!this.connected) {
+      return {
+        available: false,
+        methods: [],
+        formats: {},
+        error: 'Bridge not connected',
+      };
+    }
+
+    try {
+      const result = await this.request<{
+        methods: string[];
+        formats: Record<string, { supported: boolean; quality?: string }>; 
+      }>('get_capabilities', {}, undefined, timeout);
+
+      return {
+        available: true,
+        methods: result.methods ?? [],
+        formats: result.formats ?? {},
+        error: null,
+      };
+    } catch (err) {
+      return {
+        available: false,
+        methods: [],
+        formats: {},
+        error: `Capability query failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // USD Export via Python Bridge
+  // -----------------------------------------------------------------------
+
+  /**
+   * Export scene data to USD format via the Python bridge.
+   *
+   * Pipeline (single binary-frame round-trip):
+   * 1. Send GLB binary data as a binary frame with method='export_usd'
+   * 2. Python backend receives GLB, converts to USD using pxr/usd-core or trimesh
+   * 3. Python backend sends USD binary data back as a binary frame
+   * 4. Client receives and returns USDExportResult
+   *
+   * If the binary-frame path fails, falls back to a two-step approach:
+   *   transferGeometry → request('export_usd', ...)
+   *
+   * @param glbData - Pre-serialized GLB binary data
+   * @param format - Target USD format: 'usda', 'usdc', or 'usdz'
+   * @param options - Export options (quality, materials, etc.)
+   * @returns USD export result with binary data or error
+   */
+  async exportUSD(
+    glbData: ArrayBuffer,
+    format: 'usda' | 'usdc' | 'usdz' = 'usda',
+    options?: {
+      /** Include physics schema in USD (for sim-ready) */
+      includePhysics?: boolean;
+      /** Export quality: 'preview', 'production' */
+      quality?: 'preview' | 'production';
+      /** Embed textures */
+      embedTextures?: boolean;
+    },
+  ): Promise<USDExportResult> {
+    if (!this.connected) {
+      return {
+        success: false,
+        data: null,
+        format,
+        error: 'Python bridge not connected. USD export requires the bridge server.',
+      };
+    }
+
+    try {
+      // --- Preferred: single binary-frame round-trip ----------------------
+      // Send GLB as a binary frame with method='export_usd'.
+      // The Python backend will convert and send back a binary frame.
+      const usdResult = await this.request<{
+        payload: ArrayBuffer;
+        contentType: string;
+        method: string;
+        vertexCount?: number;
+        format?: string;
+      }>(
+        'export_usd',
+        {
+          format,
+          includePhysics: options?.includePhysics ?? false,
+          quality: options?.quality ?? 'preview',
+          embedTextures: options?.embedTextures ?? true,
+          contentType: 'model/gltf-binary',
+        },
+        glbData, // binary payload → sent as binary frame
+        120_000, // 2 min timeout for large scenes
+      );
+
+      if (usdResult && usdResult.payload instanceof ArrayBuffer) {
+        return {
+          success: true,
+          data: usdResult.payload,
+          format,
+          vertexCount: usdResult.vertexCount,
+          error: null,
+        };
+      }
+
+      // If we got a JSON result instead of binary (older server),
+      // check for inline data
+      if (usdResult && (usdResult as any).vertexCount !== undefined) {
+        return {
+          success: true,
+          data: (usdResult as any).usdData ?? null,
+          format: (usdResult as any).format ?? format,
+          vertexCount: (usdResult as any).vertexCount,
+          error: null,
+        };
+      }
+    } catch (binaryErr) {
+      Logger.warn('HybridBridge', 'Binary-frame USD export failed, trying two-step fallback', binaryErr);
+    }
+
+    // --- Fallback: two-step transferGeometry → request('export_usd') ------
+    try {
+      const transferResult = await this.transferGeometry(glbData);
+      if (!transferResult.received) {
+        return {
+          success: false,
+          data: null,
+          format,
+          error: 'Failed to transfer geometry to Python backend',
+        };
+      }
+
+      const result = await this.request<{
+        usdData?: ArrayBuffer;
+        vertexCount?: number;
+        error?: string;
+      }>('export_usd', {
+        format,
+        includePhysics: options?.includePhysics ?? false,
+        quality: options?.quality ?? 'preview',
+        embedTextures: options?.embedTextures ?? true,
+        vertexCount: transferResult.vertexCount,
+        geometryId: '', // server correlates by stored path
+      }, undefined, 120_000);
+
+      if (result.error) {
+        return {
+          success: false,
+          data: null,
+          format,
+          error: result.error,
+        };
+      }
+
+      return {
+        success: true,
+        data: result.usdData ?? null,
+        format,
+        vertexCount: result.vertexCount,
+        error: null,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        data: null,
+        format,
+        error: `USD export failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Check if USD export is available via the bridge.
+   *
+   * Returns true if the bridge is connected AND the Python backend
+   * supports the 'export_usd' method AND the USD format is reported
+   * as supported in the capabilities.
+   */
+  async isUSDExportAvailable(): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const caps = await this.getCapabilities();
+      if (!caps.available) return false;
+      if (!caps.methods.includes('export_usd')) return false;
+      // Also verify that the server reports USD format support
+      const usdCap = caps.formats['usd'];
+      if (usdCap && !usdCap.supported) return false;
+      return true;
+    } catch {
+      // If capability query fails, fall back to simple connectivity check
+      return this.connected;
+    }
   }
 }
 

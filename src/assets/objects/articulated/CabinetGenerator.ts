@@ -1,9 +1,18 @@
 /**
- * Cabinet Generator - Hinged cabinet with door
+ * Cabinet Generator - Hinged cabinet with door + optional internal drawer (Sim-Ready)
+ *
+ * Sim-ready features:
+ * - Hinge joint for door [0, 252°]
+ * - Prismatic joint for internal drawer (optional)
+ * - Collision geometry for all panels + door
+ * - Mass/inertia estimated from geometry
+ * - URDF, MJCF, and USD export
  */
 
 import * as THREE from 'three';
-import { ArticulatedObjectBase, ArticulatedObjectConfig, ArticulatedObjectResult, JointInfo, generateMJCF } from './types';
+import { ArticulatedObjectBase, ArticulatedObjectConfig, ArticulatedObjectResult, JointInfo, SimReadyMetadata, generateMJCF } from './types';
+import { generateURDF, URDFExportOptions } from './URDFExporter';
+import { generateUSD } from './USDExporter';
 
 export class CabinetGenerator extends ArticulatedObjectBase {
   protected category = 'Cabinet';
@@ -41,6 +50,14 @@ export class CabinetGenerator extends ArticulatedObjectBase {
 
     group.add(doorPivot);
 
+    // Internal drawer (prismatic joint)
+    const drawerGroup = new THREE.Group();
+    drawerGroup.name = 'cabinet_drawer_pivot';
+    const drawerFront = this.createBox('cabinet_drawer_front', 0.54, 0.2, 0.015, doorMat, new THREE.Vector3(0, 0.1, 0.19));
+    const drawerBottomPanel = this.createBox('cabinet_drawer_bottom', 0.5, 0.01, 0.3, woodMat, new THREE.Vector3(0, 0.005, 0.05));
+    drawerGroup.add(drawerFront, drawerBottomPanel);
+    group.add(drawerGroup);
+
     const joints: JointInfo[] = [
       this.createJoint({
         id: 'cabinet_hinge',
@@ -55,13 +72,63 @@ export class CabinetGenerator extends ArticulatedObjectBase {
         actuated: true,
         motor: { ctrlRange: [-1, 1], gearRatio: 40 },
       }),
+      this.createJoint({
+        id: 'cabinet_drawer_slide',
+        type: 'prismatic',
+        axis: [0, 0, 1],
+        limits: [0, 0.25],
+        childMesh: 'cabinet_drawer_front',
+        parentMesh: 'cab_bottom',
+        anchor: [0, 0.1, 0.19],
+        damping: 2.0,
+        friction: 0.3,
+        actuated: true,
+        motor: { ctrlRange: [-0.3, 0.3], gearRatio: 15 },
+      }),
     ];
 
-    const meshGeometries = new Map<string, { size: THREE.Vector3; pos: THREE.Vector3 }>();
+    const meshGeometries = new Map<string, { size: THREE.Vector3; pos: THREE.Vector3; mass?: number }>();
+    // Cabinet structure (static)
     meshGeometries.set('cab_top', { size: new THREE.Vector3(0.6, 0.02, 0.4), pos: new THREE.Vector3(0, 0.9, 0) });
-    meshGeometries.set('cabinet_door', { size: new THREE.Vector3(0.58, 0.88, 0.015), pos: new THREE.Vector3(0, 0.45, 0.2) });
+    meshGeometries.set('cab_bottom', { size: new THREE.Vector3(0.6, 0.02, 0.4), pos: new THREE.Vector3(0, 0, 0) });
+    meshGeometries.set('cab_left', { size: new THREE.Vector3(0.02, 0.9, 0.4), pos: new THREE.Vector3(-0.31, 0.45, 0) });
+    meshGeometries.set('cab_right', { size: new THREE.Vector3(0.02, 0.9, 0.4), pos: new THREE.Vector3(0.31, 0.45, 0) });
+    // Door (dynamic)
+    const doorVolume = 0.58 * 0.88 * 0.015;
+    const doorMass = doorVolume * 600 * 0.5;
+    meshGeometries.set('cabinet_door', { size: new THREE.Vector3(0.58, 0.88, 0.015), pos: new THREE.Vector3(0, 0.45, 0.2), mass: doorMass });
+    // Drawer (dynamic)
+    const drawerVolume = 0.54 * 0.2 * 0.015 + 0.5 * 0.01 * 0.3;
+    const drawerMass = drawerVolume * 600 * 0.4;
+    meshGeometries.set('cabinet_drawer_front', { size: new THREE.Vector3(0.54, 0.2, 0.015), pos: new THREE.Vector3(0, 0.1, 0.19), mass: drawerMass });
 
-    return { group, joints, category: this.category, config: cfg, toMJCF: () => generateMJCF('cabinet', joints, meshGeometries) };
+    const collisionHints = new Map<string, 'box' | 'sphere' | 'cylinder'>();
+    collisionHints.set('cab_top', 'box');
+    collisionHints.set('cab_bottom', 'box');
+    collisionHints.set('cab_left', 'box');
+    collisionHints.set('cab_right', 'box');
+    collisionHints.set('cabinet_door', 'box');
+    collisionHints.set('cabinet_drawer_front', 'box');
+
+    const simReady: SimReadyMetadata = {
+      density: 600,
+      friction: 0.5,
+      restitution: 0.2,
+      rootBodyStatic: true,
+      collisionHints,
+    };
+
+    return {
+      group,
+      joints,
+      category: this.category,
+      config: cfg,
+      toMJCF: () => generateMJCF('cabinet', joints, meshGeometries),
+      toURDF: (options?: URDFExportOptions) => generateURDF('cabinet', joints, meshGeometries, { includeInertial: true, includeCollision: true, estimateMassFromGeometry: true, defaultDensity: 600, ...options }),
+      toUSD: () => generateUSD('cabinet', joints, meshGeometries),
+      meshGeometries,
+      simReady,
+    };
   }
 
   private createSphere(name: string, radius: number, material: THREE.Material, position: THREE.Vector3): THREE.Mesh {

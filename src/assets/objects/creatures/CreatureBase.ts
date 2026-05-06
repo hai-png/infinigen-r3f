@@ -129,8 +129,18 @@ export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
   }
 
   /**
-   * Generate a creature using the BodyPlanSystem framework.
-   * This replaces the old simple ellipsoid+sphere generate().
+   * Generate a creature using the abstract method chain (Template Method pattern).
+   *
+   * The chain is: generateBodyCore → generateHead → generateLimbs →
+   * generateAppendages → applySkin. Each step delegates to subclass
+   * implementations, ensuring that CreatureBase.generate() produces a
+   * complete creature for every creature type — not just through
+   * species-specific overloads.
+   *
+   * Subclasses may override generate() with species-specific signatures
+   * (e.g. UnderwaterGenerator.generate('jellyfish')), but this base
+   * implementation serves as the canonical template for assembling a
+   * creature from its abstract parts.
    */
   generate(): Group {
     const group = new Group();
@@ -139,53 +149,77 @@ export abstract class CreatureBase extends BaseObjectGenerator<CreatureParams> {
     const s = this.params.size;
     const bodyPlanType = this.getBodyPlanType();
 
-    // 1. Resolve body plan
+    // 1. Resolve body plan (available to subclasses via this.resolvedBodyPlan)
     this.resolvedBodyPlan = this.bodyPlanSystem.createBodyPlan(bodyPlanType, s);
 
-    // 2. Generate skin config
+    // 2. Generate skin config (available to subclasses via this.skinConfig)
     this.skinConfig = this.skinSystem.createSkinConfig(bodyPlanType);
-    const primaryColor = this.skinConfig.primaryColor.clone();
-    const secondaryColor = this.skinConfig.secondaryColor.clone();
 
-    // 3. Generate torso
-    const torso = this.torsoGenerator.generate(this.resolvedBodyPlan, primaryColor);
-    group.add(torso);
+    // 3. Assemble creature through the abstract method chain
+    const body = this.generateBodyCore();
+    if (body) group.add(body);
 
-    // 4. Generate head
-    const head = this.headGenerator.generate(this.resolvedBodyPlan, primaryColor, secondaryColor);
-    group.add(head);
+    const head = this.generateHead();
+    if (head) group.add(head);
 
-    // 5. Generate legs
-    const legs = this.limbGenerator.generateLegs(this.resolvedBodyPlan, primaryColor);
-    legs.forEach(leg => group.add(leg));
+    const limbs = this.generateLimbs();
+    limbs.forEach(limb => { if (limb) group.add(limb); });
 
-    // 6. Generate wings (avian)
-    if (this.resolvedBodyPlan.hasWings && bodyPlanType === 'avian') {
-      const wings = this.limbGenerator.generateWings(this.resolvedBodyPlan, secondaryColor);
-      wings.forEach(w => group.add(w));
-    }
+    const appendages = this.generateAppendages();
+    appendages.forEach(appendage => { if (appendage) group.add(appendage); });
 
-    // 7. Generate fins (aquatic)
-    if (bodyPlanType === 'aquatic') {
-      const fins = this.limbGenerator.generateFins(this.resolvedBodyPlan, secondaryColor);
-      fins.forEach(f => group.add(f));
-    }
+    // 4. Apply skin material to all meshes via applySkin + applySkinToGroup
+    const baseMaterials = this.collectMaterials(group);
+    const skinnedMaterials = this.applySkin(baseMaterials);
+    this.applySkinnedMaterials(group, skinnedMaterials, baseMaterials);
 
-    // 8. Generate tail
-    if (this.resolvedBodyPlan.hasTail) {
-      const tail = this.tailGenerator.generate(this.resolvedBodyPlan, primaryColor, secondaryColor);
-      group.add(tail);
-    }
-
-    // 9. Apply skin material to all meshes
+    // Also apply the CreatureSkinSystem material for texture patterns
     this.applySkinToGroup(group, this.skinConfig);
 
-    // Store body plan and skin config in userData
+    // Store metadata
     group.userData.bodyPlan = this.resolvedBodyPlan;
     group.userData.skinConfig = this.skinConfig;
     group.userData.creatureType = this.params.creatureType;
 
     return group;
+  }
+
+  /**
+   * Collect all MeshStandardMaterial instances from a group's meshes.
+   * Used to build the material array for applySkin().
+   */
+  private collectMaterials(group: Group): Material[] {
+    const materials: Material[] = [];
+    group.traverse((child) => {
+      if (child instanceof Mesh && child.material instanceof MeshStandardMaterial) {
+        materials.push(child.material);
+      }
+    });
+    return materials;
+  }
+
+  /**
+   * Apply skinned materials back to the meshes in the group,
+   * matching by index with the original materials array.
+   * Skips special parts (eyes, mouth, etc.) that should keep their own materials.
+   */
+  private applySkinnedMaterials(group: Group, skinned: Material[], original: Material[]): void {
+    let matIndex = 0;
+    group.traverse((child) => {
+      if (child instanceof Mesh && child.material instanceof MeshStandardMaterial) {
+        const name = child.name.toLowerCase();
+        const isSpecialPart = name.includes('eye') || name.includes('pupil') ||
+          name.includes('sclera') || name.includes('nostril') ||
+          name.includes('fang') || name.includes('beak') ||
+          name.includes('horn') || name.includes('mouth') ||
+          name.includes('foot') || name.includes('inner');
+
+        if (!isSpecialPart && matIndex < skinned.length) {
+          child.material = skinned[matIndex] as MeshStandardMaterial;
+        }
+        matIndex++;
+      }
+    });
   }
 
   /**

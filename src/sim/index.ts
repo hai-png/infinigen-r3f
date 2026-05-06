@@ -20,6 +20,8 @@ export type {
   SimRigidBodyConfig,
   SimJointConfig,
   SimArticulatedObjectResult,
+  SimArticulatedObjectFullResult,
+  CreateArticulatedObjectConfig,
 } from './SimFactory';
 
 // Physics exporters

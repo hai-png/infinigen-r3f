@@ -32,3 +32,28 @@ export {
   type SurfaceShaderConfig,
   type SDFDisplacementUniforms,
 } from './GPUSurfaceShaders';
+
+export {
+  GPUSDFEvaluator,
+  DEFAULT_GPU_SDF_EVALUATOR_CONFIG,
+  buildCompositionFromRegistry,
+  makeSphereElement,
+  makeBoxElement,
+  makeCylinderElement,
+  makeTorusElement,
+  makeConeElement,
+  makeSegmentElement,
+  type GPUSDFEvaluatorConfig,
+  type SDFEvaluationResult,
+} from './GPUSDFEvaluator';
+
+export {
+  WGSL_SDF_PRIMITIVES,
+  WGSL_SDF_COMBINATORS,
+  WGSL_SDF_TRANSFORMS,
+  ALL_WGSL_SDF_FUNCTIONS,
+  SDF_ELEMENT_FLOATS,
+  SDFPrimitiveType,
+  SDFCombinatorType,
+  type SDFElementDesc,
+} from './WGSLSDFFunctions';

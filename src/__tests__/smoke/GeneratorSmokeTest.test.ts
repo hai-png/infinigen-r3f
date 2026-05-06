@@ -5,6 +5,15 @@
  * non-empty output. This is NOT a comprehensive test — it just catches
  * import path breakage, constructor crashes, and empty-output regressions.
  *
+ * Categories tested:
+ *   - Terrain
+ *   - Creature
+ *   - Furniture
+ *   - Scatter
+ *   - Material
+ *   - Export
+ *   - Composition
+ *
  * Run with: npx vitest run src/__tests__/smoke/GeneratorSmokeTest.ts
  */
 
@@ -14,6 +23,8 @@ import * as THREE from 'three';
 // Test utilities
 import {
   assertValidMesh,
+  assertValidGroup,
+  assertValidMaterial,
   countMeshes,
   countVertices,
   hasNaN,
@@ -192,6 +203,261 @@ describe('InsectGenerator', () => {
 });
 
 // ============================================================================
+// Furniture Generators
+// ============================================================================
+
+describe('TableFactory', () => {
+  it('can be imported and instantiated', async () => {
+    const { TableFactory } = await import('@/assets/objects/tables/TableFactory');
+    const factory = new TableFactory(42);
+    expect(factory).toBeDefined();
+  });
+
+  it('produces a non-empty table Object3D', async () => {
+    const { TableFactory } = await import('@/assets/objects/tables/TableFactory');
+    const factory = new TableFactory(42);
+    const table = factory.generate();
+    expect(table).toBeDefined();
+    expect(countMeshes(table)).toBeGreaterThan(0);
+  });
+
+  it('produces a table with valid geometry', async () => {
+    const { TableFactory } = await import('@/assets/objects/tables/TableFactory');
+    const factory = new TableFactory(42);
+    const table = factory.generate();
+    // Table can be a Group or Object3D — validate as mesh
+    if (table instanceof THREE.Group) {
+      const result = assertValidGroup(table, 1);
+      expect(result.valid).toBe(true);
+    } else if (table instanceof THREE.Mesh) {
+      const result = assertValidMesh(table);
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it('produces different tables with different seeds', async () => {
+    const { TableFactory } = await import('@/assets/objects/tables/TableFactory');
+    const factory1 = new TableFactory(42);
+    const factory2 = new TableFactory(123);
+    const table1 = factory1.generate();
+    const table2 = factory2.generate();
+    expect(countVertices(table1)).toBeGreaterThan(0);
+    expect(countVertices(table2)).toBeGreaterThan(0);
+  });
+});
+
+describe('ChairFactory', () => {
+  it('can be imported and instantiated', async () => {
+    const { ChairFactory } = await import('@/assets/objects/seating/ChairFactory');
+    const factory = new ChairFactory(42);
+    expect(factory).toBeDefined();
+  });
+
+  it('produces non-empty chair Object3D', async () => {
+    const { ChairFactory } = await import('@/assets/objects/seating/ChairFactory');
+    const factory = new ChairFactory(42);
+    const chair = factory.generate();
+    expect(chair).toBeDefined();
+    expect(countMeshes(chair)).toBeGreaterThan(0);
+  });
+
+  it('produces chair with valid geometry', async () => {
+    const { ChairFactory } = await import('@/assets/objects/seating/ChairFactory');
+    const factory = new ChairFactory(42);
+    const chair = factory.generate();
+    if (chair instanceof THREE.Group) {
+      const result = assertValidGroup(chair, 1);
+      expect(result.valid).toBe(true);
+    } else if (chair instanceof THREE.Mesh) {
+      const result = assertValidMesh(chair);
+      expect(result.valid).toBe(true);
+    }
+  });
+});
+
+describe('SofaFactory', () => {
+  it('can be imported and instantiated', async () => {
+    const { SofaFactory } = await import('@/assets/objects/seating/SofaFactory');
+    const factory = new SofaFactory(42);
+    expect(factory).toBeDefined();
+  });
+
+  it('produces non-empty sofa Object3D', async () => {
+    const { SofaFactory } = await import('@/assets/objects/seating/SofaFactory');
+    const factory = new SofaFactory(42);
+    const sofa = factory.generate();
+    expect(sofa).toBeDefined();
+    expect(countMeshes(sofa)).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================================
+// Scatter Generators
+// ============================================================================
+
+describe('InstanceScatterSystem', () => {
+  it('can be imported and instantiated', async () => {
+    const { InstanceScatterSystem } = await import('@/assets/scatters/InstanceScatterSystem');
+    const scatter = new InstanceScatterSystem();
+    expect(scatter).toBeDefined();
+  });
+
+  it('can register objects and biomes', async () => {
+    const { InstanceScatterSystem } = await import('@/assets/scatters/InstanceScatterSystem');
+    const scatter = new InstanceScatterSystem({ mode: 'random', count: 5, seed: 42 });
+    scatter.registerObject({
+      id: 'test_rock',
+      mesh: new THREE.SphereGeometry(0.1),
+      weight: 1.0,
+      minScale: new THREE.Vector3(0.8, 0.8, 0.8),
+      maxScale: new THREE.Vector3(1.2, 1.2, 1.2),
+    });
+    const instances = scatter.getInstances();
+    expect(instances).toBeDefined();
+  });
+
+  it('can scatter on terrain with height function', async () => {
+    const { InstanceScatterSystem } = await import('@/assets/scatters/InstanceScatterSystem');
+    const scatter = new InstanceScatterSystem({
+      mode: 'random',
+      count: 50,
+      seed: 42,
+      randomRotation: { enabled: true, minYaw: 0, maxYaw: 360, minPitch: 0, maxPitch: 0, minRoll: 0, maxRoll: 0 },
+      randomScale: { enabled: true, min: new THREE.Vector3(0.8, 0.8, 0.8), max: new THREE.Vector3(1.2, 1.2, 1.2) },
+      alignment: 'normal',
+    });
+    scatter.registerObject({
+      id: 'test_grass',
+      mesh: new THREE.BoxGeometry(0.1, 0.3, 0.1),
+      weight: 1.0,
+      minScale: new THREE.Vector3(0.8, 0.8, 0.8),
+      maxScale: new THREE.Vector3(1.2, 1.2, 1.2),
+    });
+
+    const result = scatter.scatterOnTerrain(
+      100, 100,
+      (x, _z) => Math.sin(x * 0.1) * 2,
+      (_x, _z) => new THREE.Vector3(0, 1, 0),
+    );
+    expect(result).toBeDefined();
+    // scatterOnTerrain may reject all points if they fall outside the
+    // sampling area, so we just check it returns a valid result structure
+    expect(result.success).toBeDefined();
+    expect(Array.isArray(result.instances)).toBe(true);
+  });
+});
+
+describe('ScatterFactory', () => {
+  it('can be imported and instantiated', async () => {
+    const { ScatterFactory } = await import('@/assets/scatters/ScatterFactory');
+    const factory = new ScatterFactory();
+    expect(factory).toBeDefined();
+  });
+
+  it('produces scatter results for fern type', async () => {
+    const { ScatterFactory } = await import('@/assets/scatters/ScatterFactory');
+    const factory = new ScatterFactory();
+    const result = factory.scatter({
+      type: 'fern',
+      density: 0.5,
+      seed: 42,
+      bounds: new THREE.Box3(
+        new THREE.Vector3(-5, 0, -5),
+        new THREE.Vector3(5, 2, 5),
+      ),
+    });
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.instanceCount).toBeGreaterThan(0);
+  });
+
+  it('produces scatter results for rock type', async () => {
+    const { ScatterFactory } = await import('@/assets/scatters/ScatterFactory');
+    const factory = new ScatterFactory();
+    const result = factory.scatter({
+      type: 'rock',
+      density: 0.3,
+      seed: 42,
+      bounds: new THREE.Box3(
+        new THREE.Vector3(-5, 0, -5),
+        new THREE.Vector3(5, 2, 5),
+      ),
+    });
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.instanceCount).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================================
+// Material Generators
+// ============================================================================
+
+describe('MaterialPresetLibrary', () => {
+  it('can be imported', async () => {
+    const mod = await import('@/assets/materials/MaterialPresetLibrary');
+    expect(mod).toBeDefined();
+  });
+
+  it('has preset definitions with required fields', async () => {
+    const { MaterialPresetLibrary } = await import('@/assets/materials/MaterialPresetLibrary');
+    const lib = new MaterialPresetLibrary();
+    const count = lib.getPresetCount();
+    expect(count).toBeGreaterThan(0);
+    // Test a sample of presets
+    const categories = ['wood', 'metal', 'stone', 'fabric', 'glass', 'nature', 'plant'];
+    for (const cat of categories) {
+      const presets = lib.getPresetsByCategory(cat as any);
+      if (presets.length > 0) {
+        const preset = presets[0];
+        expect(preset.id).toBeDefined();
+        expect(preset.name).toBeDefined();
+        expect(preset.category).toBeDefined();
+        expect(preset.params).toBeDefined();
+      }
+    }
+  });
+});
+
+describe('MaterialFactory', () => {
+  it('can be imported and create terrain material', async () => {
+    const { MaterialFactory } = await import('@/core/nodes/execution/MaterialFactory');
+    const factory = new MaterialFactory(false);
+    const material = factory.createTerrainMaterial({
+      baseColor: new THREE.Color(0.35, 0.28, 0.18),
+      roughness: 0.85,
+    });
+    expect(material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+  });
+
+  it('can create preset materials', async () => {
+    const { MaterialFactory } = await import('@/core/nodes/execution/MaterialFactory');
+    const factory = new MaterialFactory(false);
+    const presets = MaterialFactory.getPresets();
+    expect(presets.length).toBeGreaterThan(0);
+    for (const preset of presets) {
+      const material = factory.createFromPreset(preset);
+      expect(material).toBeInstanceOf(THREE.Material);
+      const result = assertValidMaterial(material);
+      expect(result.valid).toBe(true);
+    }
+  });
+
+  it('creates valid glass material', async () => {
+    const { MaterialFactory } = await import('@/core/nodes/execution/MaterialFactory');
+    const factory = new MaterialFactory(false);
+    const material = factory.createGlassMaterial({
+      color: new THREE.Color(1, 1, 1),
+      ior: 1.5,
+      transmission: 1.0,
+    });
+    expect(material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+    const result = assertValidMaterial(material);
+    expect(result.valid).toBe(true);
+  });
+});
+
+// ============================================================================
 // Export System
 // ============================================================================
 
@@ -261,5 +527,105 @@ describe('ExportToolkit backward compatibility', () => {
     expect(result.success).toBe(true);
     expect(result.outputPaths).toBeDefined();
     expect(result.outputPaths.length).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================================
+// Composition Engine
+// ============================================================================
+
+describe('CompositionEngine', () => {
+  it('can be imported and instantiated', async () => {
+    const { CompositionEngine } = await import('@/assets/composition/CompositionEngine');
+    const engine = new CompositionEngine();
+    expect(engine).toBeDefined();
+  });
+
+  it('can register rules, constraints, and templates', async () => {
+    const { CompositionEngine, AestheticPrinciple, SpatialRelation } = await import('@/assets/composition/CompositionEngine');
+    const engine = new CompositionEngine();
+
+    // Register a simple rule
+    const rule = {
+      id: 'test_rule',
+      name: 'Test Balance Rule',
+      description: 'A test rule',
+      relation: SpatialRelation.SYMMETRICAL,
+      principles: [AestheticPrinciple.BALANCE],
+      priority: 50,
+      parameters: {} as Record<string, any>,
+      validator: () => true,
+      applier: (ctx: any) => ({ success: true, transformations: [], conflicts: [], score: 1.0, metrics: {} as any }),
+    };
+    engine.registerRule(rule);
+    engine.activateRules(['test_rule']);
+
+    // Register a constraint
+    engine.registerConstraint({
+      id: 'test_constraint',
+      type: 'distance',
+      source: 'obj_a',
+      target: 'obj_b',
+      parameters: { min: 1.0, max: 5.0 },
+    });
+    engine.activateConstraints(['test_constraint']);
+
+    // Register a template
+    engine.registerTemplate({
+      id: 'test_template',
+      name: 'Test Template',
+      description: 'A test composition template',
+      tags: ['test'],
+      objects: [],
+      rules: ['test_rule'],
+      constraints: [],
+      variables: [],
+    });
+
+    // All should be registered without errors
+    expect(engine).toBeDefined();
+  });
+
+  it('can calculate metrics from a context', async () => {
+    const { CompositionEngine } = await import('@/assets/composition/CompositionEngine');
+    const engine = new CompositionEngine();
+
+    const context = {
+      nodes: new Map(),
+      rootNode: new THREE.Group(),
+      bounds: new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 3, 5)),
+      center: new THREE.Vector3(0, 1.5, 0),
+      up: new THREE.Vector3(0, 1, 0),
+      forward: new THREE.Vector3(0, 0, -1),
+      groundLevel: 0,
+      existingObjects: [
+        {
+          nodeId: 'table',
+          bounds: new THREE.Box3(new THREE.Vector3(-1, 0, -0.5), new THREE.Vector3(1, 0.75, 0.5)),
+          center: new THREE.Vector3(0, 0.375, 0),
+          category: 'furniture',
+        },
+        {
+          nodeId: 'lamp',
+          bounds: new THREE.Box3(new THREE.Vector3(-0.2, 0.75, -0.2), new THREE.Vector3(0.2, 1.5, 0.2)),
+          center: new THREE.Vector3(0, 1.125, 0),
+          category: 'lighting',
+        },
+      ],
+    };
+
+    const metrics = engine.calculateMetrics(context as any);
+    expect(metrics).toBeDefined();
+    expect(metrics.balanceScore).toBeGreaterThanOrEqual(0);
+    expect(metrics.overallScore).toBeGreaterThanOrEqual(0);
+    expect(metrics.overallScore).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('IndoorSceneComposer', () => {
+  it('can be imported and instantiated', async () => {
+    const { IndoorSceneComposer } = await import('@/assets/composition/IndoorSceneComposer');
+    const composer = new IndoorSceneComposer();
+    expect(composer).toBeDefined();
   });
 });

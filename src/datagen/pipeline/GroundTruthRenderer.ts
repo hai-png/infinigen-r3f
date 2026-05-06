@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { createCanvas } from '@/assets/utils/CanvasUtils';
 import { OpticalFlowPass, type OpticalFlowConfig } from '../../core/rendering/postprocess/OpticalFlowPass';
 import { VelocityBuffer, type CameraVelocityData } from '../../core/rendering/VelocityBuffer';
+import { encodeEXR } from './EXREncoder';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,6 +59,31 @@ export interface GTRenderResult {
   objectMap: Map<number, string>;
   instanceMap: Map<number, string>;
   materialMap: Map<number, string>;
+}
+
+/**
+ * EXR export format configuration.
+ * Depth and flow passes default to EXR (float precision); segmentation masks can remain as PNG.
+ */
+export type GTExportFormat = 'png' | 'exr';
+
+export interface GTExportConfig {
+  /** Per-channel export format. Defaults to PNG for segmentation, EXR for depth/flow. */
+  formats?: Partial<Record<GTChannel, GTExportFormat>>;
+  /** Whether to include EXR float data alongside PNG for channels set to 'exr' */
+  includeEXRData?: boolean;
+}
+
+/**
+ * Result of exporting GT channels, including both PNG data URLs and raw EXR-compatible float buffers.
+ */
+export interface GTExportResult {
+  /** PNG data URLs (always available) */
+  pngs: Map<string, string>;
+  /** Raw float buffers for EXR export (depth, flow, normal, opticalFlow) */
+  exrBuffers: Map<string, { data: Float32Array; width: number; height: number; channels: number }>;
+  /** Serialized EXR file data for channels that requested EXR format */
+  exrFiles: Map<string, ArrayBuffer>;
 }
 
 /**
@@ -200,6 +226,9 @@ export class GroundTruthRenderer {
   /** Internal velocity buffer for tracking object transforms */
   private velocityBuffer: VelocityBuffer;
 
+  /** Last render result, stored for convenience EXR export via exportToEXR(passName) */
+  private lastResult: GTRenderResult | null = null;
+
   constructor(renderer: THREE.WebGLRenderer, config: Partial<GTRenderConfig> = {}) {
     this.renderer = renderer;
     this.config = {
@@ -277,6 +306,9 @@ export class GroundTruthRenderer {
         opticalFlowOptions,
       );
     }
+
+    // Store for convenience EXR export
+    this.lastResult = result;
 
     return result;
   }
@@ -710,26 +742,116 @@ export class GroundTruthRenderer {
   }
 
   /**
-   * Export optical flow as EXR data (floating-point precision).
+   * Export a pass as EXR-encoded data.
+   *
+   * Two calling conventions:
+   *
+   * 1. Convenience — pass name only (uses last render result):
+   *    `exportToEXR('depth')` — encodes depth from the most recent render().
+   *    Supported pass names: 'depth', 'normal', 'flow', 'optical_flow'.
+   *    Segmentation passes ('object_segmentation', etc.) throw because they
+   *    use integer IDs and should be exported as PNG.
+   *
+   * 2. Explicit — provide raw data:
+   *    `exportToEXR('depth', data, width, height, 1)`
+   *    `exportToEXR('flow', data, width, height, 2)`
+   *
+   * @param passName - Channel identifier (e.g. 'depth', 'flow', 'normal', 'optical_flow')
+   * @param data     - Float32Array of pixel data (row-major, channels interleaved).
+   *                   If omitted, reads from the last render result.
+   * @param width    - Image width in pixels (required if data is provided)
+   * @param height   - Image height in pixels (required if data is provided)
+   * @param channels - Number of channels: 1 (depth), 2 (flow), 3 (normal/RGB), or 4 (RGBA).
+   *                   Defaults to 1. Ignored when using convenience form.
+   * @returns ArrayBuffer containing the EXR file bytes
+   * @throws Error if convenience form is used without a prior render, or for segmentation passes
+   */
+  exportToEXR(
+    passName: string,
+    data?: Float32Array,
+    width?: number,
+    height?: number,
+    channels?: number,
+  ): ArrayBuffer {
+    // Convenience form: encode from last render result
+    if (data === undefined) {
+      if (!this.lastResult) {
+        throw new Error(`exportToEXR('${passName}'): no render result available. Call render() first.`);
+      }
+      return GroundTruthRenderer.passToEXR(passName, this.lastResult);
+    }
+
+    // Explicit form
+    const w = width ?? this.config.width;
+    const h = height ?? this.config.height;
+    const ch = channels ?? 1;
+    const channelNames = ch === 1 ? ['Y'] : ch === 2 ? ['R', 'G'] : ch === 3 ? ['R', 'G', 'B'] : ['R', 'G', 'B', 'A'];
+    return encodeEXR(data, w, h, channelNames);
+  }
+
+  /**
+   * Export optical flow as EXR-encoded data (floating-point precision).
+   *
+   * Produces a proper 2-channel (R, G) EXR file containing the flow vectors.
    *
    * @param result - The GT render result containing opticalFlow data
-   * @returns ArrayBuffer with EXR-encoded flow data
+   * @returns ArrayBuffer with EXR-encoded flow data, or null if no flow data
    */
   static flowToEXR(result: GTRenderResult): ArrayBuffer | null {
     if (!result.opticalFlow) return null;
 
     const { width, height, opticalFlow } = result;
-    // Convert 2-channel flow to 4-channel RGBA for EXR encoding
-    const rgba = new Float32Array(width * height * 4);
-    for (let i = 0; i < width * height; i++) {
-      rgba[i * 4] = opticalFlow[i * 2];       // R = flow_x
-      rgba[i * 4 + 1] = opticalFlow[i * 2 + 1]; // G = flow_y
-      rgba[i * 4 + 2] = 0.0;                    // B = 0
-      rgba[i * 4 + 3] = 1.0;                    // A = 1
-    }
+    return encodeEXR(opticalFlow, width, height, ['R', 'G']);
+  }
 
-    // Return as raw float buffer (for downstream EXR encoder)
-    return rgba.buffer as ArrayBuffer;
+  /**
+   * Export depth as EXR-encoded data (32-bit float, single-channel).
+   *
+   * @param result - The GT render result containing depth data
+   * @returns ArrayBuffer with EXR-encoded depth data, or null if no depth data
+   */
+  static depthToEXR(result: GTRenderResult): ArrayBuffer | null {
+    if (!result.depth) return null;
+    return encodeEXR(result.depth, result.width, result.height, ['Y']);
+  }
+
+  /**
+   * Export a named pass from a GTRenderResult as EXR-encoded data.
+   *
+   * Supported pass names: 'depth', 'normal', 'flow', 'optical_flow'.
+   * Segmentation passes are not supported (use PNG instead).
+   *
+   * @param passName - Channel identifier
+   * @param result   - The GT render result
+   * @returns ArrayBuffer with EXR-encoded data
+   * @throws Error for unsupported pass names or missing data
+   */
+  static passToEXR(passName: string, result: GTRenderResult): ArrayBuffer {
+    switch (passName) {
+      case 'depth':
+        if (!result.depth) throw new Error("passToEXR('depth'): no depth data in result");
+        return encodeEXR(result.depth, result.width, result.height, ['Y']);
+
+      case 'normal':
+        if (!result.normal) throw new Error("passToEXR('normal'): no normal data in result");
+        return encodeEXR(result.normal, result.width, result.height, ['R', 'G', 'B']);
+
+      case 'flow':
+        if (!result.flow) throw new Error("passToEXR('flow'): no flow data in result");
+        return encodeEXR(result.flow, result.width, result.height, ['R', 'G']);
+
+      case 'optical_flow':
+        if (!result.opticalFlow) throw new Error("passToEXR('optical_flow'): no opticalFlow data in result");
+        return encodeEXR(result.opticalFlow, result.width, result.height, ['R', 'G']);
+
+      default:
+        if (passName.endsWith('_segmentation')) {
+          throw new Error(
+            `passToEXR('${passName}'): segmentation masks use integer IDs — export as PNG instead`,
+          );
+        }
+        throw new Error(`passToEXR('${passName}'): unknown pass name`);
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -939,6 +1061,147 @@ export class GroundTruthRenderer {
     }
 
     return pngs;
+  }
+
+  // -----------------------------------------------------------------------
+  // EXR Export Support
+  // -----------------------------------------------------------------------
+
+  /**
+   * Export GT result with configurable per-channel format (PNG or EXR).
+   *
+   * Depth and flow passes default to EXR (float precision).
+   * Segmentation masks default to PNG.
+   *
+   * The EXR encoder is a minimal JavaScript implementation that writes
+   * scan-line based OpenEXR 2.0 files with 32-bit float pixel data.
+   * For production use, a Python bridge approach can be used instead
+   * (send raw pixel data to Python via sendFloatDataToPythonBridge).
+   *
+   * @param result - The GT render result
+   * @param config - Export configuration with per-channel format overrides
+   */
+  static resultToExport(result: GTRenderResult, config: GTExportConfig = {}): GTExportResult {
+    // Always generate PNGs (for visualization)
+    const pngs = GroundTruthRenderer.resultToPNGs(result);
+
+    // Build EXR float buffers
+    const exrBuffers = new Map<string, { data: Float32Array; width: number; height: number; channels: number }>();
+
+    // Depth → 1-channel float EXR
+    if (result.depth) {
+      exrBuffers.set('depth', {
+        data: result.depth,
+        width: result.width,
+        height: result.height,
+        channels: 1,
+      });
+    }
+
+    // Normal → 3-channel float EXR
+    if (result.normal) {
+      exrBuffers.set('normal', {
+        data: result.normal,
+        width: result.width,
+        height: result.height,
+        channels: 3,
+      });
+    }
+
+    // Flow → 2-channel float EXR
+    if (result.flow) {
+      exrBuffers.set('flow', {
+        data: result.flow,
+        width: result.width,
+        height: result.height,
+        channels: 2,
+      });
+    }
+
+    // Optical flow → 2-channel float EXR
+    if (result.opticalFlow) {
+      exrBuffers.set('optical_flow', {
+        data: result.opticalFlow,
+        width: result.width,
+        height: result.height,
+        channels: 2,
+      });
+    }
+
+    // Determine default format per channel
+    const defaultFormats: Record<GTChannel, GTExportFormat> = {
+      depth: 'exr',
+      normal: 'exr',
+      flow: 'exr',
+      optical_flow: 'exr',
+      object_segmentation: 'png',
+      instance_segmentation: 'png',
+      material_segmentation: 'png',
+    };
+
+    // Build serialized EXR files for channels that need EXR format
+    const exrFiles = new Map<string, ArrayBuffer>();
+    const formats = config.formats ?? {};
+
+    for (const [channelName, bufferInfo] of exrBuffers) {
+      const channel = channelName as GTChannel;
+      const format = formats[channel] ?? defaultFormats[channel] ?? 'png';
+
+      if (format === 'exr') {
+        const channelNames =
+          bufferInfo.channels === 1 ? ['Y'] :
+          bufferInfo.channels === 2 ? ['R', 'G'] :
+          bufferInfo.channels === 3 ? ['R', 'G', 'B'] :
+          ['R', 'G', 'B', 'A'];
+        const exrData = encodeEXR(
+          bufferInfo.data,
+          bufferInfo.width,
+          bufferInfo.height,
+          channelNames,
+        );
+        exrFiles.set(channelName, exrData);
+      }
+    }
+
+    return { pngs, exrBuffers, exrFiles };
+  }
+
+  /**
+   * Send raw float pixel data to a Python backend for high-quality EXR encoding.
+   * Use this if the minimal JS EXR encoder doesn't meet requirements.
+   *
+   * The Python backend should receive: { channel, width, height, channels, data: base64 }
+   * and use OpenEXR or OpenImageIO to write the file.
+   *
+   * @param channelName - Channel identifier (e.g., 'depth', 'flow')
+   * @param data - Float32Array of pixel data
+   * @param width - Image width
+   * @param height - Image height
+   * @param channels - Number of channels (1=grayscale, 2=flow, 3=RGB)
+   * @returns A request object suitable for sending to the Python bridge
+   */
+  static preparePythonBridgePayload(
+    channelName: string,
+    data: Float32Array,
+    width: number,
+    height: number,
+    channels: number,
+  ): { channel: string; width: number; height: number; channels: number; dataBase64: string } {
+    // Convert Float32Array to base64 for JSON transport
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const dataBase64 = typeof btoa !== 'undefined' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+
+    return {
+      channel: channelName,
+      width,
+      height,
+      channels,
+      dataBase64,
+    };
   }
 }
 

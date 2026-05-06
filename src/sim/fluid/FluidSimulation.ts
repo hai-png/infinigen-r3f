@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { FluidSurfaceRenderer, FluidSurfaceRendererConfig } from './FluidSurfaceRenderer';
 
 /**
  * Smoothed Particle Hydrodynamics (SPH) Fluid Simulation
  * Implements real-time fluid simulation using Lagrangian particles
+ * with optional surface reconstruction via marching cubes.
  */
 
 export interface FluidConfig {
@@ -13,6 +15,14 @@ export interface FluidConfig {
   viscosity: number;
   h: number; // Smoothing radius
   gravity: THREE.Vector3;
+  /** Enable surface reconstruction via marching cubes (default false) */
+  surfaceReconstruction: boolean;
+  /** Grid resolution for surface reconstruction (8-64, default 32) */
+  surfaceGridResolution: number;
+  /** Material preset for the surface mesh (default 'river_water') */
+  surfaceMaterialPreset: string;
+  /** World-space padding around particle bounds for surface extraction (default 0.15) */
+  surfaceBoundsPadding: number;
 }
 
 export interface FluidParticle {
@@ -32,6 +42,11 @@ export class FluidSimulation {
   private enabled: boolean = true;
   private spatialHash: Map<string, number[]> = new Map();
 
+  // Surface reconstruction
+  private surfaceRenderer: FluidSurfaceRenderer | null = null;
+  private surfaceMesh: THREE.Mesh | null = null;
+  private surfaceReconstruction: boolean;
+
   constructor(config: Partial<FluidConfig> = {}) {
     this.config = {
       particleCount: 500,
@@ -41,8 +56,14 @@ export class FluidSimulation {
       viscosity: 250,
       h: 0.1,
       gravity: new THREE.Vector3(0, -9.81, 0),
+      surfaceReconstruction: false,
+      surfaceGridResolution: 32,
+      surfaceMaterialPreset: 'river_water',
+      surfaceBoundsPadding: 0.15,
       ...config,
     };
+
+    this.surfaceReconstruction = this.config.surfaceReconstruction;
 
     this.bounds = new THREE.Box3(
       new THREE.Vector3(-1, -1, -1),
@@ -81,6 +102,11 @@ export class FluidSimulation {
     }
 
     this.createVisualization();
+
+    // Initialize surface renderer if enabled
+    if (this.surfaceReconstruction) {
+      this.initSurfaceRenderer();
+    }
   }
 
   private createVisualization(): void {
@@ -111,6 +137,50 @@ export class FluidSimulation {
     this.geometry = geometry;
   }
 
+  /**
+   * Initialize the surface renderer for marching cubes extraction.
+   */
+  private initSurfaceRenderer(): void {
+    if (this.surfaceRenderer) return;
+
+    const surfaceConfig: Partial<FluidSurfaceRendererConfig> = {
+      gridResolution: this.config.surfaceGridResolution,
+      smoothingRadius: this.config.h,
+      particleMass: this.config.particleMass,
+      restDensity: this.config.restDensity,
+      boundsPadding: this.config.surfaceBoundsPadding,
+      materialPreset: this.config.surfaceMaterialPreset,
+    };
+
+    this.surfaceRenderer = new FluidSurfaceRenderer(surfaceConfig);
+    this.surfaceMesh = this.surfaceRenderer.getMesh();
+    this.surfaceMesh.name = 'FluidSurface';
+
+    // When surface reconstruction is on, make particles semi-transparent
+    // so the surface mesh is visible
+    if (this.points) {
+      const mat = this.points.material as THREE.PointsMaterial;
+      mat.opacity = 0.3;
+    }
+  }
+
+  /**
+   * Clean up the surface renderer.
+   */
+  private destroySurfaceRenderer(): void {
+    if (this.surfaceRenderer) {
+      this.surfaceRenderer.dispose();
+      this.surfaceRenderer = null;
+      this.surfaceMesh = null;
+    }
+
+    // Restore full particle opacity
+    if (this.points) {
+      const mat = this.points.material as THREE.PointsMaterial;
+      mat.opacity = 0.8;
+    }
+  }
+
   public step(dt: number): void {
     if (!this.enabled || this.particles.length === 0) return;
 
@@ -127,6 +197,28 @@ export class FluidSimulation {
     }
 
     this.updateVisualization();
+
+    // Update surface mesh if reconstruction is enabled
+    if (this.surfaceReconstruction && this.surfaceRenderer) {
+      this.updateSurfaceMesh();
+    }
+  }
+
+  /**
+   * Update the surface mesh from current particle positions.
+   * Called automatically each step when surface reconstruction is enabled.
+   */
+  private updateSurfaceMesh(): void {
+    if (!this.surfaceRenderer) return;
+
+    // Extract particle positions
+    const positions: THREE.Vector3[] = [];
+    for (const p of this.particles) {
+      positions.push(p.position);
+    }
+
+    this.surfaceRenderer.update(positions);
+    this.surfaceMesh = this.surfaceRenderer.getMesh();
   }
 
   private hashPosition(pos: THREE.Vector3): string {
@@ -318,8 +410,112 @@ export class FluidSimulation {
     positions.needsUpdate = true;
   }
 
+  // ── Public API ───────────────────────────────────────────────────────────
+
   public getPoints(): THREE.Points | null {
     return this.points;
+  }
+
+  /**
+   * Get the surface mesh (water surface from marching cubes).
+   * Returns null if surface reconstruction is not enabled.
+   */
+  public getSurfaceMesh(): THREE.Mesh | null {
+    return this.surfaceMesh;
+  }
+
+  /**
+   * Get the FluidSurfaceRenderer instance.
+   * Returns null if surface reconstruction is not enabled.
+   */
+  public getSurfaceRenderer(): FluidSurfaceRenderer | null {
+    return this.surfaceRenderer;
+  }
+
+  /**
+   * Enable or disable surface reconstruction.
+   * When enabled, a water surface mesh is generated via marching cubes.
+   * When disabled, only particle point sprites are shown.
+   */
+  public setSurfaceReconstruction(enabled: boolean): void {
+    if (enabled === this.surfaceReconstruction) return;
+
+    this.surfaceReconstruction = enabled;
+
+    if (enabled) {
+      this.initSurfaceRenderer();
+      // Immediately update the surface
+      this.updateSurfaceMesh();
+    } else {
+      this.destroySurfaceRenderer();
+    }
+  }
+
+  /**
+   * Check if surface reconstruction is currently enabled.
+   */
+  public isSurfaceReconstructionEnabled(): boolean {
+    return this.surfaceReconstruction;
+  }
+
+  /**
+   * Set the grid resolution for surface reconstruction.
+   * Valid range: 8–64. Higher = better quality, lower FPS.
+   * Default: 32 for real-time, up to 64 for quality.
+   */
+  public setSurfaceGridResolution(res: number): void {
+    this.config.surfaceGridResolution = Math.max(8, Math.min(64, res));
+    if (this.surfaceRenderer) {
+      this.surfaceRenderer.setGridResolution(this.config.surfaceGridResolution);
+    }
+  }
+
+  /**
+   * Get the current surface grid resolution.
+   */
+  public getSurfaceGridResolution(): number {
+    return this.config.surfaceGridResolution;
+  }
+
+  /**
+   * Set the rest density threshold for the isosurface.
+   * Lower values create a larger surface, higher values create a tighter surface.
+   */
+  public setRestDensity(density: number): void {
+    this.config.restDensity = density;
+    if (this.surfaceRenderer) {
+      this.surfaceRenderer.setRestDensity(density);
+    }
+  }
+
+  /**
+   * Set the material preset for the surface mesh.
+   * Common presets: 'river_water', 'waterfall', 'whitewater'
+   * This takes effect on next surface renderer creation.
+   */
+  public setSurfaceMaterialPreset(preset: string): void {
+    this.config.surfaceMaterialPreset = preset;
+    // Need to recreate the renderer for new material
+    if (this.surfaceReconstruction) {
+      this.destroySurfaceRenderer();
+      this.initSurfaceRenderer();
+      this.updateSurfaceMesh();
+    }
+  }
+
+  /**
+   * Get all particle positions as an array of Vector3.
+   * Useful for external surface extraction or debugging.
+   */
+  public getParticlePositions(): THREE.Vector3[] {
+    return this.particles.map(p => p.position);
+  }
+
+  /**
+   * Get the number of active particles.
+   */
+  public getParticleCount(): number {
+    return this.particles.length;
   }
 
   public addForce(position: THREE.Vector3, force: THREE.Vector3, radius: number = 0.2): void {
@@ -334,11 +530,27 @@ export class FluidSimulation {
 
   public reset(): void {
     this.particles = [];
+    this.destroySurfaceRenderer();
     this.initializeParticles();
   }
 
   public setGravity(gravity: THREE.Vector3): void {
     this.config.gravity.copy(gravity);
+  }
+
+  /**
+   * Set the simulation bounds. Particles that leave this region are
+   * reflected back inside.
+   */
+  public setBounds(bounds: THREE.Box3): void {
+    this.bounds = bounds.clone();
+  }
+
+  /**
+   * Get the simulation bounds.
+   */
+  public getBounds(): THREE.Box3 {
+    return this.bounds.clone();
   }
 
   public dispose(): void {
@@ -348,6 +560,7 @@ export class FluidSimulation {
     if (this.points) {
       (this.points.material as THREE.Material).dispose();
     }
+    this.destroySurfaceRenderer();
   }
 }
 

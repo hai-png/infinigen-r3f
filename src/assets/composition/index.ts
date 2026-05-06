@@ -113,14 +113,35 @@ export {
 export type {
   RoomType,
   SurfaceType,
+  IndoorTimeOfDay,
   IndoorObject,
   SurfaceMaterial,
   DoorPlacement,
   WindowPlacement,
   RoomSpec,
   ConstraintRelation,
+  IndoorDimensions,
+  FurnitureSpec,
+  IndoorLightingParams,
+  RoomGeometry,
+  IndoorCameraParams,
+  IndoorSceneConfig,
   IndoorSceneResult,
 } from './IndoorSceneComposer';
+
+// Scene object factory
+export {
+  SceneObjectFactory,
+  composeAndCreateNatureScene,
+} from './SceneObjectFactory';
+
+export type {
+  NatureSceneObjects,
+  IndoorSceneObjects,
+  SceneFactoryResult,
+  LightingObjectConfig,
+  CameraObjectConfig,
+} from './SceneObjectFactory';
 
 // Scene presets
 export {

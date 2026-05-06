@@ -20,8 +20,8 @@
 import * as THREE from 'three';
 import { SeededRandom, seededFbm, seededNoise3D, seededRidgedMultifractal } from '@/core/util/MathUtils';
 import { SDFPrimitiveResult, TERRAIN_MATERIALS } from './SDFPrimitives';
-import { smoothUnion, sdfUnion } from './SDFCombinators';
-import { SignedDistanceField, extractIsosurface } from './sdf-operations';
+import { smoothUnion, sdfUnion, sdfSubtraction, smoothSubtraction } from './SDFCombinators';
+import { SignedDistanceField, extractIsosurface, sdfBoolean, sdfSmoothUnion, createPrimitiveSDF } from './sdf-operations';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -706,3 +706,406 @@ export function createUpsidedownMountainRangeSDF(
 
 // Re-export MountainInstance for external use
 export type { MountainInstance };
+
+// ---------------------------------------------------------------------------
+// Upside-Down Mountain Inversion SDF Operation
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuration for the inverted mountain ridges SDF.
+ * This operation takes a base terrain SDF and inverts mountain ridges
+ * above a configurable height threshold, creating overhanging/inverted
+ * terrain features by using SDF subtraction.
+ */
+export interface InvertedRidgeConfig {
+  /** Height threshold above which ridges are inverted (world Y) */
+  inversionThreshold: number;
+  /** The base terrain SDF evaluator */
+  baseTerrainSDF: (point: THREE.Vector3) => SDFPrimitiveResult;
+  /** Smooth blend width at the inversion threshold (default 2.0) */
+  blendWidth: number;
+  /** Inversion depth — how far the inverted region extends (default 5.0) */
+  inversionDepth: number;
+  /** Whether to use smooth subtraction (true) or sharp (false) at the boundary */
+  smoothBoundary: boolean;
+  /** Material ID for the inverted region surface */
+  invertedMaterialId: number;
+  /** Noise displacement for the inverted surface (default 0) */
+  inversionNoiseScale: number;
+  /** Noise displacement strength (default 0.5) */
+  inversionNoiseStrength: number;
+  /** Random seed for inversion noise */
+  seed: number;
+}
+
+/** Default configuration for inverted ridge SDF */
+export const DEFAULT_INVERTED_RIDGE_CONFIG: Partial<InvertedRidgeConfig> = {
+  inversionThreshold: 15.0,
+  blendWidth: 2.0,
+  inversionDepth: 5.0,
+  smoothBoundary: true,
+  invertedMaterialId: TERRAIN_MATERIALS.STONE,
+  inversionNoiseScale: 0.3,
+  inversionNoiseStrength: 0.5,
+  seed: 42,
+};
+
+/**
+ * SDF operation that inverts mountain ridges above a height threshold.
+ *
+ * This creates the "upside-down mountain" effect by:
+ * 1. Evaluating the base terrain SDF
+ * 2. Above the threshold height, creating an inverted copy of the terrain
+ *    (the terrain shape is reflected downward)
+ * 3. Subtracting a half-space SDF (above threshold) from the base terrain
+ *    to carve out the inverted region
+ * 4. Combining the result with the inverted terrain shape using SDF subtraction
+ *
+ * The result is terrain where ridges above the threshold appear to hang
+ * downward, like stalactites or inverted mountains.
+ *
+ * @param point - Query point in world space
+ * @param config - Inversion configuration
+ * @returns SDF result with inverted ridges above threshold
+ */
+export function sdInvertedRidge(
+  point: THREE.Vector3,
+  config: Partial<InvertedRidgeConfig> = {},
+): SDFPrimitiveResult {
+  const cfg = { ...DEFAULT_INVERTED_RIDGE_CONFIG, ...config } as InvertedRidgeConfig;
+
+  // 1. Evaluate the base terrain
+  const baseResult = cfg.baseTerrainSDF(point);
+
+  // 2. If point is below the threshold, return the base terrain unchanged
+  if (point.y < cfg.inversionThreshold - cfg.blendWidth) {
+    return baseResult;
+  }
+
+  // 3. Compute an inverted terrain SDF:
+  //    Reflect the point across the threshold plane, evaluate the terrain,
+  //    then negate. This creates an inverted copy of the terrain hanging below.
+  const reflectedPoint = new THREE.Vector3(
+    point.x,
+    2 * cfg.inversionThreshold - point.y, // Reflect Y across threshold
+    point.z,
+  );
+
+  const reflectedResult = cfg.baseTerrainSDF(reflectedPoint);
+
+  // Add inversion noise displacement
+  let inversionNoise = 0;
+  if (cfg.inversionNoiseScale > 0 && cfg.inversionNoiseStrength > 0) {
+    inversionNoise = seededFbm(
+      point.x * cfg.inversionNoiseScale + cfg.seed * 0.1,
+      point.y * cfg.inversionNoiseScale,
+      point.z * cfg.inversionNoiseScale + cfg.seed * 0.1,
+      3, 2.0, 0.5, cfg.seed,
+    ) * cfg.inversionNoiseStrength;
+  }
+
+  // The inverted SDF: the reflected terrain, but we limit its depth
+  // by clamping the distance to the inversion depth
+  const invertedDist = reflectedResult.distance + inversionNoise;
+  const clampedInvertedDist = Math.max(invertedDist, -cfg.inversionDepth);
+
+  // 4. Half-space SDF: everything above the threshold plane
+  //    This defines the region where inversion occurs
+  const halfSpaceDist = point.y - cfg.inversionThreshold;
+
+  // 5. Combine: subtract the half-space from the base terrain to carve
+  //    out the region above the threshold, then add the inverted terrain
+  //    shape in that carved-out region
+
+  // First, compute: carved = baseTerrain - halfSpaceAbove
+  // This removes the part of the terrain above the threshold
+  let carvedDist: number;
+  let carvedMaterial: number;
+
+  if (cfg.smoothBoundary) {
+    carvedDist = smoothSubtraction(baseResult.distance, halfSpaceDist, cfg.blendWidth);
+  } else {
+    carvedDist = sdfSubtraction(baseResult.distance, halfSpaceDist);
+  }
+
+  // Material: where we carved, use the base material; where the half-space
+  // dominates (above threshold), we'll override with inverted material
+  carvedMaterial = baseResult.distance < -halfSpaceDist
+    ? cfg.invertedMaterialId
+    : baseResult.materialId;
+
+  // 6. Union the carved terrain with the inverted terrain
+  //    The inverted terrain fills the carved-out region above the threshold
+  const resultDist = smoothUnion(carvedDist, clampedInvertedDist, cfg.blendWidth);
+  const resultMaterial = clampedInvertedDist < carvedDist
+    ? cfg.invertedMaterialId
+    : carvedMaterial;
+
+  return { distance: resultDist, materialId: resultMaterial };
+}
+
+/**
+ * Create an SDF evaluator that inverts mountain ridges above a threshold.
+ *
+ * This is the factory function version of sdInvertedRidge that returns
+ * a reusable SDF evaluator function.
+ *
+ * @param config - Inversion configuration including the base terrain SDF
+ * @returns SDF evaluator function
+ */
+export function createInvertedRidgeSDF(
+  config: Partial<InvertedRidgeConfig> = {},
+): (point: THREE.Vector3) => SDFPrimitiveResult {
+  return (point: THREE.Vector3): SDFPrimitiveResult => {
+    return sdInvertedRidge(point, config);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Floating Island SDF using SDFOperations (volumetric boolean ops)
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuration for the volumetric floating island SDF.
+ *
+ * Unlike `sdInvertedRidge` which operates point-by-point with SDFCombinators,
+ * this function operates on full `SignedDistanceField` volumes using the
+ * boolean operations (subtraction, union, intersection) from `sdf-operations.ts`.
+ *
+ * The approach:
+ * 1. Rasterize the base terrain into an SDF volume
+ * 2. Create a half-space plane SDF at the inversion threshold
+ * 3. Subtract the half-space from the terrain: terrain - halfSpace
+ *    This carves out the terrain above the threshold, leaving only
+ *    the part below the threshold intact
+ * 4. Create an inverted (reflected) copy of the terrain above the threshold
+ * 5. Intersect the inverted terrain with the half-space to constrain it
+ *    to the region above the threshold
+ * 6. Union the below-threshold terrain with the inverted above-threshold terrain
+ *
+ * The result creates the distinctive "floating island" / "upside-down mountain"
+ * terrain where peaks above the threshold hang downward like stalactites.
+ */
+export interface FloatingIslandSDFConfig {
+  /** Base terrain SDF evaluator function */
+  baseTerrainSDF: (point: THREE.Vector3) => SDFPrimitiveResult;
+  /** Height threshold above which ridges are inverted (world Y) */
+  inversionThreshold: number;
+  /** Inversion depth — how far the inverted region extends below the threshold (default 5.0) */
+  inversionDepth: number;
+  /** Voxel resolution for SDF rasterization (world units per voxel, default 1.0) */
+  resolution: number;
+  /** Bounds of the SDF volume to compute */
+  bounds: THREE.Box3;
+  /** Smooth blend factor for the final union (default 2.0) */
+  blendFactor: number;
+  /** Noise displacement for the inverted surface (default 0) */
+  inversionNoiseScale: number;
+  /** Noise displacement strength (default 0.5) */
+  inversionNoiseStrength: number;
+  /** Material ID for the inverted region surface */
+  invertedMaterialId: number;
+  /** Random seed */
+  seed: number;
+}
+
+/** Default configuration for floating island SDF */
+export const DEFAULT_FLOATING_ISLAND_SDF_CONFIG: Partial<FloatingIslandSDFConfig> = {
+  inversionThreshold: 15.0,
+  inversionDepth: 5.0,
+  resolution: 1.0,
+  blendFactor: 2.0,
+  inversionNoiseScale: 0.3,
+  inversionNoiseStrength: 0.5,
+  invertedMaterialId: TERRAIN_MATERIALS.STONE,
+  seed: 42,
+};
+
+/**
+ * Create a floating island SDF volume using volumetric boolean operations.
+ *
+ * This function uses the `sdfBoolean` and `sdfSmoothUnion` operations from
+ * `sdf-operations.ts` (SDFOperations) to construct floating island terrain:
+ *
+ * 1. **Rasterize base terrain**: Evaluate the base terrain SDF at each voxel
+ *    to create a volumetric SDF.
+ *
+ * 2. **Create half-space plane**: Generate an SDF volume where everything
+ *    above `inversionThreshold` is inside (negative). This is the "cut plane".
+ *
+ * 3. **Subtract**: `terrainBelow = terrain - halfSpaceAbove`
+ *    Using `sdfBoolean(sdfDifference)`, this removes the terrain above the
+ *    threshold, keeping only the terrain below.
+ *
+ * 4. **Create inverted terrain**: For each voxel above the threshold, compute
+ *    the terrain SDF at the reflected point (mirrored across the threshold).
+ *    This creates an upside-down copy of the mountain peaks.
+ *
+ * 5. **Intersect**: `invertedAbove = invertedTerrain ∩ halfSpaceAbove`
+ *    Using `sdfBoolean(sdfIntersection)`, constrain the inverted terrain to
+ *    only exist above the threshold plane.
+ *
+ * 6. **Union**: `result = terrainBelow ∪ invertedAbove`
+ *    Using `sdfSmoothUnion`, combine the below-threshold terrain with the
+ *    inverted peaks hanging above, creating the floating island effect.
+ *
+ * @param config - Floating island configuration
+ * @returns SignedDistanceField with the combined floating island terrain
+ */
+export function createFloatingIslandSDF(
+  config: Partial<FloatingIslandSDFConfig> = {},
+): SignedDistanceField {
+  const cfg = { ...DEFAULT_FLOATING_ISLAND_SDF_CONFIG, ...config } as FloatingIslandSDFConfig;
+
+  if (!cfg.baseTerrainSDF || !cfg.bounds) {
+    throw new Error('FloatingIslandSDFConfig requires baseTerrainSDF and bounds');
+  }
+
+  // Step 1: Rasterize the base terrain into an SDF volume
+  const terrainSDF = new SignedDistanceField({
+    resolution: cfg.resolution,
+    bounds: cfg.bounds,
+    maxDistance: 1e6,
+  });
+
+  for (let gz = 0; gz < terrainSDF.gridSize[2]; gz++) {
+    for (let gy = 0; gy < terrainSDF.gridSize[1]; gy++) {
+      for (let gx = 0; gx < terrainSDF.gridSize[0]; gx++) {
+        const pos = terrainSDF.getPosition(gx, gy, gz);
+        const result = cfg.baseTerrainSDF(pos);
+        terrainSDF.setValueAtGrid(gx, gy, gz, result.distance);
+      }
+    }
+  }
+
+  // Step 2: Create half-space plane SDF (above threshold = inside)
+  // The plane SDF: -(point.y - threshold) = threshold - point.y
+  // Negative above the threshold (inside), positive below (outside)
+  const halfSpaceSDF = new SignedDistanceField({
+    resolution: cfg.resolution,
+    bounds: cfg.bounds,
+    maxDistance: 1e6,
+  });
+
+  for (let gz = 0; gz < halfSpaceSDF.gridSize[2]; gz++) {
+    for (let gy = 0; gy < halfSpaceSDF.gridSize[1]; gy++) {
+      for (let gx = 0; gx < halfSpaceSDF.gridSize[0]; gx++) {
+        const pos = halfSpaceSDF.getPosition(gx, gy, gz);
+        // Half-space: inside (negative) above threshold, outside (positive) below
+        const dist = cfg.inversionThreshold - pos.y;
+        halfSpaceSDF.setValueAtGrid(gx, gy, gz, dist);
+      }
+    }
+  }
+
+  // Step 3: Subtract — terrainBelow = terrain - halfSpace
+  // This removes the terrain above the threshold, keeping terrain below
+  const terrainBelow = sdfBoolean(terrainSDF, halfSpaceSDF, 'difference');
+
+  // Step 4: Create inverted terrain above the threshold
+  // For each voxel above the threshold, evaluate the terrain at the reflected
+  // point and add noise displacement
+  const invertedSDF = new SignedDistanceField({
+    resolution: cfg.resolution,
+    bounds: cfg.bounds,
+    maxDistance: 1e6,
+  });
+
+  for (let gz = 0; gz < invertedSDF.gridSize[2]; gz++) {
+    for (let gy = 0; gy < invertedSDF.gridSize[1]; gy++) {
+      for (let gx = 0; gx < invertedSDF.gridSize[0]; gx++) {
+        const pos = invertedSDF.getPosition(gx, gy, gz);
+
+        // Reflect point across the threshold plane
+        const reflectedPoint = new THREE.Vector3(
+          pos.x,
+          2 * cfg.inversionThreshold - pos.y,
+          pos.z,
+        );
+
+        // Evaluate terrain at the reflected point
+        const reflectedResult = cfg.baseTerrainSDF(reflectedPoint);
+
+        // Add inversion noise displacement
+        let inversionNoise = 0;
+        if (cfg.inversionNoiseScale > 0 && cfg.inversionNoiseStrength > 0) {
+          inversionNoise = seededFbm(
+            pos.x * cfg.inversionNoiseScale + cfg.seed * 0.1,
+            pos.y * cfg.inversionNoiseScale,
+            pos.z * cfg.inversionNoiseScale + cfg.seed * 0.1,
+            3, 2.0, 0.5, cfg.seed,
+          ) * cfg.inversionNoiseStrength;
+        }
+
+        // Clamp inverted depth so the floating islands don't extend too far
+        const invertedDist = Math.max(
+          reflectedResult.distance + inversionNoise,
+          -cfg.inversionDepth,
+        );
+
+        invertedSDF.setValueAtGrid(gx, gy, gz, invertedDist);
+      }
+    }
+  }
+
+  // Step 5: Intersect inverted terrain with half-space (above threshold)
+  // This constrains the inverted terrain to only appear above the threshold
+  const invertedAbove = sdfBoolean(invertedSDF, halfSpaceSDF, 'intersection');
+
+  // Step 6: Smooth union of below-threshold terrain and inverted above-threshold terrain
+  const result = sdfSmoothUnion(terrainBelow, invertedAbove, cfg.blendFactor);
+
+  return result;
+}
+
+/**
+ * Generate a floating island mesh from the volumetric SDF operations.
+ *
+ * This is the high-level convenience function that:
+ * 1. Creates the floating island SDF using `createFloatingIslandSDF`
+ * 2. Extracts the isosurface via marching cubes
+ * 3. Optionally adds vertex colors from material zones
+ *
+ * @param config - Floating island SDF configuration
+ * @returns THREE.BufferGeometry with the floating island terrain mesh
+ */
+export function generateFloatingIslandMesh(
+  config: Partial<FloatingIslandSDFConfig> = {},
+): THREE.BufferGeometry {
+  const sdf = createFloatingIslandSDF(config);
+  const geometry = extractIsosurface(sdf, 0);
+
+  if (geometry.attributes.position.count === 0) {
+    return geometry;
+  }
+
+  // Compute vertex colors based on height relative to the inversion threshold
+  const cfg = { ...DEFAULT_FLOATING_ISLAND_SDF_CONFIG, ...config } as FloatingIslandSDFConfig;
+  const positions = geometry.attributes.position.array as Float32Array;
+  const vertexCount = positions.length / 3;
+  const colors = new Float32Array(vertexCount * 3);
+
+  for (let i = 0; i < vertexCount; i++) {
+    const vx = positions[i * 3];
+    const vy = positions[i * 3 + 1];
+    const vz = positions[i * 3 + 2];
+
+    // Above the threshold = inverted region (floating island surface)
+    // Below the threshold = normal terrain
+    if (vy > cfg.inversionThreshold) {
+      // Inverted region — darker, rocky surface
+      colors[i * 3] = 0.40;     // r
+      colors[i * 3 + 1] = 0.35; // g
+      colors[i * 3 + 2] = 0.30; // b
+    } else {
+      // Normal terrain below threshold
+      colors[i * 3] = 0.50;     // r
+      colors[i * 3 + 1] = 0.45; // g
+      colors[i * 3 + 2] = 0.40; // b
+    }
+  }
+
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeBoundingSphere();
+  return geometry;
+}

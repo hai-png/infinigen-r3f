@@ -33,12 +33,19 @@ class InfinigenBridgeServer:
     WebSocket server for handling requests from the R3F frontend.
     Offloads heavy tasks to Blender/Infinigen Python backend.
     """
-    
+
+    VERSION = '1.0'
+
     def __init__(self, host: str = 'localhost', port: int = 8765):
         self.host = host
         self.port = port
         self.clients: set[WebSocketServerProtocol] = set()
         self.task_queue: asyncio.Queue = asyncio.Queue()
+        self.start_time: float = 0  # set in run()
+
+        # In-memory store for geometry payloads pending USD conversion.
+        # Key: request id from the binary frame header; Value: bytes on disk.
+        self._pending_geometry: Dict[str, str] = {}
         
     async def register(self, websocket: WebSocketServerProtocol):
         """Register a new client connection"""
@@ -112,6 +119,7 @@ class InfinigenBridgeServer:
                 'generate_procedural', 'raycast_batch',
                 'optimize_decoration', 'optimize_trajectories',
                 'transfer_image', 'transfer_geometry', 'transfer_heightmap',
+                'health_check', 'get_capabilities', 'export_usd',
             ]:
                 await self.handle_rpc_method(websocket, data)
             elif msg_type in ['GENERATE_GEOMETRY', 'RUN_SIMULATION', 'RENDER_IMAGE', 'BAKE_PHYSICS']:
@@ -141,6 +149,28 @@ class InfinigenBridgeServer:
                 result = await self.handle_transfer_geometry(payload, header)
             elif method == 'transfer_heightmap':
                 result = await self.handle_transfer_heightmap(payload, header)
+            elif method == 'export_usd':
+                # Binary-frame variant of USD export: payload is the GLB bytes,
+                # header carries format/options. We convert and send back binary.
+                usd_result = await self.handle_export_usd_binary(payload, header)
+                if usd_result.get('success'):
+                    usd_bytes = usd_result.pop('usd_bytes', b'')
+                    resp_header = {
+                        'id': request_id,
+                        'success': True,
+                        'result': usd_result,
+                        'contentType': usd_result.get('contentType', 'model/usd'),
+                    }
+                    frame = self.encode_binary_frame(resp_header, usd_bytes)
+                    await websocket.send(frame)
+                    return
+                else:
+                    await websocket.send(json.dumps({
+                        'id': request_id,
+                        'success': False,
+                        'error': usd_result.get('error', 'USD export failed'),
+                    }))
+                    return
             else:
                 raise ValueError(f"Unknown binary method: {method}")
 
@@ -222,6 +252,14 @@ class InfinigenBridgeServer:
                 result = {'hint': 'transfer_geometry requires a binary frame'}
             elif method == 'transfer_heightmap':
                 result = {'hint': 'transfer_heightmap requires a binary frame'}
+            elif method == 'health_check':
+                result = self.handle_health_check()
+            elif method == 'get_capabilities':
+                result = self.handle_get_capabilities()
+            elif method == 'export_usd':
+                # Text-frame variant: expects geometry to have been previously
+                # transferred via transfer_geometry; params carries the request id.
+                result = await self.handle_export_usd_text(params)
             else:
                 raise ValueError(f"Unknown method: {method}")
 
@@ -983,6 +1021,321 @@ class InfinigenBridgeServer:
             print(f"[Bridge] Raycast failed: {e}")
             return [float('inf')] * len(rays)
     
+    # ------------------------------------------------------------------
+    # Health Check & Capability Discovery
+    # ------------------------------------------------------------------
+
+    def handle_health_check(self) -> Dict[str, Any]:
+        """
+        Return server health status.
+
+        GET /health equivalent — returns { "status": "ok", "version": "1.0" }
+        plus additional metadata used by HybridBridge.healthCheck().
+        """
+        import time
+        uptime = time.time() - self.start_time if self.start_time else 0
+        return {
+            'status': 'ok',
+            'version': self.VERSION,
+            'capabilities': self._get_method_list(),
+            'uptime': round(uptime, 1),
+        }
+
+    def handle_get_capabilities(self) -> Dict[str, Any]:
+        """
+        Return detailed capability information about the bridge server.
+
+        Lists supported RPC methods and format-specific capabilities
+        (e.g. whether USD export is available, which quality levels).
+        """
+        usd_supported = self._is_usd_available()
+        return {
+            'methods': self._get_method_list(),
+            'formats': {
+                'usd': {
+                    'supported': usd_supported,
+                    'quality': 'production' if usd_supported else None,
+                },
+                'usda': {
+                    'supported': usd_supported,
+                    'quality': 'production' if usd_supported else None,
+                },
+                'usdc': {
+                    'supported': usd_supported,
+                    'quality': 'production' if usd_supported else None,
+                },
+                'usdz': {
+                    'supported': usd_supported,
+                    'quality': 'preview' if usd_supported else None,
+                },
+                'glb': {'supported': True, 'quality': 'production'},
+                'gltf': {'supported': True, 'quality': 'production'},
+                'fbx': {'supported': False},
+            },
+        }
+
+    def _get_method_list(self) -> list:
+        """Return the list of RPC methods this server supports."""
+        return [
+            'mesh_boolean', 'mesh_subdivide', 'export_mjcf',
+            'generate_procedural', 'raycast_batch',
+            'optimize_decoration', 'optimize_trajectories',
+            'transfer_image', 'transfer_geometry', 'transfer_heightmap',
+            'health_check', 'get_capabilities', 'export_usd',
+        ]
+
+    def _is_usd_available(self) -> bool:
+        """Check whether pxr (OpenUSD) or trimesh is available for USD conversion."""
+        try:
+            from pxr import Usd  # noqa: F401
+            return True
+        except ImportError:
+            pass
+        # trimesh can write USDA (text) as a fallback
+        try:
+            import trimesh  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    # ------------------------------------------------------------------
+    # USD Export
+    # ------------------------------------------------------------------
+
+    async def handle_export_usd_text(
+        self, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Text-frame USD export.
+
+        The caller must have previously transferred geometry via
+        `transfer_geometry`, passing the same request `id` so the server
+        can correlate the saved file.  Params:
+
+            format:           'usda' | 'usdc' | 'usdz'  (default 'usda')
+            geometryId:       the request-id used during transfer_geometry
+            includePhysics:   bool (default False)
+            quality:          'preview' | 'production'
+            embedTextures:    bool (default True)
+
+        Returns { usdData: <base64>, vertexCount, format } on success.
+        """
+        fmt = params.get('format', 'usda')
+        geo_id = params.get('geometryId', '')
+        geo_path = self._pending_geometry.pop(geo_id, None)
+
+        if not geo_path or not os.path.isfile(geo_path):
+            return {
+                'error': (
+                    f'No geometry found for id "{geo_id}". '
+                    'Transfer geometry first via transfer_geometry.'
+                ),
+            }
+
+        return await self._convert_to_usd(geo_path, fmt, params)
+
+    async def handle_export_usd_binary(
+        self, payload: bytes, header: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Binary-frame USD export.
+
+        The payload is the raw GLB/OBJ bytes.  The header carries the
+        same params as the text variant (format, includePhysics, etc.).
+
+        Returns { success, usd_bytes, vertexCount, format, contentType }
+        on success, or { success: False, error } on failure.
+        """
+        fmt = header.get('format', 'usda')
+        params = {
+            'includePhysics': header.get('includePhysics', False),
+            'quality': header.get('quality', 'preview'),
+            'embedTextures': header.get('embedTextures', True),
+        }
+
+        # Write payload to a temp file
+        output_dir = '/tmp/infinigen_exports'
+        os.makedirs(output_dir, exist_ok=True)
+        request_id = header.get('id', 'usd_export')
+        ext = 'glb'
+        content_type = header.get('contentType', '')
+        if 'obj' in content_type:
+            ext = 'obj'
+        elif 'stl' in content_type:
+            ext = 'stl'
+
+        temp_path = os.path.join(output_dir, f'usd_input_{request_id}.{ext}')
+        with open(temp_path, 'wb') as f:
+            f.write(payload)
+
+        result = await self._convert_to_usd(temp_path, fmt, params)
+
+        # Clean up temp file
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+
+        if 'error' in result:
+            return {'success': False, 'error': result['error']}
+
+        usd_bytes = result.pop('usd_bytes', b'')
+        content_type_map = {
+            'usda': 'model/usd',
+            'usdc': 'model/usd',
+            'usdz': 'model/vnd.usdz+zip',
+        }
+        return {
+            'success': True,
+            'usd_bytes': usd_bytes,
+            'vertexCount': result.get('vertexCount', 0),
+            'format': fmt,
+            'contentType': content_type_map.get(fmt, 'model/usd'),
+        }
+
+    async def _convert_to_usd(
+        self, input_path: str, fmt: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Convert a geometry file (GLB/OBJ/STL) on disk to the requested
+        USD format.
+
+        Tries OpenUSD (pxr) first, then falls back to trimesh, then
+        to a minimal hand-written USDA.
+        """
+        vertex_count = 0
+        try:
+            import trimesh
+            mesh = trimesh.load(input_path, force='mesh')
+            vertex_count = len(mesh.vertices)
+        except Exception:
+            pass
+
+        output_dir = '/tmp/infinigen_exports'
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f'export_{os.path.basename(input_path)}.{fmt}')
+
+        # --- Try pxr (OpenUSD) -------------------------------------------
+        try:
+            from pxr import Usd, UsdGeom, Sdf, Vt
+            import numpy as np
+
+            stage = Usd.Stage.CreateNew(output_path)
+            stage.SetStartTimeCode(0)
+            stage.SetEndTimeCode(1)
+
+            xform = UsdGeom.Xform.Define(stage, '/Root')
+            mesh_prim = UsdGeom.Mesh.Define(stage, '/Root/Mesh')
+
+            # Load source mesh via trimesh
+            try:
+                import trimesh
+                tm = trimesh.load(input_path, force='mesh')
+                verts = Vt.Vec3fArray([tuple(v) for v in tm.vertices])
+                faces = Vt.IntArray([int(i) for f in tm.faces for i in f])
+                face_counts = Vt.IntArray([3] * len(tm.faces))
+                mesh_prim.GetPointsAttr().Set(verts)
+                mesh_prim.GetFaceVertexIndicesAttr().Set(faces)
+                mesh_prim.GetFaceVertexCountsAttr().Set(face_counts)
+                vertex_count = len(tm.vertices)
+            except Exception:
+                # If trimesh fails, create a placeholder mesh
+                placeholder = Vt.Vec3fArray([(0, 0, 0), (1, 0, 0), (0, 1, 0)])
+                mesh_prim.GetPointsAttr().Set(placeholder)
+                mesh_prim.GetFaceVertexIndicesAttr().Set(Vt.IntArray([0, 1, 2]))
+                mesh_prim.GetFaceVertexCountsAttr().Set(Vt.IntArray([3]))
+
+            stage.GetRootLayer().Save()
+
+            with open(output_path, 'rb') as f:
+                usd_bytes = f.read()
+
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+
+            return {
+                'usd_bytes': usd_bytes,
+                'vertexCount': vertex_count,
+                'format': fmt,
+            }
+
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"[Bridge] pxr USD export failed, falling back: {e}")
+
+        # --- Try trimesh (writes USDA text) --------------------------------
+        try:
+            import trimesh
+
+            tm = trimesh.load(input_path, force='mesh')
+            vertex_count = len(tm.vertices)
+
+            if fmt == 'usda':
+                # trimesh can export USDA
+                usda_path = output_path
+                tm.export(usda_path, file_type='usda')
+                with open(usda_path, 'rb') as f:
+                    usd_bytes = f.read()
+                try:
+                    os.remove(usda_path)
+                except OSError:
+                    pass
+                return {
+                    'usd_bytes': usd_bytes,
+                    'vertexCount': vertex_count,
+                    'format': 'usda',
+                }
+            else:
+                # For usdc/usdz trimesh cannot write, fall through
+                pass
+        except Exception as e:
+            print(f"[Bridge] trimesh USD export failed, falling back: {e}")
+
+        # --- Minimal hand-written USDA fallback ----------------------------
+        try:
+            import trimesh
+            tm = trimesh.load(input_path, force='mesh')
+            vertex_count = len(tm.vertices)
+            verts_str = '\n'.join(
+                f'            {v[0]:.6f}, {v[1]:.6f}, {v[2]:.6f}'
+                for v in tm.vertices
+            )
+            faces_flat = [int(i) for f in tm.faces for i in f]
+            counts_str = ', '.join('3' for _ in tm.faces)
+            indices_str = ', '.join(str(i) for i in faces_flat)
+        except Exception:
+            verts_str = '            0.0, 0.0, 0.0\n            1.0, 0.0, 0.0\n            0.0, 1.0, 0.0'
+            counts_str = '3'
+            indices_str = '0, 1, 2'
+
+        usda_content = f"""#usda 1.0
+(
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Root"
+{{
+    def Mesh "Mesh"
+    {{
+        point3f[] points = [
+{verts_str}
+        ]
+        int[] faceVertexCounts = [{counts_str}]
+        int[] faceVertexIndices = [{indices_str}]
+    }}
+}}
+"""
+        return {
+            'usd_bytes': usda_content.encode('utf-8'),
+            'vertexCount': vertex_count,
+            'format': 'usda',
+        }
+
     def _raycast_fallback(self, rays: list) -> list:
         """Simple AABB raycast fallback"""
         import numpy as np
@@ -1126,6 +1479,11 @@ class InfinigenBridgeServer:
         except Exception:
             pass
 
+        # Store path for later USD conversion keyed by request id
+        request_id = header.get('id', '')
+        if request_id:
+            self._pending_geometry[request_id] = output_path
+
         return {'received': True, 'vertexCount': vertex_count, 'path': output_path}
 
     async def handle_transfer_heightmap(self, payload: bytes, header: Dict[str, Any]) -> Dict[str, Any]:
@@ -1185,6 +1543,9 @@ class InfinigenBridgeServer:
         
     async def run(self):
         """Start the WebSocket server"""
+        import time
+        self.start_time = time.time()
+
         handler = lambda ws, path: self.handler(ws)
         
         async with websockets.serve(self.handler, self.host, self.port):

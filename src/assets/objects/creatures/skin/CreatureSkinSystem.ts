@@ -16,6 +16,7 @@ import {
   Color,
   CanvasTexture,
   RepeatWrapping,
+  Vector3,
 } from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
 import { createCanvas } from '@/assets/utils/CanvasUtils';
@@ -130,7 +131,12 @@ export class CreatureSkinSystem {
   }
 
   /**
-   * Generate a MeshStandardMaterial with procedural textures
+   * Generate a MeshStandardMaterial with procedural textures.
+   *
+   * For fur skin type, always generates a diffuse texture (even for solid
+   * pattern) to produce visible fur strand color variation rather than just
+   * roughness changes. Non-fur types with solid pattern skip the diffuse
+   * texture to avoid unnecessary overhead.
    */
   generateMaterial(config: CreatureSkinConfig): MeshStandardMaterial {
     const materialConfig: Record<string, any> = {
@@ -139,8 +145,10 @@ export class CreatureSkinSystem {
       metalness: config.metalness,
     };
 
-    // Generate diffuse texture with pattern
-    if (config.pattern !== 'solid') {
+    // Generate diffuse texture:
+    // - Always for non-solid patterns
+    // - Always for fur skin type (even solid) so fur strands are visible
+    if (config.pattern !== 'solid' || config.skinType === 'fur') {
       const diffuseCanvas = this.generatePatternTexture(config);
       const diffuseTex = new CanvasTexture(diffuseCanvas);
       diffuseTex.wrapS = RepeatWrapping;
@@ -148,13 +156,23 @@ export class CreatureSkinSystem {
       materialConfig.map = diffuseTex;
     }
 
-    // Generate bump/normal map for skin detail
+    // Generate bump map for skin detail
     const bumpCanvas = this.generateBumpTexture(config);
     const bumpTex = new CanvasTexture(bumpCanvas);
     bumpTex.wrapS = RepeatWrapping;
     bumpTex.wrapT = RepeatWrapping;
     materialConfig.bumpMap = bumpTex;
     materialConfig.bumpScale = config.bumpStrength * 0.02;
+
+    // Generate normal map from the bump/height data using Sobel filter
+    // Normal maps provide superior lighting detail compared to bump maps
+    const normalCanvas = this.generateNormalMapFromBump(bumpCanvas, config.bumpStrength);
+    const normalTex = new CanvasTexture(normalCanvas);
+    normalTex.wrapS = RepeatWrapping;
+    normalTex.wrapT = RepeatWrapping;
+    materialConfig.normalMap = normalTex;
+    // When a normal map is present, reduce bump strength to avoid double-displacement
+    materialConfig.bumpScale = config.bumpStrength * 0.005;
 
     return new MeshStandardMaterial(materialConfig);
   }
@@ -250,6 +268,14 @@ export class CreatureSkinSystem {
         break;
       case 'gradient':
         this.drawGradient(ctx, size, sr, sg, sb);
+        break;
+      case 'solid':
+      default:
+        // For fur skin type, add subtle strand color variation even on
+        // "solid" pattern so the fur texture is visible, not just flat color
+        if (config.skinType === 'fur') {
+          this.drawFurColorVariation(ctx, size, config);
+        }
         break;
     }
 
@@ -359,6 +385,70 @@ export class CreatureSkinSystem {
     gradient.addColorStop(1, `rgba(${r},${g},${b},0.1)`);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
+  }
+
+  /**
+   * Draw subtle fur strand color variation for solid-pattern fur.
+   * Adds fine directional color variation (darker roots, lighter tips)
+   * and per-strand hue shift so that solid fur still looks like fur
+   * rather than a flat colored surface.
+   */
+  private drawFurColorVariation(
+    ctx: CanvasRenderingContext2D,
+    size: number,
+    config: CreatureSkinConfig,
+  ): void {
+    const pr = Math.round(config.primaryColor.r * 255);
+    const pg = Math.round(config.primaryColor.g * 255);
+    const pb = Math.round(config.primaryColor.b * 255);
+    const sr = Math.round(config.secondaryColor.r * 255);
+    const sg = Math.round(config.secondaryColor.g * 255);
+    const sb = Math.round(config.secondaryColor.b * 255);
+
+    // Fur density controls how many strand groups are visible
+    const density = config.furDensity ?? 0.75;
+    const strandGroups = Math.round(density * 40);
+
+    // Draw directional fur strand streaks (root → tip follows Y axis)
+    for (let i = 0; i < strandGroups; i++) {
+      const x = this.rng.next() * size;
+      const y = this.rng.next() * size;
+      const length = size * (0.02 + this.rng.next() * 0.06);
+      const width = size * (0.003 + this.rng.next() * 0.006);
+
+      // Slight color variation per strand (mix primary and secondary)
+      const mix = this.rng.next() * 0.4;
+      const cr = Math.round(pr * (1 - mix) + sr * mix);
+      const cg = Math.round(pg * (1 - mix) + sg * mix);
+      const cb = Math.round(pb * (1 - mix) + sb * mix);
+
+      // Subtle alpha for natural blending
+      const alpha = 0.15 + this.rng.next() * 0.2;
+
+      // Root is slightly darker, tip slightly lighter
+      const tipMix = 0.15;
+      const tr = Math.min(255, Math.round(cr * (1 + tipMix)));
+      const tg = Math.min(255, Math.round(cg * (1 + tipMix)));
+      const tb = Math.min(255, Math.round(cb * (1 + tipMix)));
+
+      const gradient = ctx.createLinearGradient(x, y, x, y + length);
+      gradient.addColorStop(0, `rgba(${cr},${cg},${cb},${alpha})`);
+      gradient.addColorStop(1, `rgba(${tr},${tg},${tb},${alpha * 0.5})`);
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x - width / 2, y, width, length);
+    }
+
+    // Add fine-grained per-pixel noise for strand-level color variation
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const noise = (this.rng.next() - 0.5) * 25;
+      data[i]     = Math.max(0, Math.min(255, data[i] + noise));
+      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+    }
+    ctx.putImageData(imageData, 0, 0);
   }
 
   // ── Bump Texture Generation ──────────────────────────────────────
@@ -497,5 +587,103 @@ export class CreatureSkinSystem {
         ctx.fillRect(x, y, cellSize - 1, cellSize - 1);
       }
     }
+  }
+
+  // ── Normal Map Generation from Bump/Height Data ────────────────────
+
+  /**
+   * Generate a normal map from a bump/height canvas using a Sobel filter.
+   *
+   * The Sobel operator computes the gradient of the height field in X and Y,
+   * producing a normal vector at each pixel. The normal is encoded as RGB
+   * where R = (normal.x + 1) / 2, G = (normal.y + 1) / 2, B = (normal.z + 1) / 2.
+   *
+   * This provides much better per-pixel lighting than a bump map alone,
+   * especially for detailed surface features like scales, fur, and feathers.
+   *
+   * @param bumpCanvas - The bump/height map canvas (grayscale values represent height)
+   * @param strength - Controls the intensity of the normal perturbation
+   */
+  private generateNormalMapFromBump(bumpCanvas: HTMLCanvasElement, strength: number): HTMLCanvasElement {
+    const width = bumpCanvas.width;
+    const height = bumpCanvas.height;
+
+    // Read the bump canvas pixel data (height field)
+    const bumpCtx = bumpCanvas.getContext('2d')!;
+    const bumpImageData = bumpCtx.getImageData(0, 0, width, height);
+    const bumpData = bumpImageData.data;
+
+    // Extract grayscale height values into a Float32Array
+    const heightField = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      // Average RGB for grayscale (all channels should be equal for a bump map)
+      heightField[i] = (bumpData[i * 4] + bumpData[i * 4 + 1] + bumpData[i * 4 + 2]) / (3.0 * 255.0);
+    }
+
+    // Create output normal map canvas
+    const normalCanvas = createCanvas();
+    normalCanvas.width = width;
+    normalCanvas.height = height;
+    const normalCtx = normalCanvas.getContext('2d')!;
+    const normalImageData = normalCtx.createImageData(width, height);
+    const normalData = normalImageData.data;
+
+    // Sobel filter strength — scale the gradient by this factor to control
+    // how pronounced the surface detail appears in the normal map
+    const strengthScale = strength * 2.0;
+
+    // Apply Sobel filter to compute normal vectors from the height field
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        // Sample 3x3 neighborhood with clamp-to-edge boundary handling
+        const getPixel = (px: number, py: number): number => {
+          const cx = Math.max(0, Math.min(width - 1, px));
+          const cy = Math.max(0, Math.min(height - 1, py));
+          return heightField[cy * width + cx];
+        };
+
+        // Sobel X kernel:
+        //  -1  0  +1
+        //  -2  0  +2
+        //  -1  0  +1
+        const sobelX =
+          -1.0 * getPixel(x - 1, y - 1) + 1.0 * getPixel(x + 1, y - 1) +
+          -2.0 * getPixel(x - 1, y)     + 2.0 * getPixel(x + 1, y) +
+          -1.0 * getPixel(x - 1, y + 1) + 1.0 * getPixel(x + 1, y + 1);
+
+        // Sobel Y kernel:
+        //  -1  -2  -1
+        //   0   0   0
+        //  +1  +2  +1
+        const sobelY =
+          -1.0 * getPixel(x - 1, y - 1) - 2.0 * getPixel(x, y - 1) - 1.0 * getPixel(x + 1, y - 1) +
+           1.0 * getPixel(x - 1, y + 1) + 2.0 * getPixel(x, y + 1) + 1.0 * getPixel(x + 1, y + 1);
+
+        // Compute normal from the gradient:
+        // The height field H has gradient (dH/dx, dH/dy).
+        // The surface is defined as Z = H(x, y), so the normal is:
+        //   N = normalize((-dH/dx, -dH/dy, 1))
+        // We scale the gradient by strengthScale to control the bump intensity.
+        const nx = -sobelX * strengthScale;
+        const ny = -sobelY * strengthScale;
+        const nz = 1.0;
+
+        // Normalize the normal vector
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        const nnx = nx / len;
+        const nny = ny / len;
+        const nnz = nz / len;
+
+        // Encode normal to RGB: map from [-1, 1] to [0, 255]
+        const idx = (y * width + x) * 4;
+        normalData[idx]     = Math.round((nnx * 0.5 + 0.5) * 255); // R = normal.x
+        normalData[idx + 1] = Math.round((nny * 0.5 + 0.5) * 255); // G = normal.y
+        normalData[idx + 2] = Math.round((nnz * 0.5 + 0.5) * 255); // B = normal.z
+        normalData[idx + 3] = 255; // A = fully opaque
+      }
+    }
+
+    normalCtx.putImageData(normalImageData, 0, 0);
+    return normalCanvas;
   }
 }

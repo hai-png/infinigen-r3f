@@ -48,6 +48,8 @@
     "lint": "next lint",
     "build:lib": "tsc",
     "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build:lib"
   },
   "keywords": [
@@ -94,6 +96,7 @@
     "@types/three": "^0.184.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
+    "@vitest/coverage-v8": "1.6.1",
     "eslint": "^8.55.0",
     "typescript": "^6.0.3",
     "vitest": "^1.0.0"

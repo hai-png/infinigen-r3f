@@ -64,6 +64,28 @@ export interface ArticulatedObjectResult {
   config: ArticulatedObjectConfig;
   /** Export to MJCF XML string */
   toMJCF: () => string;
+  /** Export to URDF XML string (optional — provided by sim-ready generators) */
+  toURDF?: (options?: import('./URDFExporter').URDFExportOptions) => string;
+  /** Export to USDA (ASCII USD) string (optional — provided by sim-ready generators) */
+  toUSD?: () => string;
+  /** Mesh geometry map for export (optional — provided by sim-ready generators) */
+  meshGeometries?: Map<string, { size: THREE.Vector3; pos: THREE.Vector3; mass?: number }>;
+  /** Sim-ready metadata: mass per mesh, collision shapes, etc. */
+  simReady?: SimReadyMetadata;
+}
+
+/** Sim-ready metadata attached to ArticulatedObjectResult */
+export interface SimReadyMetadata {
+  /** Default density used for mass estimation (kg/m³) */
+  density: number;
+  /** Default friction coefficient */
+  friction: number;
+  /** Default restitution */
+  restitution: number;
+  /** Whether the root body should be static */
+  rootBodyStatic: boolean;
+  /** Per-mesh collision shape hints */
+  collisionHints: Map<string, 'box' | 'sphere' | 'cylinder'>;
 }
 
 // ============================================================================
@@ -179,6 +201,168 @@ export function generateMJCF(
 
   lines.push('</mujoco>');
   return lines.join('\n');
+}
+
+// ============================================================================
+// MJCF Validation
+// ============================================================================
+
+/** Valid MJCF joint types per the MuJoCo specification */
+const VALID_MJCF_JOINT_TYPES = new Set([
+  'hinge',
+  'slide',
+  'ball',
+  'free',
+  'fixed',
+]);
+
+/**
+ * Validate an MJCF XML string.
+ *
+ * Checks:
+ * 1. Root element is `<mujoco>`
+ * 2. At least one `<body>` element exists in `<worldbody>`
+ * 3. Each `<joint>` has a valid type attribute
+ * 4. All `<geom>` elements have valid type attributes
+ * 5. Mesh references in `<geom>` point to existing `<mesh>` assets
+ * 6. Joint references in `<actuator>` and `<sensor>` point to existing joints
+ *
+ * @param mjcfXml - The MJCF XML string to validate
+ * @returns ValidationResult with `valid` flag and list of error messages
+ *
+ * @example
+ * ```ts
+ * const result = validateMJCF(mjcfString);
+ * if (!result.valid) {
+ *   console.error('MJCF validation failed:', result.errors);
+ * }
+ * ```
+ */
+export function validateMJCF(mjcfXml: string): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!mjcfXml || mjcfXml.trim().length === 0) {
+    return { valid: false, errors: ['MJCF XML is empty'] };
+  }
+
+  // Parse the XML
+  let doc: Document;
+  try {
+    const parser = new DOMParser();
+    doc = parser.parseFromString(mjcfXml, 'application/xml');
+  } catch (e) {
+    return { valid: false, errors: [`Failed to parse XML: ${e instanceof Error ? e.message : String(e)}`] };
+  }
+
+  // Check for XML parse errors
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) {
+    return { valid: false, errors: [`XML parse error: ${parseError.textContent}`] };
+  }
+
+  // 1. Root element must be <mujoco>
+  const rootElement = doc.documentElement;
+  if (!rootElement || rootElement.tagName !== 'mujoco') {
+    errors.push(`Root element is "${rootElement?.tagName ?? 'missing'}", expected "mujoco"`);
+  }
+
+  // 2. At least one <body> element in <worldbody>
+  const worldbody = doc.querySelector('worldbody');
+  if (!worldbody) {
+    errors.push('No <worldbody> element found — MJCF must have a worldbody');
+  } else {
+    const bodies = worldbody.querySelectorAll('body');
+    if (bodies.length === 0) {
+      errors.push('No <body> elements found in <worldbody> — MJCF must have at least one body');
+    }
+  }
+
+  // Collect joint names for actuator/sensor reference checking
+  const jointNames = new Set<string>();
+  const joints = doc.querySelectorAll('joint');
+  joints.forEach((joint) => {
+    const name = joint.getAttribute('name');
+    if (name) {
+      jointNames.add(name);
+    }
+  });
+
+  // 3. Each <joint> has a valid type
+  joints.forEach((joint, index) => {
+    const jointName = joint.getAttribute('name') || `joint_${index}`;
+    const jointType = joint.getAttribute('type');
+
+    if (jointType && !VALID_MJCF_JOINT_TYPES.has(jointType)) {
+      errors.push(`Joint "${jointName}" has invalid type "${jointType}" — must be one of: ${[...VALID_MJCF_JOINT_TYPES].join(', ')}`);
+    }
+
+    // Hinge/slide joints should have range or limited attribute
+    if (jointType === 'hinge' || jointType === 'slide') {
+      const range = joint.getAttribute('range');
+      const limited = joint.getAttribute('limited');
+      // Not a hard error, but worth noting
+      if (!range && limited !== 'false') {
+        // Could be intentionally unlimited (limited="false"), otherwise range is expected
+      }
+    }
+  });
+
+  // 4. Validate <geom> type attributes
+  const VALID_GEOM_TYPES = new Set([
+    'plane', 'sphere', 'capsule', 'ellipsoid', 'cylinder', 'box',
+    'mesh', 'hfield', 'none',
+  ]);
+  const geoms = doc.querySelectorAll('geom');
+  geoms.forEach((geom, index) => {
+    const geomName = geom.getAttribute('name') || `geom_${index}`;
+    const geomType = geom.getAttribute('type');
+
+    if (geomType && !VALID_GEOM_TYPES.has(geomType)) {
+      errors.push(`Geom "${geomName}" has invalid type "${geomType}" — must be one of: ${[...VALID_GEOM_TYPES].join(', ')}`);
+    }
+  });
+
+  // 5. Mesh references in <geom> point to existing <mesh> assets
+  const meshAssetNames = new Set<string>();
+  const meshAssets = doc.querySelectorAll('asset > mesh');
+  meshAssets.forEach((mesh) => {
+    const name = mesh.getAttribute('name');
+    if (name) {
+      meshAssetNames.add(name);
+    }
+  });
+
+  geoms.forEach((geom, index) => {
+    const geomName = geom.getAttribute('name') || `geom_${index}`;
+    const meshRef = geom.getAttribute('mesh');
+    if (meshRef && !meshAssetNames.has(meshRef)) {
+      errors.push(`Geom "${geomName}" references mesh "${meshRef}" which does not exist in <asset>`);
+    }
+  });
+
+  // 6. Actuator/sensor joint references point to existing joints
+  const actuators = doc.querySelectorAll('actuator > motor, actuator > position, actuator > velocity, actuator > general');
+  actuators.forEach((act, index) => {
+    const actName = act.getAttribute('name') || `actuator_${index}`;
+    const jointRef = act.getAttribute('joint');
+    if (jointRef && !jointNames.has(jointRef)) {
+      errors.push(`Actuator "${actName}" references joint "${jointRef}" which does not exist`);
+    }
+  });
+
+  const sensors = doc.querySelectorAll('sensor > jointpos, sensor > jointvel, sensor > jointlimitpos, sensor > jointlimitvel');
+  sensors.forEach((sensor, index) => {
+    const sensorName = sensor.getAttribute('name') || `sensor_${index}`;
+    const jointRef = sensor.getAttribute('joint');
+    if (jointRef && !jointNames.has(jointRef)) {
+      errors.push(`Sensor "${sensorName}" references joint "${jointRef}" which does not exist`);
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }
 
 // ============================================================================

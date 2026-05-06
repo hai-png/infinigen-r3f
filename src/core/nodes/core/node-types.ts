@@ -337,6 +337,24 @@ export enum NodeTypes {
   Slerp = 'SlerpNode',
   PolarToCart = 'PolarToCartNode',
   CartToPolar = 'CartToPolarNode',
+  // Utility / Math
+  Math = 'MathNode',
+  MapRange = 'MapRangeNode',
+  Switch = 'SwitchNode',
+  FloatCurve = 'FloatCurveNode',
+  SetShadeSmooth = 'SetShadeSmoothNode',
+
+  // Mesh Primitives
+  MeshCube = 'MeshCubeNode',
+  MeshUVSphere = 'MeshUVSphereNode',
+  MeshIcoSphere = 'MeshIcoSphereNode',
+  MeshCircle = 'MeshCircleNode',
+  MeshCylinder = 'MeshCylinderNode',
+  MeshCone = 'MeshConeNode',
+  MeshGrid = 'MeshGridNode',
+  MeshLine = 'MeshLineNode',
+  MeshTorus = 'MeshTorusNode',
+
   // Subdivision
   SubdivisionSurface = 'SubdivisionSurfaceNode',
 

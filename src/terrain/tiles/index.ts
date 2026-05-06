@@ -25,3 +25,37 @@ export type {
   TileEruptionParams,
   LandTileSystemConfig,
 } from './LandTileSystem';
+
+// Special tile generators (FloatingIce, Volcano)
+export {
+  generateFloatingIceTile,
+  generateVolcanoTile,
+  sdFloatingIce,
+  sdVolcano,
+  ICE_TILE_MATERIALS,
+  VOLCANO_TILE_MATERIALS,
+} from './SpecialTiles';
+
+export type {
+  FloatingIceConfig,
+  VolcanoConfig,
+} from './SpecialTiles';
+
+// Dedicated tile modules
+export {
+  generateFloatingIceTileMesh,
+  generateFloatingIceLandTile,
+} from './FloatingIceTile';
+
+export type {
+  FloatingIceTileConfig,
+} from './FloatingIceTile';
+
+export {
+  generateVolcanoTileMesh,
+  generateVolcanoLandTile,
+} from './VolcanoTile';
+
+export type {
+  VolcanoTileConfig,
+} from './VolcanoTile';

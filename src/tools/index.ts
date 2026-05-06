@@ -26,6 +26,7 @@ export {
   SceneExporter,
   exportSceneToBlob,
   getSupportedFormats,
+  getAvailableFormatIds,
   TextureBaker,
   SimulationExporter,
   MeshSimplifier,
@@ -38,6 +39,7 @@ export type {
   ExportScope,
   SceneExportOptions,
   SceneExportResult,
+  FormatCapability,
   // Pipeline-specific types (now consolidated from datagen/pipeline/SceneExporter)
   LODConfig,
   TexturePackResult,

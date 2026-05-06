@@ -21,10 +21,12 @@ export {
   SceneExporter,
   exportSceneToBlob,
   getSupportedFormats,
+  getAvailableFormatIds,
   type ExportFormat,
   type ExportScope,
   type SceneExportOptions,
   type SceneExportResult,
+  type FormatCapability,
 } from './export/SceneExporter';
 
 // Re-export additional types that were previously exported from this module

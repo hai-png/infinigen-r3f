@@ -38,8 +38,11 @@ export * from './NodeValidator';
 // Shader graph builder
 export * from './ShaderGraphBuilder';
 
-// Serializer
+// Serializer (JSON)
 export * from './NodeSerializer';
+
+// Code serializer / transpiler (NodeWrangler graph → TypeScript code)
+export * from './NodeCodeSerializer';
 
 // Node definition registry
 export * from './node-definition-registry';

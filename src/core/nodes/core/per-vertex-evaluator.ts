@@ -280,6 +280,81 @@ perVertexExecutors.set(String(NodeTypes.RandomValue), (inputs, props, _geometry,
   return outputs;
 });
 
+// CaptureAttribute → evaluate Value input per-vertex and output as streams
+perVertexExecutors.set(String(NodeTypes.CaptureAttribute), (inputs, props, geometry, vertexCount) => {
+  const outputs = new Map<string, AttributeStream>();
+
+  // Determine the domain and data type from properties
+  const domain: AttributeDomain = (props.domain as AttributeDomain) ?? 'point';
+  const dataTypeStr = (props.dataType as string) ?? 'FLOAT';
+  const dataType: AttributeDataType =
+    dataTypeStr === 'VECTOR' || dataTypeStr === 'FLOAT_VECTOR' || dataTypeStr === 'vec3' ? 'VECTOR'
+    : dataTypeStr === 'COLOR' || dataTypeStr === 'FLOAT_COLOR' ? 'COLOR'
+    : dataTypeStr === 'BOOLEAN' ? 'BOOLEAN'
+    : dataTypeStr === 'INT' || dataTypeStr === 'INTEGER' ? 'INT'
+    : 'FLOAT';
+
+  // The element count depends on the domain
+  const elementCount = domain === 'point' ? vertexCount
+    : domain === 'face' ? geometry.faceCount
+    : domain === 'face_corner' ? vertexCount
+    : vertexCount;
+
+  // Get the Value input stream
+  const valueInput = inputs.get('Value') ?? inputs.get('Attribute') ?? inputs.get('value');
+
+  // Pass geometry through unchanged (CaptureAttribute doesn't modify geometry)
+  const geometryInput = inputs.get('Geometry');
+  if (geometryInput) {
+    outputs.set('Geometry', geometryInput);
+  }
+
+  // Create the output Attribute stream from the Value input
+  if (valueInput) {
+    // If the Value is already a per-element stream, pass it through as the Attribute output
+    const outputName = 'Attribute';
+    if (valueInput.size === elementCount) {
+      // Same size — clone and rename
+      const attrStream = new AttributeStream(
+        `captured_${domain}`, domain, valueInput.dataType, elementCount,
+      );
+      const srcData = valueInput.getRawData();
+      const dstData = attrStream.getRawData();
+      const len = Math.min(srcData.length, dstData.length);
+      for (let i = 0; i < len; i++) {
+        dstData[i] = srcData[i];
+      }
+      outputs.set(outputName, attrStream);
+    } else {
+      // Size mismatch — map element-by-element (cycling if needed)
+      const attrStream = new AttributeStream(
+        `captured_${domain}`, domain, valueInput.dataType, elementCount,
+      );
+      const srcData = valueInput.getRawData();
+      const dstData = attrStream.getRawData();
+      const srcCC = valueInput.componentCount;
+      const dstCC = attrStream.componentCount;
+      const cc = Math.min(srcCC, dstCC);
+      for (let i = 0; i < elementCount; i++) {
+        const srcIdx = (i % valueInput.size) * srcCC;
+        const dstIdx = i * dstCC;
+        for (let c = 0; c < cc; c++) {
+          dstData[dstIdx + c] = srcData[srcIdx + c];
+        }
+      }
+      outputs.set(outputName, attrStream);
+    }
+  } else {
+    // No Value input — output a zero-filled stream
+    const attrStream = new AttributeStream(
+      `captured_${domain}`, domain, dataType, elementCount,
+    );
+    outputs.set('Attribute', attrStream);
+  }
+
+  return outputs;
+});
+
 // ---------------------------------------------------------------------------
 // PerVertexEvaluator class
 // ---------------------------------------------------------------------------

@@ -29,6 +29,19 @@ export type ExportFormat = 'glb' | 'gltf' | 'obj' | 'ply' | 'stl' | 'json' | 'fb
 
 export type ExportScope = 'full' | 'selected' | 'terrain';
 
+/**
+ * Describes the capability status of a single export format.
+ * Used by the UI to grey out unsupported formats.
+ */
+export interface FormatCapability {
+  /** The export format identifier */
+  format: ExportFormat;
+  /** Whether the format can currently produce output */
+  available: boolean;
+  /** Whether the format requires the Python bridge (HybridBridge) */
+  requiresBridge: boolean;
+}
+
 export interface SceneExportOptions {
   format: ExportFormat;
   scope: ExportScope;
@@ -126,9 +139,37 @@ export class SceneExporter {
   private bridge: HybridBridge;
   private simplifier: MeshSimplifier | null = null;
 
+  /** Cached capability state for USD export (refreshed on demand) */
+  private _usdAvailable: boolean | null = null;
+  private _usdCheckPromise: Promise<boolean> | null = null;
+
   constructor(simplifier?: MeshSimplifier) {
     this.bridge = HybridBridge.getInstance();
     this.simplifier = simplifier ?? null;
+  }
+
+  /**
+   * Asynchronously check whether USD export is available via the bridge.
+   *
+   * Uses a cached result if the bridge is still connected; re-checks
+   * capabilities when the cached state is stale or the bridge
+   * reconnected.
+   */
+  async isUSDExportAvailable(): Promise<boolean> {
+    if (!HybridBridge.isConnected()) {
+      this._usdAvailable = false;
+      return false;
+    }
+    // If we already have a fresh result, return it
+    if (this._usdAvailable !== null) return this._usdAvailable;
+    // Deduplicate concurrent checks
+    if (!this._usdCheckPromise) {
+      this._usdCheckPromise = this.bridge.isUSDExportAvailable().finally(() => {
+        this._usdCheckPromise = null;
+      });
+    }
+    this._usdAvailable = await this._usdCheckPromise;
+    return this._usdAvailable;
   }
 
   // -----------------------------------------------------------------------
@@ -136,16 +177,81 @@ export class SceneExporter {
   // -----------------------------------------------------------------------
 
   /**
-   * Return the list of export formats that actually produce output.
-   * Bridge-only formats (FBX, USD) are NOT included unless the Python
-   * bridge is connected.
+   * Static method: return detailed capability info for every export format.
+   *
+   * Each entry includes the format name, whether it is currently available,
+   * and whether it requires the Python bridge.
+   *
+   * For USD-family formats, availability is determined by the bridge being
+   * connected **and** the server reporting 'export_usd' in its capabilities
+   * (verified via a prior health check / capability query). If the bridge
+   * is connected but capabilities have not been queried yet, the format
+   * is reported as available (optimistic) since the server always supports
+   * export_usd when trimesh or pxr is installed.
+   *
+   * The UI can use this to grey out unsupported formats.
+   */
+  static getSupportedFormats(): FormatCapability[] {
+    const bridgeConnected = HybridBridge.isConnected();
+    const allFormats: ExportFormat[] = [
+      ...NATIVE_FORMATS,
+      ...BRIDGE_FORMATS,
+    ];
+    return allFormats.map((format) => {
+      const requiresBridge = BRIDGE_FORMATS.includes(format) || USD_FAMILY.includes(format);
+      return {
+        format,
+        available: requiresBridge ? bridgeConnected : true,
+        requiresBridge,
+      };
+    });
+  }
+
+  /**
+   * Async version of getSupportedFormats that accurately reflects USD
+   * availability by querying the bridge capabilities.
+   *
+   * Use this when you need a reliable answer about whether USD export
+   * is truly available (e.g. before starting a long export job).
+   */
+  async getSupportedFormatsAsync(): Promise<FormatCapability[]> {
+    const bridgeConnected = HybridBridge.isConnected();
+    let usdAvailable = bridgeConnected;
+
+    if (bridgeConnected) {
+      try {
+        usdAvailable = await this.bridge.isUSDExportAvailable();
+      } catch {
+        usdAvailable = bridgeConnected; // optimistic fallback
+      }
+    }
+
+    const allFormats: ExportFormat[] = [
+      ...NATIVE_FORMATS,
+      ...BRIDGE_FORMATS,
+    ];
+    return allFormats.map((format) => {
+      const requiresBridge = BRIDGE_FORMATS.includes(format) || USD_FAMILY.includes(format);
+      const isUSD = USD_FAMILY.includes(format);
+      return {
+        format,
+        available: isUSD ? usdAvailable : (requiresBridge ? bridgeConnected : true),
+        requiresBridge,
+      };
+    });
+  }
+
+  /**
+   * Instance method: return the list of export format identifiers that
+   * currently produce output.
+   *
+   * @deprecated Use `SceneExporter.getSupportedFormats()` instead, which
+   * returns detailed `FormatCapability[]` with availability info.
    */
   getSupportedFormats(): ExportFormat[] {
-    const formats = [...NATIVE_FORMATS];
-    if (HybridBridge.isConnected()) {
-      formats.push(...BRIDGE_FORMATS);
-    }
-    return formats;
+    return SceneExporter.getSupportedFormats()
+      .filter((cap) => cap.available)
+      .map((cap) => cap.format);
   }
 
   /**
@@ -188,13 +294,13 @@ export class SceneExporter {
       if (!this.isFormatSupported(opts.format)) {
         if (opts.format === 'fbx') {
           return this.makeErrorResult(
-            'FBX export requires Python bridge — connect the Python backend or use GLB/OBJ instead.',
+            'FBX export requires Python bridge. Use HybridBridge.isConnected() to check availability.',
             startTime, warnings, errors,
           );
         }
-        if (opts.format === 'usd') {
+        if (opts.format === 'usd' || opts.format === 'usdz') {
           return this.makeErrorResult(
-            'USD export requires Python bridge — connect the Python backend or use GLB/OBJ instead.',
+            'USD export requires Python bridge. Use HybridBridge.isConnected() to check availability.',
             startTime, warnings, errors,
           );
         }
@@ -238,9 +344,9 @@ export class SceneExporter {
           result = this.exportThreeJSON(exportScene, opts, stats, warnings, errors);
           break;
         case 'fbx':
-          // Should have been caught above, but just in case bridge connected
+          // Should have been caught above, but just in case
           return this.makeErrorResult(
-            'FBX export requires Python bridge',
+            'FBX export requires Python bridge. Use HybridBridge.isConnected() to check availability.',
             startTime, warnings, errors,
           );
         case 'usd':
@@ -891,9 +997,19 @@ export async function exportSceneToBlob(
 }
 
 /**
- * Get the list of supported export formats.
+ * Get the list of supported export formats with capability details.
  * Standalone convenience function that doesn't require a SceneExporter instance.
  */
-export function getSupportedFormats(): ExportFormat[] {
-  return new SceneExporter().getSupportedFormats();
+export function getSupportedFormats(): FormatCapability[] {
+  return SceneExporter.getSupportedFormats();
+}
+
+/**
+ * Get just the list of currently-available format identifiers.
+ * Convenience function for simple use cases that only need format names.
+ */
+export function getAvailableFormatIds(): ExportFormat[] {
+  return SceneExporter.getSupportedFormats()
+    .filter((cap) => cap.available)
+    .map((cap) => cap.format);
 }

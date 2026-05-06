@@ -8,8 +8,9 @@
 
 export { COCOExporter, type COCODataset, type COCOAnnotation, type COCOImage, type COCOCategory } from './coco-exporter';
 export { YOLOExporter, type YOLOBbox, type YOLOImage, type YOLOCategory, type YOLODatasetConfig } from './yolo-exporter';
+export { generateAnnotations, type AnnotationPair, type AnnotationIntegrationOptions } from './annotation-integration';
 
 // Future exports:
 // export { VOCExporter } from './voc-exporter';
 // export { PointCloudExporter } from './pointcloud-exporter';
-// export { MeshSequenceExporter } from './mesh-sequence-exporter';
+// export { MeshSequenceExporter } from './mesh-sequence-exporter'

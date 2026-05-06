@@ -763,8 +763,8 @@ const PRESETS: MaterialPreset[] = [
     },
   },
   {
-    id: 'bark_birch',
-    name: 'Birch Bark',
+    id: 'nature_bark_birch',
+    name: 'Birch Bark (Nature)',
     category: 'nature',
     description: 'White birch bark with peeling',
     params: {
@@ -837,7 +837,7 @@ const PRESETS: MaterialPreset[] = [
   },
 
   // ───────────────────────────────────────
-  // PLANT (8)
+  // PLANT (9)
   // ───────────────────────────────────────
   {
     id: 'simple_greenery',
@@ -927,6 +927,18 @@ const PRESETS: MaterialPreset[] = [
       noiseScale: 7.0, noiseDetail: 5, distortion: 0.25, warpStrength: 0.35,
     },
     physicalOverrides: { sheen: 0.15, sheenRoughness: 0.7, sheenColor: c(0.3, 0.55, 0.18) },
+  },
+  {
+    id: 'bark_birch',
+    name: 'Birch Bark',
+    category: 'plant',
+    description: 'White papery birch bark with peeling texture, plant variant',
+    params: {
+      baseColor: c(0.85, 0.82, 0.74), roughness: 0.85, metallic: 0.0,
+      aoStrength: 0.55, heightScale: 0.025, normalStrength: 1.3,
+      emissionColor: null, emissionStrength: 0,
+      noiseScale: 3.5, noiseDetail: 6, distortion: 0.35, warpStrength: 0.5,
+    },
   },
   {
     id: 'plant_bark_birch',

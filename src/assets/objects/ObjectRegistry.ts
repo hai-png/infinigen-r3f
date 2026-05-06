@@ -176,3 +176,46 @@ ObjectRegistry.register(
   FruitBowlGenerator,
   ['fruit', 'food', 'procedural', 'bowl', 'decor'],
 );
+
+// ============================================================================
+// Auto-register indoor furniture generators in ObjectRegistry
+// ============================================================================
+
+import { ChairGenerator } from './seating/ChairGenerator';
+import { TableFactory } from './tables/TableFactory';
+import { CoffeeTable } from './tables/CoffeeTable';
+import { DiningTable } from './tables/DiningTable';
+import { DeskGenerator } from './tables/DeskGenerator';
+import { SofaFactory } from './seating/SofaFactory';
+import { OfficeChairFactory } from './seating/OfficeChairFactory';
+import { StoolGenerator } from './seating/StoolGenerator';
+import { BathroomFixtures } from './bathroom/BathroomFixtures';
+import { DoorGenerator } from './architectural/DoorGenerator';
+import { WindowGenerator } from './architectural/WindowGenerator';
+import { StaircaseGenerator } from './architectural/StaircaseGenerator';
+
+// ChairGenerator with 3 variants
+const chairGen = new ChairGenerator();
+ObjectRegistry.register('ChairGenerator', 'furniture/chair', chairGen, ['chair', 'seating', 'furniture', 'indoor']);
+ObjectRegistry.register('Chair_Dining', 'furniture/chair', { generator: ChairGenerator, variant: 'dining' }, ['chair', 'dining', 'seating', 'furniture', 'indoor']);
+ObjectRegistry.register('Chair_Office', 'furniture/chair', { generator: ChairGenerator, variant: 'office' }, ['chair', 'office', 'seating', 'furniture', 'indoor']);
+ObjectRegistry.register('Chair_BarStool', 'furniture/chair', { generator: ChairGenerator, variant: 'bar_stool' }, ['chair', 'bar_stool', 'seating', 'furniture', 'indoor']);
+
+// Table generators
+ObjectRegistry.register('TableFactory', 'furniture/table', TableFactory, ['table', 'furniture', 'indoor']);
+ObjectRegistry.register('CoffeeTable', 'furniture/table', CoffeeTable, ['table', 'coffee_table', 'furniture', 'indoor', 'living_room']);
+ObjectRegistry.register('DiningTable', 'furniture/table', DiningTable, ['table', 'dining', 'furniture', 'indoor', 'dining_room']);
+ObjectRegistry.register('DeskGenerator', 'furniture/table', DeskGenerator, ['table', 'desk', 'furniture', 'indoor', 'office']);
+
+// Seating generators
+ObjectRegistry.register('SofaFactory', 'furniture/sofa', SofaFactory, ['sofa', 'seating', 'furniture', 'indoor', 'living_room']);
+ObjectRegistry.register('OfficeChairFactory', 'furniture/chair', OfficeChairFactory, ['chair', 'office', 'seating', 'furniture', 'indoor']);
+ObjectRegistry.register('StoolGenerator', 'furniture/chair', StoolGenerator, ['stool', 'seating', 'furniture', 'indoor']);
+
+// Bathroom fixtures
+ObjectRegistry.register('BathroomFixtures', 'bathroom', BathroomFixtures, ['bathroom', 'toilet', 'sink', 'bathtub', 'shower', 'indoor']);
+
+// Architectural generators
+ObjectRegistry.register('DoorGenerator', 'architectural/door', DoorGenerator, ['door', 'architectural', 'indoor']);
+ObjectRegistry.register('WindowGenerator', 'architectural/window', WindowGenerator, ['window', 'architectural', 'indoor']);
+ObjectRegistry.register('StaircaseGenerator', 'architectural/staircase', StaircaseGenerator, ['staircase', 'stairs', 'architectural', 'indoor']);

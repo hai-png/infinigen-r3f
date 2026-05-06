@@ -23,6 +23,12 @@ export interface DoorParams extends BaseGeneratorConfig {
   frameWidth: number;
   frameDepth: number;
   materialType: 'wood' | 'metal' | 'glass' | 'composite';
+  /** Door open/closed state: 0 = fully closed, 1 = fully open, 0.5 = half-open */
+  openAmount: number;
+  /** Which side the door hinges on: 'left' (default) or 'right' */
+  hingeSide: 'left' | 'right';
+  /** Which direction the door opens: 'inward' (into room) or 'outward' */
+  openDirection: 'inward' | 'outward';
 }
 
 /**
@@ -43,6 +49,9 @@ export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
       frameWidth: 0.1 + this.rng.range(0, 0.05),
       frameDepth: 0.08 + this.rng.range(0, 0.04),
       materialType: this.rng.choice(['wood', 'metal', 'glass', 'composite']),
+      openAmount: 0,
+      hingeSide: 'left',
+      openDirection: 'inward',
     };
   }
 
@@ -58,27 +67,69 @@ export class DoorGenerator extends BaseObjectGenerator<DoorParams> {
     const frame = this.createFrame(params);
     group.add(frame);
 
-    // Create door panel(s) - proper Mesh objects
-    const panels = this.createPanels(params);
-    panels.forEach(panel => group.add(panel));
+    // Create door panel(s) with open/closed state support
+    const panelGroup = this.createPanelsWithState(params);
+    group.add(panelGroup);
 
-    // Create handle/knob - proper Mesh objects
+    // Create handle/knob - proper Mesh objects (attached to panel group)
     const handle = this.createHandle(params);
-    if (handle) group.add(handle);
+    if (handle) panelGroup.add(handle);
 
-    // Add hinges - proper Mesh objects
+    // Add hinges - proper Mesh objects (attached to panel group)
     if (params.type !== 'sliding' && params.type !== 'revolving') {
       const hinges = this.createHinges(params);
-      hinges.forEach(hinge => group.add(hinge));
+      hinges.forEach(hinge => panelGroup.add(hinge));
     }
 
-    // Add glass panels if specified - proper Mesh objects
+    // Add glass panels if specified - proper Mesh objects (attached to panel group)
     if (params.hasGlass) {
       const glass = this.createGlassPanels(params);
-      glass.forEach(g => group.add(g));
+      glass.forEach(g => panelGroup.add(g));
     }
 
     return group;
+  }
+
+  /**
+   * Create door panel(s) wrapped in a pivot group that supports open/closed state.
+   * The pivot group is positioned at the hinge edge and rotated by openAmount.
+   */
+  private createPanelsWithState(params: DoorParams): Group {
+    const pivotGroup = new Group();
+    pivotGroup.name = 'door_pivot';
+
+    // Position pivot at hinge edge
+    const hingeX = params.hingeSide === 'left'
+      ? -params.width / 2
+      : params.width / 2;
+    pivotGroup.position.set(hingeX, 0, 0);
+
+    // Create panels relative to pivot point
+    const panels = this.createPanels(params);
+    panels.forEach(panel => {
+      // Shift panel so hinge edge aligns with pivot origin
+      panel.position.x -= hingeX;
+      pivotGroup.add(panel);
+    });
+
+    // Apply open/closed rotation
+    if (params.type === 'sliding') {
+      // Sliding doors translate instead of rotate
+      const slideAmount = params.openAmount * params.width;
+      pivotGroup.position.x += params.hingeSide === 'left' ? slideAmount : -slideAmount;
+    } else if (params.type !== 'revolving') {
+      // Hinged doors rotate around Y axis at the hinge edge
+      const maxAngle = Math.PI / 2; // 90 degrees max opening
+      const angle = params.openAmount * maxAngle;
+      const direction = params.hingeSide === 'left' ? 1 : -1;
+      const inOut = params.openDirection === 'inward' ? 1 : -1;
+      pivotGroup.rotation.y = direction * inOut * angle;
+    } else {
+      // Revolving: rotate the whole group
+      pivotGroup.rotation.y = params.openAmount * Math.PI / 2;
+    }
+
+    return pivotGroup;
   }
 
   private createFrame(params: DoorParams): Group {

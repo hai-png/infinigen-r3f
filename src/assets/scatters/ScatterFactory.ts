@@ -15,6 +15,13 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
+import {
+  BIOME_SCATTER_ID_MAP,
+  SCATTER_ID_TO_SCATTER_TYPE,
+  type BiomeScatterProfile,
+  type ScatterEntry,
+} from '@/terrain/biomes/core/BiomeScatterMapping';
+import { BIOME_SCATTER_MAPPING } from '@/terrain/biomes/core/BiomeScatterMapping';
 
 // ============================================================================
 // Type Definitions
@@ -62,6 +69,8 @@ export interface ScatterConfig {
   type: ScatterType;
   /** Density: objects per square meter (default 1.0) */
   density: number;
+  /** Minimum distance between scattered objects (default 0) */
+  minDistance?: number;
   /** Surface selector function for terrain-aware placement */
   surfaceSelector: SurfaceSelector;
   /** Optional SDF distance field for terrain awareness (avoids water, steep slopes) */
@@ -180,6 +189,96 @@ export class ScatterFactory {
 
     // Register built-in scatter types
     this.registerBuiltinTypes();
+  }
+
+  // -----------------------------------------------------------------------
+  // Biome-driven scatter
+  // -----------------------------------------------------------------------
+
+  /**
+   * Scatter all biome-appropriate objects for the given biome type.
+   *
+   * Uses BiomeScatterMapping to resolve which scatter IDs belong to the
+   * biome, then maps those to concrete ScatterTypes via the
+   * SCATTER_ID_TO_SCATTER_TYPE bridge. Each resolved ScatterType is
+   * scattered using the BiomeScatterProfile's density and spacing data.
+   *
+   * @param biomeType - Biome identifier (e.g. 'desert', 'temperate_forest')
+   * @param baseConfig - Base scatter configuration (bounds, heightFunction, etc.)
+   * @returns Array of ScatterResults, one per scatter type that was resolved
+   */
+  scatterFromBiome(
+    biomeType: string,
+    baseConfig: Partial<ScatterConfig> = {},
+  ): ScatterResult[] {
+    const results: ScatterResult[] = [];
+
+    // 1. Get the full BiomeScatterProfile (for density/spacing data)
+    const profile: BiomeScatterProfile | undefined =
+      BIOME_SCATTER_MAPPING.getProfile(biomeType as any);
+
+    // 2. Get the canonical scatter IDs for this biome
+    const scatterIds = BIOME_SCATTER_ID_MAP[biomeType] ?? [];
+
+    // 3. For each scatter ID, resolve to a ScatterType and scatter
+    for (const scatterId of scatterIds) {
+      const scatterType = SCATTER_ID_TO_SCATTER_TYPE[scatterId];
+      if (!scatterType) {
+        console.warn(
+          `[ScatterFactory] No ScatterType mapping for scatter ID '${scatterId}' in biome '${biomeType}'`,
+        );
+        continue;
+      }
+
+      // Check if this ScatterType is registered
+      if (!this.geometryRegistry.has(scatterType as ScatterType)) {
+        console.warn(
+          `[ScatterFactory] ScatterType '${scatterType}' (from '${scatterId}') not registered`,
+        );
+        continue;
+      }
+
+      // Build per-entry ScatterConfig from the profile if available
+      let entryConfig = baseConfig;
+      if (profile) {
+        const allEntries: ScatterEntry[] = [
+          ...profile.primaryVegetation,
+          ...profile.groundCover,
+          ...profile.specialFeatures,
+        ];
+        // Find a matching entry by trying both the canonical ID and common prefixes
+        const entry = allEntries.find(e =>
+          e.id === scatterId ||
+          scatterId.startsWith(e.id.replace(/_/g, '') + '_') ||
+          e.id.includes(scatterId.replace(/_scatter$/, '')),
+        );
+
+        if (entry) {
+          entryConfig = {
+            ...baseConfig,
+            type: scatterType as ScatterType,
+            density: entry.baseDensity * profile.densityMultipliers.global,
+            minDistance: entry.minDistance,
+            minScale: entry.scaleRange[0],
+            maxScale: entry.scaleRange[1],
+          };
+        } else {
+          entryConfig = {
+            ...baseConfig,
+            type: scatterType as ScatterType,
+          };
+        }
+      } else {
+        entryConfig = {
+          ...baseConfig,
+          type: scatterType as ScatterType,
+        };
+      }
+
+      results.push(this.scatter(entryConfig));
+    }
+
+    return results;
   }
 
   /**

@@ -38,7 +38,11 @@ export {
 } from './assets/lighting/index';
 
 // Terrain Generation (primary for: BiomeType, TerrainConfig, LODConfig)
+// Note: TerrainMaterialConfig also exists in ./assets/materials (MaterialPipeline);
+// the terrain version (from TerrainMaterialSystem) is primary. Re-export explicitly
+// to resolve the ambiguity with the export * from './assets/materials/index'.
 export * from './terrain';
+export type { TerrainMaterialConfig } from './terrain/materials/TerrainMaterialSystem';
 
 // Simulation System
 export * from './sim';

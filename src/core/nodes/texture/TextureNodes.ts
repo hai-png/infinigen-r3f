@@ -619,7 +619,17 @@ export class TextureWhiteNoiseNode implements TextureNodeBase {
 
 /**
  * Texture Musgrave Node
- * Generates fractal noise patterns (FBM, multifractal, etc.)
+ * Generates fractal noise patterns (FBM, multifractal, ridged, hybrid, hetero_terrain)
+ * 
+ * Implements proper multi-octave gradient noise (Perlin-based) with correct
+ * fBm semantics matching Blender's Musgrave texture node.
+ * 
+ * The previous implementation used Math.sin(x)*Math.cos(y)*Math.sin(z) which
+ * was NOT Perlin noise and produced completely incorrect results for any
+ * material or terrain feature using Musgrave noise.
+ * 
+ * This implementation uses a proper gradient noise with fade function and
+ * permutation table, matching the behavior of Blender's Musgrave texture.
  */
 export class TextureMusgraveNode implements TextureNodeBase {
   readonly type = NodeTypes.TextureMusgrave;
@@ -640,41 +650,248 @@ export class TextureMusgraveNode implements TextureNodeBase {
     float: 0,
   };
 
+  /** Permutation table for gradient noise (doubled for overflow-free indexing) */
+  private perm: Uint8Array;
+
+  constructor(seed: number = 42) {
+    // Build permutation table with Fisher-Yates shuffle from seed
+    const p = new Uint8Array(512);
+    const base = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) base[i] = i;
+    
+    // Seeded PRNG (LCG)
+    let s = seed | 0;
+    const nextRand = () => {
+      s = (s * 1664525 + 1013904223) & 0x7fffffff;
+      return s / 0x7fffffff;
+    };
+    
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(nextRand() * (i + 1));
+      [base[i], base[j]] = [base[j], base[i]];
+    }
+    
+    for (let i = 0; i < 256; i++) {
+      p[i] = base[i];
+      p[i + 256] = base[i];
+    }
+    this.perm = p;
+  }
+
   execute(): TextureMusgraveOutputs {
     const { vector = [0, 0, 0], scale = 1.0 } = this.inputs;
     const x = vector[0] * scale;
     const y = vector[1] * scale;
     const z = vector[2] * scale || 0;
     
-    const detail = Math.floor(this.inputs.detail || 2);
+    const detail = Math.min(Math.floor(this.inputs.detail || 2), 16);
     const lacunarity = this.inputs.lacunarity || 2;
     const dimension = this.inputs.dimension || 2;
+    const offset = this.inputs.offset || 0;
     const gain = this.inputs.gain || 1;
+    const musgraveType = this.inputs.musgraveType || 'fbm';
+
+    // H = 1 - dimension/2 (Hurst exponent), controls roughness
+    const H = 1 - dimension / 2;
     
-    let value = 0;
-    let amplitude = 1;
-    let frequency = 1;
-    let totalAmplitude = 0;
-    
-    for (let i = 0; i < detail; i++) {
-      const noise = this.perlinNoise(x * frequency, y * frequency, z * frequency);
-      value += noise * amplitude;
-      totalAmplitude += amplitude;
-      amplitude *= gain;
-      frequency *= lacunarity;
+    let value: number;
+
+    switch (musgraveType) {
+      case 'multifractal':
+        value = this.multifractal(x, y, z, H, lacunarity, detail, offset);
+        break;
+      case 'ridged_multifractal':
+        value = this.ridgedMultifractal(x, y, z, H, lacunarity, detail, offset, gain);
+        break;
+      case 'hybrid_multifractal':
+        value = this.hybridMultifractal(x, y, z, H, lacunarity, detail, offset, gain);
+        break;
+      case 'hetero_terrain':
+        value = this.heteroTerrain(x, y, z, H, lacunarity, detail, offset);
+        break;
+      case 'fbm':
+      default:
+        value = this.fbm(x, y, z, H, lacunarity, detail);
+        break;
     }
     
-    value /= totalAmplitude;
-    value = (value + 1) / 2; // Normalize to [0, 1]
-    
     this.outputs.float = value;
-    
     return this.outputs;
   }
 
-  private perlinNoise(x: number, y: number, z: number): number {
-    // Simplified implementation (same as TextureNoiseNode)
-    return Math.sin(x) * Math.cos(y) * Math.sin(z);
+  /**
+   * fBm (Fractal Brownian Motion) - standard multi-octave Perlin noise
+   * Amplitude decays as lacunarity^(-H*octave)
+   */
+  private fbm(x: number, y: number, z: number, H: number, lacunarity: number, octaves: number): number {
+    let value = 0;
+    let amplitude = 1; // lacunarity^0 = 1
+    let frequency = 1;
+    let totalAmplitude = 0;
+
+    for (let i = 0; i < octaves; i++) {
+      value += amplitude * this.gradientNoise(x * frequency, y * frequency, z * frequency);
+      totalAmplitude += amplitude;
+      amplitude *= Math.pow(lacunarity, -H);
+      frequency *= lacunarity;
+    }
+
+    return value / totalAmplitude;
+  }
+
+  /**
+   * Multifractal - multiplies successive octaves instead of adding
+   * Produces more varied detail in areas of high base value
+   */
+  private multifractal(x: number, y: number, z: number, H: number, lacunarity: number, octaves: number, offset: number): number {
+    let value = 1;
+    let frequency = 1;
+
+    for (let i = 0; i < octaves; i++) {
+      value *= (offset + Math.pow(lacunarity, -H * i) * this.gradientNoise(x * frequency, y * frequency, z * frequency));
+      frequency *= lacunarity;
+    }
+
+    return value - 1; // Shift so baseline is near 0
+  }
+
+  /**
+   * Ridged Multifractal - uses absolute value and weight feedback
+   * Creates sharp ridges and valleys, good for terrain features
+   */
+  private ridgedMultifractal(x: number, y: number, z: number, H: number, lacunarity: number, octaves: number, offset: number, gain: number): number {
+    let value = 0;
+    let frequency = 1;
+    let weight = 1;
+    let signal: number;
+
+    for (let i = 0; i < octaves; i++) {
+      signal = this.gradientNoise(x * frequency, y * frequency, z * frequency);
+      
+      // Take absolute value to create ridges
+      signal = Math.abs(signal);
+      // Invert and offset: ridge is at 0 (originally the zero-crossing)
+      signal = offset - signal;
+      // Square the signal to increase sharpness of ridges
+      signal *= signal;
+      // Weight contribution by previous signal (weight feedback)
+      signal *= weight;
+      weight = Math.min(Math.max(signal * gain, 0), 1);
+      
+      value += signal * Math.pow(lacunarity, -H * i);
+      frequency *= lacunarity;
+    }
+
+    return value;
+  }
+
+  /**
+   * Hybrid Multifractal - combines additive fBm with multiplicative weighting
+   * First octave uses additive, subsequent use multiplicative correction
+   */
+  private hybridMultifractal(x: number, y: number, z: number, H: number, lacunarity: number, octaves: number, offset: number, gain: number): number {
+    let value = 0;
+    let frequency = 1;
+    let weight = 1;
+    let signal: number;
+
+    for (let i = 0; i < octaves; i++) {
+      signal = this.gradientNoise(x * frequency, y * frequency, z * frequency);
+      
+      if (i === 0) {
+        // First octave: additive with offset
+        value = (offset + signal) * Math.pow(lacunarity, -H * i);
+        weight = signal;
+      } else {
+        // Subsequent: weight by previous signal
+        weight = Math.min(Math.max((offset + signal) * weight, 0), 1);
+        value += weight * signal * Math.pow(lacunarity, -H * i);
+      }
+      
+      frequency *= lacunarity;
+    }
+
+    return value;
+  }
+
+  /**
+   * Hetero Terrain - like fBm but offsets each octave
+   * Produces terrain with heterogeneous features at different scales
+   */
+  private heteroTerrain(x: number, y: number, z: number, H: number, lacunarity: number, octaves: number, offset: number): number {
+    let value = 0;
+    let frequency = 1;
+    let increment: number;
+
+    // First octave
+    value = offset + this.gradientNoise(x, y, z);
+    value *= Math.pow(lacunarity, -H);
+    frequency = lacunarity;
+
+    for (let i = 1; i < octaves; i++) {
+      increment = (offset + this.gradientNoise(x * frequency, y * frequency, z * frequency));
+      increment *= Math.pow(lacunarity, -H * i);
+      value += increment * value; // Multiplicative accumulation
+      frequency *= lacunarity;
+    }
+
+    return value;
+  }
+
+  /**
+   * Proper Perlin gradient noise implementation
+   * Uses the fade function (6t^5 - 15t^4 + 10t^3) for smooth interpolation,
+   * gradient dot products for directional noise, and a permutation table
+   * for consistent pseudo-random hash lookups.
+   */
+  private gradientNoise(x: number, y: number, z: number): number {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+    const Z = Math.floor(z) & 255;
+    
+    x -= Math.floor(x);
+    y -= Math.floor(y);
+    z -= Math.floor(z);
+    
+    const u = this.fade(x);
+    const v = this.fade(y);
+    const w = this.fade(z);
+    
+    const A  = this.perm[X] + Y;
+    const AA = this.perm[A] + Z;
+    const AB = this.perm[A + 1] + Z;
+    const B  = this.perm[X + 1] + Y;
+    const BA = this.perm[B] + Z;
+    const BB = this.perm[B + 1] + Z;
+    
+    return this.lerp(w,
+      this.lerp(v,
+        this.lerp(u, this.grad(this.perm[AA], x, y, z), this.grad(this.perm[BA], x - 1, y, z)),
+        this.lerp(u, this.grad(this.perm[AB], x, y - 1, z), this.grad(this.perm[BB], x - 1, y - 1, z))
+      ),
+      this.lerp(v,
+        this.lerp(u, this.grad(this.perm[AA + 1], x, y, z - 1), this.grad(this.perm[BA + 1], x - 1, y, z - 1)),
+        this.lerp(u, this.grad(this.perm[AB + 1], x, y - 1, z - 1), this.grad(this.perm[BB + 1], x - 1, y - 1, z - 1))
+      )
+    );
+  }
+
+  /** Quintic fade curve: 6t^5 - 15t^4 + 10t^3 (Ken Perlin's improved interpolation) */
+  private fade(t: number): number {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  /** Linear interpolation */
+  private lerp(t: number, a: number, b: number): number {
+    return a + t * (b - a);
+  }
+
+  /** Gradient function: maps hash value to directional gradient dot product */
+  private grad(hash: number, x: number, y: number, z: number): number {
+    const h = hash & 15;
+    const u = h < 8 ? x : y;
+    const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+    return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
   }
 }
 

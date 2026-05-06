@@ -16,7 +16,7 @@ import {
 } from '../core/types';
 
 export interface TranspilerOptions {
-  outputFormat: 'typescript' | 'javascript' | 'shader-material' | 'three-nodes';
+  outputFormat: 'typescript' | 'javascript' | 'shader-material' | 'three-nodes' | 'node-wrangler';
   indentSize?: number;
   includeComments?: boolean;
   optimize?: boolean;
@@ -52,6 +52,8 @@ export class NodeTranspiler {
         return this.transpileToShaderMaterial(tree);
       case 'three-nodes':
         return this.transpileToThreeNodes(tree);
+      case 'node-wrangler':
+        return this.transpileToNodeWranglerCode(tree);
       default:
         throw new Error(`Unknown output format: ${this.options.outputFormat}`);
     }
@@ -369,6 +371,79 @@ export class NodeTranspiler {
     nodesToRemove.forEach(id => optimized.nodes.delete(id));
 
     return optimized;
+  }
+
+  /**
+   * Transpile to NodeWrangler-style TypeScript code.
+   *
+   * This produces code that uses the NodeWrangler API directly,
+   * suitable for building graphs programmatically.
+   * Delegates to NodeCodeSerializer for the actual code generation.
+   */
+  private transpileToNodeWranglerCode(tree: NodeTree): string {
+    // Build a temporary NodeWrangler from the NodeTree data
+    const { NodeWrangler } = require('../core/node-wrangler');
+    const { NodeTypes } = require('../core/node-types');
+    const { NodeCodeSerializer } = require('../core/NodeCodeSerializer');
+
+    const nw = new NodeWrangler();
+
+    // Reconstruct the graph in a NodeWrangler from the NodeTree
+    const nodeIdMap = new Map<string, any>();
+    for (const [id, node] of tree.nodes) {
+      const typeStr = String(node.type);
+      // Find matching NodeTypes enum value
+      let nodeType = NodeTypes[typeStr];
+      if (!nodeType) {
+        // Try looking up by value
+        for (const [key, val] of Object.entries(NodeTypes)) {
+          if (val === typeStr) {
+            nodeType = NodeTypes[key];
+            break;
+          }
+        }
+      }
+      if (!nodeType) {
+        nodeType = typeStr; // fallback
+      }
+
+      const props = { ...(node.settings || {}) };
+      const newNode = nw.newNode(nodeType, undefined, undefined, props);
+      nodeIdMap.set(id, newNode);
+
+      // Set input values
+      if (node.inputs instanceof Map) {
+        for (const [socketName, value] of node.inputs) {
+          if (value !== undefined && value !== null) {
+            try {
+              nw.setInputValue(newNode, socketName, value);
+            } catch {
+              // Skip inputs that don't exist on the node definition
+            }
+          }
+        }
+      }
+    }
+
+    // Create connections
+    for (const link of tree.links) {
+      const fromNode = nodeIdMap.get(link.fromNode);
+      const toNode = nodeIdMap.get(link.toNode);
+      if (fromNode && toNode) {
+        try {
+          nw.connect(fromNode, link.fromSocket, toNode, link.toSocket);
+        } catch {
+          // Skip connections that can't be made
+        }
+      }
+    }
+
+    const serializer = new NodeCodeSerializer({
+      includeComments: this.options.includeComments,
+      functionName: `build${tree.name.replace(/[^a-zA-Z0-9]/g, '') || 'Graph'}`,
+    });
+
+    return serializer.serialize(nw);
   }
 }
 

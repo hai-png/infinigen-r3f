@@ -406,10 +406,20 @@ export function executeFacesOfEdge(inputs: NodeInputs): NodeOutput {
 // ============================================================================
 
 /**
- * 8. CaptureAttribute — Capture an attribute value at the current geometry state.
- * Unlike StoreNamedAttribute, this captures the field evaluation context.
- * Inputs: Geometry, Value, Data Type, Domain
- * Outputs: Geometry, Attribute (the captured values)
+ * 8. CaptureAttribute — Evaluate a field per-element on geometry and capture
+ * the per-element values.
+ *
+ * In Blender's geometry nodes, CaptureAttribute evaluates its Value input
+ * field at each element of the specified domain (point/face/corner). The
+ * field may depend on per-element data like Position, Normal, or Index.
+ *
+ * The Value input can be:
+ *   - A per-element array (from Position, Normal, etc. nodes)
+ *   - An AttributeStream (from the per-vertex evaluator)
+ *   - A function (field evaluator) that takes (index, position, normal) → value
+ *   - A single scalar/vector constant (uniform field — same value for all elements)
+ *
+ * Outputs: Geometry (with captured attribute stored), Attribute (per-element array)
  */
 export function executeCaptureAttribute(inputs: NodeInputs): NodeOutput {
   const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
@@ -419,51 +429,317 @@ export function executeCaptureAttribute(inputs: NodeInputs): NodeOutput {
 
   if (!geometry) return { Geometry: null, Attribute: value };
 
-  // Capture the attribute — store it on the geometry as a named attribute
-  const attrName = `_captured_${domain}_${Date.now()}`;
   const result = geometry.clone();
+  const posAttr = result.getAttribute('position');
+  const indexAttr = result.getIndex();
 
-  if (value !== null && value !== undefined) {
-    const posAttr = result.getAttribute('position');
-    const count = domain === 'POINT'
-      ? (posAttr?.count ?? 0)
-      : domain === 'FACE'
-        ? Math.floor((result.getIndex()?.count ?? posAttr?.count ?? 0) / 3)
-        : posAttr?.count ?? 0;
+  // Determine element count for the specified domain
+  const count = getDomainElementCount(result, domain);
 
-    // Store as custom attribute
-    if (dataType === 'FLOAT' && typeof value === 'number') {
-      const data = new Float32Array(count).fill(value);
-      result.setAttribute(attrName, new THREE.Float32BufferAttribute(data, 1));
-    } else if (dataType === 'FLOAT_VECTOR' && typeof value === 'object') {
-      const v = normalizeVec(value);
-      const data = new Float32Array(count * 3);
-      for (let i = 0; i < count; i++) {
-        data[i * 3] = v.x;
-        data[i * 3 + 1] = v.y;
-        data[i * 3 + 2] = v.z;
-      }
-      result.setAttribute(attrName, new THREE.Float32BufferAttribute(data, 3));
-    } else if (dataType === 'FLOAT_COLOR' && typeof value === 'object') {
-      const c = value as ColorLike;
-      const data = new Float32Array(count * 4);
-      for (let i = 0; i < count; i++) {
-        data[i * 4] = c.r ?? 0;
-        data[i * 4 + 1] = c.g ?? 0;
-        data[i * 4 + 2] = c.b ?? 0;
-        data[i * 4 + 3] = c.a ?? 1;
-      }
-      result.setAttribute(attrName, new THREE.Float32BufferAttribute(data, 4));
-    } else if (dataType === 'INT' && typeof value === 'number') {
-      const data = new Int32Array(count).fill(value);
-      result.setAttribute(attrName, new THREE.Int32BufferAttribute(data, 1));
-    } else if (dataType === 'BOOLEAN' && typeof value === 'boolean') {
-      const data = new Uint8Array(count).fill(value ? 1 : 0);
-      result.setAttribute(attrName, new THREE.Uint8BufferAttribute(data, 1));
+  // ---------------------------------------------------------------------------
+  // Resolve the Value into a per-element array
+  // ---------------------------------------------------------------------------
+
+  const perElementValues: unknown[] = resolvePerElementValues(
+    value, count, domain, result, dataType,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Store as a named attribute on the geometry
+  // ---------------------------------------------------------------------------
+
+  const attrName = `_captured_${domain}_${Date.now()}`;
+  storePerElementAttribute(result, attrName, perElementValues, dataType, count);
+
+  // ---------------------------------------------------------------------------
+  // Return geometry with captured attribute + the per-element array
+  // ---------------------------------------------------------------------------
+
+  return { Geometry: result, Attribute: perElementValues };
+}
+
+/**
+ * Determine the number of elements for a given domain on a geometry.
+ */
+function getDomainElementCount(geometry: THREE.BufferGeometry, domain: string): number {
+  const posAttr = geometry.getAttribute('position');
+  const indexAttr = geometry.getIndex();
+  switch (domain.toUpperCase()) {
+    case 'POINT':
+      return posAttr?.count ?? 0;
+    case 'FACE':
+      return indexAttr
+        ? Math.floor(indexAttr.count / 3)
+        : Math.floor((posAttr?.count ?? 0) / 3);
+    case 'EDGE': {
+      const faces = indexAttr
+        ? Math.floor(indexAttr.count / 3)
+        : Math.floor((posAttr?.count ?? 0) / 3);
+      return Math.max(1, Math.floor(faces * 1.5));
     }
+    case 'FACE_CORNER':
+      return indexAttr
+        ? indexAttr.count
+        : (posAttr?.count ?? 0);
+    case 'SPLINE':
+    case 'INSTANCE':
+      return 1;
+    default:
+      return posAttr?.count ?? 0;
+  }
+}
+
+/**
+ * Extract position for a domain element.
+ * For POINT domain, returns the vertex position directly.
+ * For FACE domain, returns the face centroid.
+ */
+function getElementPosition(
+  geometry: THREE.BufferGeometry,
+  domain: string,
+  elementIndex: number,
+): Vector3Like {
+  const posAttr = geometry.getAttribute('position');
+  const indexAttr = geometry.getIndex();
+
+  if (domain.toUpperCase() === 'POINT' || domain.toUpperCase() === 'FACE_CORNER') {
+    const idx = domain.toUpperCase() === 'FACE_CORNER' && indexAttr
+      ? indexAttr.getX(elementIndex)
+      : elementIndex;
+    return {
+      x: posAttr?.getX(idx) ?? 0,
+      y: posAttr?.getY(idx) ?? 0,
+      z: posAttr?.getZ(idx) ?? 0,
+    };
   }
 
-  return { Geometry: result, Attribute: value };
+  if (domain.toUpperCase() === 'FACE') {
+    const i0 = indexAttr ? indexAttr.getX(elementIndex * 3) : elementIndex * 3;
+    const i1 = indexAttr ? indexAttr.getX(elementIndex * 3 + 1) : elementIndex * 3 + 1;
+    const i2 = indexAttr ? indexAttr.getX(elementIndex * 3 + 2) : elementIndex * 3 + 2;
+    return {
+      x: ((posAttr?.getX(i0) ?? 0) + (posAttr?.getX(i1) ?? 0) + (posAttr?.getX(i2) ?? 0)) / 3,
+      y: ((posAttr?.getY(i0) ?? 0) + (posAttr?.getY(i1) ?? 0) + (posAttr?.getY(i2) ?? 0)) / 3,
+      z: ((posAttr?.getZ(i0) ?? 0) + (posAttr?.getZ(i1) ?? 0) + (posAttr?.getZ(i2) ?? 0)) / 3,
+    };
+  }
+
+  return { x: 0, y: 0, z: 0 };
+}
+
+/**
+ * Extract normal for a domain element.
+ */
+function getElementNormal(
+  geometry: THREE.BufferGeometry,
+  domain: string,
+  elementIndex: number,
+): Vector3Like {
+  const normalAttr = geometry.getAttribute('normal');
+  const posAttr = geometry.getAttribute('position');
+  const indexAttr = geometry.getIndex();
+
+  if (normalAttr && (domain.toUpperCase() === 'POINT' || domain.toUpperCase() === 'FACE_CORNER')) {
+    const idx = domain.toUpperCase() === 'FACE_CORNER' && indexAttr
+      ? indexAttr.getX(elementIndex)
+      : elementIndex;
+    return {
+      x: normalAttr.getX(idx),
+      y: normalAttr.getY(idx),
+      z: normalAttr.getZ(idx),
+    };
+  }
+
+  if (domain.toUpperCase() === 'FACE' && posAttr && indexAttr) {
+    // Compute face normal
+    const i0 = indexAttr.getX(elementIndex * 3);
+    const i1 = indexAttr.getX(elementIndex * 3 + 1);
+    const i2 = indexAttr.getX(elementIndex * 3 + 2);
+    const v0 = new THREE.Vector3(posAttr.getX(i0), posAttr.getY(i0), posAttr.getZ(i0));
+    const v1 = new THREE.Vector3(posAttr.getX(i1), posAttr.getY(i1), posAttr.getZ(i1));
+    const v2 = new THREE.Vector3(posAttr.getX(i2), posAttr.getY(i2), posAttr.getZ(i2));
+    const e1 = new THREE.Vector3().subVectors(v1, v0);
+    const e2 = new THREE.Vector3().subVectors(v2, v0);
+    const n = new THREE.Vector3().crossVectors(e1, e2).normalize();
+    return { x: n.x, y: n.y, z: n.z };
+  }
+
+  return { x: 0, y: 1, z: 0 };
+}
+
+/**
+ * Resolve the Value input into a per-element array.
+ *
+ * Handles:
+ *   - Per-element arrays (from Position/Normal/Index nodes)
+ *   - AttributeStream objects (from the per-vertex evaluator)
+ *   - Field evaluator functions: (index, position, normal) → value
+ *   - Single scalar/vector constants (uniform field)
+ */
+function resolvePerElementValues(
+  value: unknown,
+  count: number,
+  domain: string,
+  geometry: THREE.BufferGeometry,
+  dataType: string,
+): unknown[] {
+  if (value === null || value === undefined) {
+    // No value — return zeros
+    return new Array(count).fill(
+      dataType === 'FLOAT_VECTOR' ? { x: 0, y: 0, z: 0 }
+        : dataType === 'FLOAT_COLOR' ? { r: 0, g: 0, b: 0, a: 1 }
+        : dataType === 'BOOLEAN' ? false
+        : 0,
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Case 1: Value is an AttributeStream (from PerVertexEvaluator)
+  // -----------------------------------------------------------------------
+  if (typeof value === 'object' && value !== null && 'getFloat' in value && 'size' in value) {
+    const stream = value as any;
+    const result: unknown[] = [];
+    const streamSize = stream.size as number;
+    const streamType = stream.dataType as string;
+
+    for (let i = 0; i < count; i++) {
+      const idx = Math.min(i, streamSize - 1);
+      if (streamType === 'VECTOR') {
+        const v = stream.getVector(idx) as [number, number, number];
+        result.push({ x: v[0], y: v[1], z: v[2] });
+      } else if (streamType === 'COLOR') {
+        result.push(stream.getColor(idx));
+      } else if (streamType === 'BOOLEAN') {
+        result.push(stream.getBoolean(idx));
+      } else {
+        // FLOAT, INT
+        result.push(stream.getFloat(idx));
+      }
+    }
+    return result;
+  }
+
+  // -----------------------------------------------------------------------
+  // Case 2: Value is already a per-element array
+  // -----------------------------------------------------------------------
+  if (Array.isArray(value)) {
+    if (value.length === count) {
+      // Per-element array — use directly
+      return value.slice();
+    } else if (value.length > 0) {
+      // Array size doesn't match — try to map element-by-element,
+      // cycling if the array is shorter
+      const result: unknown[] = [];
+      for (let i = 0; i < count; i++) {
+        result.push(value[i % value.length]);
+      }
+      return result;
+    }
+    // Empty array — fall through to constant
+  }
+
+  // -----------------------------------------------------------------------
+  // Case 3: Value is a field evaluator function
+  //   (index: number, position: Vector3Like, normal: Vector3Like) => any
+  // -----------------------------------------------------------------------
+  if (typeof value === 'function') {
+    const result: unknown[] = [];
+    for (let i = 0; i < count; i++) {
+      const position = getElementPosition(geometry, domain, i);
+      const normal = getElementNormal(geometry, domain, i);
+      try {
+        result.push(value(i, position, normal));
+      } catch {
+        // On error, use default value
+        result.push(dataType === 'FLOAT_VECTOR' ? { x: 0, y: 0, z: 0 } : 0);
+      }
+    }
+    return result;
+  }
+
+  // -----------------------------------------------------------------------
+  // Case 4: Single scalar constant — repeat for all elements
+  //   This is correct for constant fields (e.g., Value = 5.0)
+  // -----------------------------------------------------------------------
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return new Array(count).fill(value);
+  }
+
+  // -----------------------------------------------------------------------
+  // Case 5: Single vector/color object — repeat for all elements
+  // -----------------------------------------------------------------------
+  if (typeof value === 'object') {
+    // Check if this looks like a single vector/color (not an array)
+    const v = normalizeVec(value);
+    if (dataType === 'FLOAT_VECTOR' || dataType === 'VECTOR') {
+      const repeated = { x: v.x, y: v.y, z: v.z };
+      return new Array(count).fill(repeated);
+    }
+    if (dataType === 'FLOAT_COLOR' || dataType === 'COLOR') {
+      const c = value as ColorLike;
+      const repeated = { r: c.r ?? 0, g: c.g ?? 0, b: c.b ?? 0, a: c.a ?? 1 };
+      return new Array(count).fill(repeated);
+    }
+    // For other object types, just repeat
+    return new Array(count).fill(value);
+  }
+
+  // Fallback
+  return new Array(count).fill(value);
+}
+
+/**
+ * Store a per-element array as a named attribute on the geometry.
+ */
+function storePerElementAttribute(
+  geometry: THREE.BufferGeometry,
+  attrName: string,
+  values: unknown[],
+  dataType: string,
+  count: number,
+): void {
+  if (values.length === 0) return;
+
+  const safeCount = Math.min(values.length, count);
+
+  if (dataType === 'FLOAT' || dataType === 'FLOAT_FACTOR') {
+    const data = new Float32Array(count);
+    for (let i = 0; i < safeCount; i++) {
+      data[i] = typeof values[i] === 'number' ? (values[i] as number) : 0;
+    }
+    geometry.setAttribute(attrName, new THREE.Float32BufferAttribute(data, 1));
+  } else if (dataType === 'FLOAT_VECTOR' || dataType === 'VECTOR') {
+    const data = new Float32Array(count * 3);
+    for (let i = 0; i < safeCount; i++) {
+      const v = normalizeVec(values[i]);
+      data[i * 3] = v.x;
+      data[i * 3 + 1] = v.y;
+      data[i * 3 + 2] = v.z;
+    }
+    geometry.setAttribute(attrName, new THREE.Float32BufferAttribute(data, 3));
+  } else if (dataType === 'FLOAT_COLOR' || dataType === 'COLOR') {
+    const data = new Float32Array(count * 4);
+    for (let i = 0; i < safeCount; i++) {
+      const c = values[i] as ColorLike;
+      data[i * 4] = c?.r ?? 0;
+      data[i * 4 + 1] = c?.g ?? 0;
+      data[i * 4 + 2] = c?.b ?? 0;
+      data[i * 4 + 3] = c?.a ?? 1;
+    }
+    geometry.setAttribute(attrName, new THREE.Float32BufferAttribute(data, 4));
+  } else if (dataType === 'INT') {
+    const data = new Int32Array(count);
+    for (let i = 0; i < safeCount; i++) {
+      data[i] = typeof values[i] === 'number' ? Math.floor(values[i] as number) : 0;
+    }
+    geometry.setAttribute(attrName, new THREE.Int32BufferAttribute(data, 1));
+  } else if (dataType === 'BOOLEAN') {
+    const data = new Uint8Array(count);
+    for (let i = 0; i < safeCount; i++) {
+      data[i] = values[i] ? 1 : 0;
+    }
+    geometry.setAttribute(attrName, new THREE.Uint8BufferAttribute(data, 1));
+  }
 }
 
 /**

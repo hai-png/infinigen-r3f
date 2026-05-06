@@ -59,3 +59,16 @@ export type {
   DifferentialGrowthCoralVariant,
   DifferentialGrowthCoralParams,
 } from './DifferentialGrowthCoral';
+
+// Wave 3 Coral Generators (branching, fan, brain)
+export {
+  generateBranchingCoral,
+  generateFanCoral,
+  generateBrainCoral,
+} from './Wave3CoralGenerators';
+
+export type {
+  BranchingCoralConfig,
+  FanCoralConfig,
+  BrainCoralConfig,
+} from './Wave3CoralGenerators';

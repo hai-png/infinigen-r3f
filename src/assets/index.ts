@@ -2,7 +2,11 @@
 export * from './procedural/index';
 
 // Material generators
+// Note: TerrainMaterialConfig is also exported via ./procedural/index (→ terrain).
+// The materials version (from MaterialPipeline) is the primary one here.
+// Explicit re-export resolves the ambiguity.
 export * from './materials/index';
+export type { TerrainMaterialConfig } from './materials/MaterialPipeline';
 
 // Specialized shaders
 export * from './shaders/index';

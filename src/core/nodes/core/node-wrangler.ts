@@ -342,6 +342,481 @@ export class NodeWrangler {
     return exposedSocket;
   }
 
+  // ==========================================================================
+  // Convenience Methods - Python API Parity
+  // Based on infinigen/core/nodes/node_wrangler.py
+  // ==========================================================================
+
+  /**
+   * Add two or more nodes (vector math ADD).
+   * Supports N-ary associative addition: add(a, b, c) = add(a, add(b, c))
+   */
+  add(...nodes: any[]): any {
+    if (nodes.length === 1) return nodes[0];
+    if (nodes.length === 2) {
+      return this.newNode(NodeTypes.VectorMath, undefined, undefined, { operation: 'ADD' });
+      // The caller should connect the two nodes as inputs via link()
+    }
+    // Recursive N-ary: add the first with the rest
+    return this.add(nodes[0], this.add(...nodes.slice(1)));
+  }
+
+  /**
+   * Multiply two or more nodes (vector math MULTIPLY).
+   * Supports N-ary associative multiplication.
+   */
+  multiply(...nodes: any[]): any {
+    if (nodes.length === 1) return nodes[0];
+    if (nodes.length === 2) {
+      return this.newNode(NodeTypes.VectorMath, undefined, undefined, { operation: 'MULTIPLY' });
+    }
+    return this.multiply(nodes[0], this.multiply(...nodes.slice(1)));
+  }
+
+  /**
+   * Scalar add: adds two float values using Math node ADD operation
+   */
+  scalarAdd(...nodes: any[]): any {
+    if (nodes.length === 1) return nodes[0];
+    if (nodes.length === 2) {
+      return this.newNode(NodeTypes.Math, undefined, undefined, { operation: 'ADD' });
+    }
+    return this.scalarAdd(nodes[0], this.scalarAdd(...nodes.slice(1)));
+  }
+
+  /**
+   * Scalar multiply: multiplies two float values using Math node MULTIPLY operation
+   */
+  scalarMultiply(...nodes: any[]): any {
+    if (nodes.length === 1) return nodes[0];
+    if (nodes.length === 2) {
+      return this.newNode(NodeTypes.Math, undefined, undefined, { operation: 'MULTIPLY' });
+    }
+    return this.scalarMultiply(nodes[0], this.scalarMultiply(...nodes.slice(1)));
+  }
+
+  /**
+   * Subtract two nodes (vector math SUBTRACT)
+   */
+  sub(nodeA: any, nodeB: any): any {
+    return this.newNode(NodeTypes.VectorMath, undefined, undefined, { operation: 'SUBTRACT' });
+  }
+
+  /**
+   * Scalar subtract: subtracts two float values using Math node SUBTRACT operation
+   */
+  scalarSub(nodeA: any, nodeB: any): any {
+    return this.newNode(NodeTypes.Math, undefined, undefined, { operation: 'SUBTRACT' });
+  }
+
+  /**
+   * Divide two nodes (vector math DIVIDE)
+   */
+  divide(nodeA: any, nodeB: any): any {
+    return this.newNode(NodeTypes.VectorMath, undefined, undefined, { operation: 'DIVIDE' });
+  }
+
+  /**
+   * Scalar divide: divides two float values using Math node DIVIDE operation
+   */
+  scalarDivide(nodeA: any, nodeB: any): any {
+    return this.newNode(NodeTypes.Math, undefined, undefined, { operation: 'DIVIDE' });
+  }
+
+  /**
+   * Scale a vector by a scalar
+   */
+  scale(vectorNode: any, scalarNode: any): any {
+    return this.newNode(
+      NodeTypes.VectorMath,
+      undefined,
+      undefined,
+      { operation: 'SCALE' }
+    );
+  }
+
+  /**
+   * Dot product of two vectors
+   */
+  dot(nodeA: any, nodeB: any): any {
+    return this.newNode(
+      NodeTypes.VectorMath,
+      undefined,
+      undefined,
+      { operation: 'DOT_PRODUCT' }
+    );
+  }
+
+  /**
+   * Generic math operation on Math node
+   */
+  math(operation: string, ...nodes: any[]): any {
+    return this.newNode(
+      NodeTypes.Math,
+      undefined,
+      undefined,
+      { operation }
+    );
+  }
+
+  /**
+   * Generic vector math operation on VectorMath node
+   */
+  vectorMath(operation: string, ...nodes: any[]): any {
+    return this.newNode(
+      NodeTypes.VectorMath,
+      undefined,
+      undefined,
+      { operation }
+    );
+  }
+
+  /**
+   * Bernoulli trial: returns a boolean output with given probability
+   * Creates a RandomValue node with BOOLEAN data type
+   */
+  bernoulli(prob: number, seed?: number): NodeInstance {
+    if (seed === undefined) {
+      seed = Math.floor(Math.random() * 1e5);
+    }
+    return this.newNode(
+      NodeTypes.RandomValue,
+      `bernoulli_${this.nodeCounter}`,
+      undefined,
+      {
+        data_type: 'BOOLEAN',
+        Probability: prob,
+        Seed: seed,
+      }
+    );
+  }
+
+  /**
+   * Uniform random value in [low, high] range
+   * Supports FLOAT and FLOAT_VECTOR data types
+   */
+  uniform(low: number | number[] = 0.0, high: number | number[] = 1.0, seed?: number, dataType: string = 'FLOAT'): NodeInstance {
+    if (seed === undefined) {
+      seed = Math.floor(Math.random() * 1e5);
+    }
+    if (Array.isArray(low)) {
+      dataType = 'FLOAT_VECTOR';
+    }
+    return this.newNode(
+      NodeTypes.RandomValue,
+      `uniform_${this.nodeCounter}`,
+      undefined,
+      {
+        data_type: dataType,
+        Min: low,
+        Max: high,
+        Seed: seed,
+      }
+    );
+  }
+
+  /**
+   * Build a float curve: maps input value through a curve defined by anchor points
+   * Each anchor is [position, value] where position and value are in [0, 1]
+   */
+  buildFloatCurve(x: any, anchors: [number, number][], handle: string = 'VECTOR'): NodeInstance {
+    const floatCurve = this.newNode(
+      NodeTypes.FloatCurve,
+      `floatcurve_${this.nodeCounter}`,
+      undefined,
+      {
+        Value: x,
+        _anchors: anchors,
+        _handle: handle,
+      }
+    );
+    return floatCurve;
+  }
+
+  /**
+   * Switch between two values based on a boolean condition
+   */
+  switch(pred: any, trueVal: any, falseVal: any, inputType: string = 'FLOAT'): NodeInstance {
+    return this.newNode(
+      NodeTypes.Switch,
+      `switch_${this.nodeCounter}`,
+      undefined,
+      {
+        input_type: inputType,
+        Switch: pred,
+        True: trueVal,
+        False: falseVal,
+      }
+    );
+  }
+
+  /**
+   * Vector switch between two vector values based on a boolean condition
+   */
+  vectorSwitch(pred: any, trueVal: any, falseVal: any): NodeInstance {
+    return this.switch(pred, trueVal, falseVal, 'VECTOR');
+  }
+
+  /**
+   * Compare two values with a given operation
+   */
+  compare(operation: string, nodeA: any, nodeB: any): NodeInstance {
+    return this.newNode(
+      NodeTypes.Compare,
+      undefined,
+      undefined,
+      { operation }
+    );
+  }
+
+  /**
+   * Compare direction between two vectors with angle threshold
+   */
+  compareDirection(operation: string, a: any, b: any, angle: number): NodeInstance {
+    return this.newNode(
+      NodeTypes.Compare,
+      undefined,
+      undefined,
+      { data_type: 'VECTOR', mode: 'DIRECTION', operation }
+    );
+  }
+
+  /**
+   * Capture an attribute on geometry, returning [geometry, attribute] tuple
+   * This evaluates a field on the geometry and returns per-element values
+   */
+  capture(geometry: any, attribute: any, attrs?: Record<string, any>): { geometry: any; attribute: any } {
+    const captureNode = this.newNode(
+      NodeTypes.CaptureAttribute,
+      `capture_${this.nodeCounter}`,
+      undefined,
+      {
+        ...(attrs || {}),
+        Geometry: geometry,
+        Value: attribute,
+      }
+    );
+    return {
+      geometry: captureNode,
+      attribute: captureNode,
+    };
+  }
+
+  /**
+   * Musgrave texture with automatic MapRange remapping from [-1, 1] to [0, 1]
+   * This matches the Python NodeWrangler.musgrave() convenience method
+   */
+  musgrave(scale: number = 10, vector?: any): NodeInstance {
+    const musgraveNode = this.newNode(
+      NodeTypes.MusgraveTexture,
+      `musgrave_${this.nodeCounter}`,
+      undefined,
+      { Scale: scale }
+    );
+    if (vector !== undefined) {
+      this.setInputValue(musgraveNode, 'Vector', vector);
+    }
+
+    // MapRange remaps [-1, 1] -> [0, 1]
+    const mapRange = this.newNode(
+      NodeTypes.MapRange,
+      `maprange_${this.nodeCounter}`,
+      undefined,
+      {}
+    );
+    this.setInputValue(mapRange, 0, musgraveNode);  // value from musgrave
+    this.setInputValue(mapRange, 'From Min', -1);
+    this.setInputValue(mapRange, 'From Max', 1);
+    this.setInputValue(mapRange, 'To Min', 0);
+    this.setInputValue(mapRange, 'To Max', 1);
+
+    return mapRange;
+  }
+
+  /**
+   * Combine XYZ components into a vector
+   */
+  combine(x: any, y: any, z: any): NodeInstance {
+    return this.newNode(NodeTypes.CombineXYZ, `combine_${this.nodeCounter}`);
+  }
+
+  /**
+   * Separate a vector into XYZ components
+   */
+  separate(x: any): NodeInstance {
+    return this.newNode(NodeTypes.SeparateXYZ, `separate_${this.nodeCounter}`);
+  }
+
+  /**
+   * Convert a curve to mesh with optional profile curve
+   */
+  curve2mesh(curve: any, profileCurve?: any): NodeInstance {
+    const curveToMesh = this.newNode(
+      NodeTypes.CurveToMesh,
+      `curve2mesh_${this.nodeCounter}`
+    );
+    if (profileCurve !== undefined) {
+      this.setInputValue(curveToMesh, 'Profile Curve', profileCurve);
+    }
+    // Set shade smooth off
+    const shadeSmooth = this.newNode(
+      NodeTypes.SetShadeSmooth,
+      `shadesmooth_${this.nodeCounter}`
+    );
+    this.setInputValue(shadeSmooth, 'Shade Smooth', false);
+    return shadeSmooth;
+  }
+
+  /**
+   * Build a case/switch statement based on index matching
+   */
+  buildCase(value: any, inputs: any[], outputs: any[], inputType: string = 'FLOAT'): any {
+    let node = outputs[outputs.length - 1];
+    for (let i = 0; i < inputs.length - 1; i++) {
+      node = this.switch(
+        this.compare('EQUAL', value, inputs[i]),
+        outputs[i],
+        node,
+        inputType
+      );
+    }
+    return node;
+  }
+
+  /**
+   * Build an index-based case: switch on the Index node
+   */
+  buildIndexCase(inputs: any[]): any {
+    const indexNode = this.newNode(NodeTypes.Index, `index_${this.nodeCounter}`);
+    return this.buildCase(
+      indexNode,
+      [...inputs, -1],
+      [...Array(inputs.length).fill(true), false]
+    );
+  }
+
+  /**
+   * Find nodes by type name in the active group
+   */
+  find(name: string): NodeInstance[] {
+    const group = this.getActiveGroup();
+    return Array.from(group.nodes.values()).filter(
+      n => String(n.type).includes(name) || n.name.includes(name)
+    );
+  }
+
+  /**
+   * Find nodes recursively, including within nested node groups
+   */
+  findRecursive(name: string): { wrangler: NodeWrangler; node: NodeInstance }[] {
+    const results: { wrangler: NodeWrangler; node: NodeInstance }[] = [];
+    // Search in current group
+    for (const node of this.find(name)) {
+      results.push({ wrangler: this, node });
+    }
+    // Search in sub-groups
+    for (const [groupId, group] of this.nodeGroups.entries()) {
+      if (groupId === this.activeGroup) continue;
+      for (const node of group.nodes.values()) {
+        if (String(node.type).includes(name) || node.name.includes(name)) {
+          results.push({ wrangler: this, node });
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Find links coming into a specific socket
+   */
+  findFrom(toSocketName: string, toNodeId?: string): NodeLink[] {
+    const group = this.getActiveGroup();
+    const result: NodeLink[] = [];
+    for (const link of group.links.values()) {
+      if (link.toSocket === toSocketName) {
+        if (!toNodeId || link.toNode === toNodeId) {
+          result.push(link);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Find links going out from a specific socket
+   */
+  findTo(fromSocketName: string, fromNodeId?: string): NodeLink[] {
+    const group = this.getActiveGroup();
+    const result: NodeLink[] = [];
+    for (const link of group.links.values()) {
+      if (link.fromSocket === fromSocketName) {
+        if (!fromNodeId || link.fromNode === fromNodeId) {
+          result.push(link);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Create a new Value node with a given value
+   */
+  newValue(v: number, label?: string): NodeInstance {
+    const node = this.newNode(NodeTypes.Value, label);
+    this.setInputValue(node, 0, v);
+    return node;
+  }
+
+  /**
+   * Create a boolean math operation node
+   */
+  booleanMath(operation: string, ...nodes: any[]): NodeInstance {
+    return this.newNode(
+      NodeTypes.BooleanMath,
+      undefined,
+      undefined,
+      { operation }
+    );
+  }
+
+  /**
+   * Power operation on two float inputs
+   */
+  power(base: any, exponent: any): NodeInstance {
+    return this.newNode(
+      NodeTypes.Math,
+      undefined,
+      undefined,
+      { operation: 'POWER' }
+    );
+  }
+
+  /**
+   * Scalar max: maximum of two float values
+   */
+  scalarMax(nodeA: any, nodeB: any): NodeInstance {
+    return this.newNode(
+      NodeTypes.Math,
+      undefined,
+      undefined,
+      { operation: 'MAXIMUM' }
+    );
+  }
+
+  /**
+   * Create a GroupInput node (singleton per group)
+   */
+  groupInput(): NodeInstance {
+    const group = this.getActiveGroup();
+    // Reuse existing GroupInput if one exists
+    for (const node of group.nodes.values()) {
+      if (String(node.type) === String(NodeTypes.GroupInput)) {
+        return node;
+      }
+    }
+    return this.newNode(NodeTypes.GroupInput, 'Group Input');
+  }
+
   /**
    * Get a node by ID
    */

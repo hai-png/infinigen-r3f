@@ -15,6 +15,7 @@ import type { TerrainSurfaceConfig } from '../gpu/TerrainSurfaceShaderPipeline';
 import { SignedDistanceField } from '../sdf/sdf-operations';
 import type { HeightMap, NormalMap } from '../types';
 import { heightMapFromFloat32Array } from '../types';
+import { BiomeSystem, type BiomeGrid, type BiomeType } from '../biomes/core/BiomeSystem';
 
 export type MaskMap = Uint8Array;
 
@@ -52,6 +53,10 @@ export interface TerrainData {
   config: TerrainConfig;
   width: number;
   height: number;
+  /** Full biome grid from Whittaker classification (temperature/moisture maps + blend weights) */
+  biomeGrid: BiomeGrid | null;
+  /** Dominant biome type across the terrain */
+  dominantBiome: BiomeType | null;
 }
 
 export class TerrainGenerator {
@@ -61,6 +66,7 @@ export class TerrainGenerator {
   private height: number;
   private permutationTable: number[];
   private cachedHeightMap: Float32Array | null = null;
+  private biomeSystem: BiomeSystem | null = null;
 
   // -----------------------------------------------------------------------
   // Surface Shader Pipeline Integration
@@ -135,7 +141,35 @@ export class TerrainGenerator {
     // 5. Calculate derived maps
     const normalData = this.calculateNormals(heightData);
     const slopeData = this.calculateSlopes(heightData);
-    const biomeMask = this.generateBiomeMask(heightData, slopeData);
+
+    // 6. Generate biome data using BiomeSystem (Whittaker classification)
+    // This replaces the old 25-line inline height/slope lookup
+    this.biomeSystem = new BiomeSystem(0.3, this.config.seed);
+    const biomeGrid = this.biomeSystem.generateBiomeGrid(
+      heightData,
+      slopeData,
+      this.width,
+      this.height,
+      { seed: this.config.seed, seaLevel: this.config.seaLevel }
+    );
+    const biomeMask = biomeGrid.biomeIds;
+
+    // Determine dominant biome (excluding ocean)
+    const biomeCounts = new Map<string, number>();
+    for (let i = 0; i < biomeGrid.biomeIds.length; i++) {
+      const biomeType = biomeGrid.biomeIndexToType[biomeGrid.biomeIds[i]];
+      if (biomeType) {
+        biomeCounts.set(biomeType, (biomeCounts.get(biomeType) ?? 0) + 1);
+      }
+    }
+    let maxCount = 0;
+    let dominantBiome: BiomeType | null = null;
+    for (const [type, count] of biomeCounts) {
+      if (type !== 'ocean' && count > maxCount) {
+        maxCount = count;
+        dominantBiome = type as BiomeType;
+      }
+    }
 
     // Cache raw heightmap for getHeightAt() lookups
     this.cachedHeightMap = heightData;
@@ -145,6 +179,8 @@ export class TerrainGenerator {
       normalMap: heightMapFromFloat32Array(normalData, this.width, this.height),
       slopeMap: heightMapFromFloat32Array(slopeData, this.width, this.height),
       biomeMask,
+      biomeGrid,
+      dominantBiome,
       config: { ...this.config },
       width: this.width,
       height: this.height,
@@ -345,31 +381,31 @@ export class TerrainGenerator {
   }
 
   /**
-   * Generate biome mask based on height and slope
+   * Generate biome mask using the BiomeSystem (Whittaker classification).
+   *
+   * This is now a convenience wrapper that delegates to BiomeSystem.
+   * The primary biome generation happens in generate() which produces a full
+   * BiomeGrid with temperature/moisture maps and blend weights.
+   *
+   * This method is kept for backward compatibility and unit testing.
    */
-  private generateBiomeMask(heightMap: Float32Array, slopeMap: Float32Array): MaskMap {
-    const mask = new Uint8Array(this.width * this.height);
+  generateBiomeMask(heightMap: Float32Array, slopeMap: Float32Array, seaLevel?: number): MaskMap {
+    const biomeSystem = new BiomeSystem(0.3, this.config.seed);
+    return biomeSystem.generateBiomeMask(
+      heightMap,
+      slopeMap,
+      this.width,
+      this.height,
+      seaLevel ?? this.config.seaLevel
+    );
+  }
 
-    for (let i = 0; i < heightMap.length; i++) {
-      const h = heightMap[i];
-      const s = slopeMap[i];
-
-      let biome = 0; // Deep water
-
-      if (h < this.config.seaLevel - 0.1) biome = 0;      // Deep water
-      else if (h < this.config.seaLevel) biome = 1;       // Shore
-      else if (h < this.config.seaLevel + 0.1 && s < 0.1) biome = 2; // Beach
-      else if (h < 0.4 && s < 0.2) biome = 3;             // Plains
-      else if (h < 0.4 && s >= 0.2) biome = 4;            // Hills
-      else if (h < 0.7 && s < 0.3) biome = 5;             // Forest
-      else if (h < 0.7 && s >= 0.3) biome = 6;            // Mountain Forest
-      else if (h < 0.85) biome = 7;                       // Mountain
-      else biome = 8;                                     // Snow Peak
-
-      mask[i] = biome;
-    }
-
-    return mask;
+  /**
+   * Get the BiomeSystem instance used for the last terrain generation.
+   * Returns null if generate() has not been called yet.
+   */
+  getBiomeSystem(): BiomeSystem | null {
+    return this.biomeSystem;
   }
 
   /**

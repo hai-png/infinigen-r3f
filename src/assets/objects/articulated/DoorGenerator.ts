@@ -1,9 +1,17 @@
 /**
- * Door Generator - Hinged articulated door
+ * Door Generator - Hinged articulated door (Sim-Ready)
+ *
+ * Sim-ready features:
+ * - Hinge joint with limits [0, 270°]
+ * - Collision geometry for frame + panel
+ * - Mass/inertia estimated from geometry
+ * - URDF, MJCF, and USD export
  */
 
 import * as THREE from 'three';
-import { ArticulatedObjectBase, ArticulatedObjectConfig, ArticulatedObjectResult, JointInfo, generateMJCF } from './types';
+import { ArticulatedObjectBase, ArticulatedObjectConfig, ArticulatedObjectResult, JointInfo, SimReadyMetadata, generateMJCF } from './types';
+import { generateURDF, URDFExportOptions } from './URDFExporter';
+import { generateUSD } from './USDExporter';
 
 export class DoorGenerator extends ArticulatedObjectBase {
   protected category = 'Door';
@@ -55,11 +63,30 @@ export class DoorGenerator extends ArticulatedObjectBase {
       }),
     ];
 
-    const meshGeometries = new Map<string, { size: THREE.Vector3; pos: THREE.Vector3 }>();
+    const meshGeometries = new Map<string, { size: THREE.Vector3; pos: THREE.Vector3; mass?: number }>();
+    // Frame pieces (static — mass 0)
     meshGeometries.set('frame_left', { size: new THREE.Vector3(0.05, 2.1, 0.08), pos: new THREE.Vector3(-0.475, 1.05, 0) });
     meshGeometries.set('frame_right', { size: new THREE.Vector3(0.05, 2.1, 0.08), pos: new THREE.Vector3(0.475, 1.05, 0) });
     meshGeometries.set('frame_top', { size: new THREE.Vector3(0.95, 0.05, 0.08), pos: new THREE.Vector3(0, 2.075, 0) });
-    meshGeometries.set('door_panel', { size: new THREE.Vector3(0.88, 2.0, 0.03), pos: new THREE.Vector3(0, 1.0, 0) });
+    // Door panel (dynamic — estimate mass from wood density)
+    const doorVolume = 0.88 * 2.0 * 0.03; // m³
+    const doorMass = doorVolume * 600 * 0.6; // 600 kg/m³ pine wood × fill factor
+    meshGeometries.set('door_panel', { size: new THREE.Vector3(0.88, 2.0, 0.03), pos: new THREE.Vector3(0, 1.0, 0), mass: doorMass });
+
+    // Sim-ready metadata
+    const collisionHints = new Map<string, 'box' | 'sphere' | 'cylinder'>();
+    collisionHints.set('frame_left', 'box');
+    collisionHints.set('frame_right', 'box');
+    collisionHints.set('frame_top', 'box');
+    collisionHints.set('door_panel', 'box');
+
+    const simReady: SimReadyMetadata = {
+      density: 600,
+      friction: 0.5,
+      restitution: 0.3,
+      rootBodyStatic: true,
+      collisionHints,
+    };
 
     return {
       group,
@@ -67,6 +94,10 @@ export class DoorGenerator extends ArticulatedObjectBase {
       category: this.category,
       config: cfg,
       toMJCF: () => generateMJCF('door', joints, meshGeometries),
+      toURDF: (options?: URDFExportOptions) => generateURDF('door', joints, meshGeometries, { includeInertial: true, includeCollision: true, estimateMassFromGeometry: true, defaultDensity: 600, ...options }),
+      toUSD: () => generateUSD('door', joints, meshGeometries),
+      meshGeometries,
+      simReady,
     };
   }
 }

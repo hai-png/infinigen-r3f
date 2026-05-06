@@ -20,6 +20,11 @@ export {
 } from './GroundTruthRenderer';
 
 export {
+  encodeEXR,
+  EXREncoder,
+} from './EXREncoder';
+
+export {
   AnnotationExporter,
   type AnnotationExportConfig,
   type AnnotationFormat,

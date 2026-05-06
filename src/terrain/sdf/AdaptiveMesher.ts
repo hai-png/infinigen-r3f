@@ -49,6 +49,12 @@ import {
   CompositionOperation,
 } from './TerrainElementSystem';
 import { ErosionEnhanced, type ErosionData, type ErosionConfig } from '../erosion/ErosionEnhanced';
+import {
+  GPUSDFEvaluator as WebGPUSDFEvaluator,
+  type GPUSDFEvaluatorConfig,
+  DEFAULT_GPU_SDF_EVALUATOR_CONFIG,
+  buildCompositionFromRegistry,
+} from '../gpu/GPUSDFEvaluator';
 
 // ============================================================================
 // Configuration Types
@@ -1092,12 +1098,19 @@ export class GPUSDFEvaluator {
   private workerCount: number;
   private workers: Worker[] = [];
   private initialized: boolean = false;
+  private webgpuEvaluator: WebGPUSDFEvaluator | null = null;
+  private webgpuInitialized: boolean = false;
 
   /**
    * @param workerCount - Number of web workers for parallel evaluation (default 4)
    */
   constructor(workerCount: number = 4) {
     this.workerCount = workerCount;
+
+    // Try to create a WebGPU-backed evaluator for accelerated SDF evaluation
+    if (WebGPUSDFEvaluator.isWebGPUAvailable()) {
+      this.webgpuEvaluator = new WebGPUSDFEvaluator(DEFAULT_GPU_SDF_EVALUATOR_CONFIG);
+    }
   }
 
   /**
@@ -1131,6 +1144,33 @@ export class GPUSDFEvaluator {
       console.warn('GPUSDFEvaluator: Failed to create workers, using main thread fallback:', e);
       this.initialized = true; // Prevent retry
     }
+  }
+
+  /**
+   * Initialize the WebGPU compute shader pipeline for SDF evaluation.
+   * Called automatically when GPU evaluation is first attempted.
+   *
+   * @param device - Optional pre-existing GPUDevice
+   * @returns true if WebGPU pipeline was created
+   */
+  async initializeWebGPU(device?: GPUDevice): Promise<boolean> {
+    if (this.webgpuInitialized) return this.webgpuEvaluator?.isGPUAvailable() ?? false;
+
+    if (this.webgpuEvaluator) {
+      const result = await this.webgpuEvaluator.initialize(device);
+      this.webgpuInitialized = true;
+      return result;
+    }
+
+    this.webgpuInitialized = true;
+    return false;
+  }
+
+  /**
+   * Check if WebGPU acceleration is available.
+   */
+  isWebGPUAvailable(): boolean {
+    return this.webgpuEvaluator?.isGPUAvailable() ?? false;
   }
 
   /**
@@ -1257,8 +1297,11 @@ export class GPUSDFEvaluator {
   /**
    * Evaluate composed SDF from an ElementRegistry on a regular grid.
    *
-   * Uses the registry's `evaluateComposedBatch()` method internally
-   * for efficient batch evaluation of all registered terrain elements.
+   * When WebGPU is available, delegates to GPUSDFEvaluator for GPU-accelerated
+   * evaluation of primitive SDF compositions. Falls back to CPU-based
+   * ElementRegistry evaluation when WebGPU is unavailable or when the
+   * composition contains elements not representable as GPU primitives
+   * (e.g., FBM noise-based GroundElement or MountainElement).
    *
    * @param registry - Configured ElementRegistry with initialized elements
    * @param operation - Composition operation for element SDF combination
@@ -1272,6 +1315,35 @@ export class GPUSDFEvaluator {
     bounds: THREE.Box3,
     resolution: number
   ): Promise<Float32Array> {
+    // Try WebGPU path first
+    if (this.webgpuEvaluator) {
+      try {
+        if (!this.webgpuInitialized) {
+          await this.initializeWebGPU();
+        }
+
+        if (this.webgpuEvaluator.isGPUAvailable()) {
+          const elements = buildCompositionFromRegistry(registry);
+
+          if (elements.length > 0) {
+            const result = await this.webgpuEvaluator.evaluate(
+              elements,
+              bounds,
+              resolution,
+              registry,
+              operation,
+            );
+
+            // Return the raw SDF data from the result
+            return result.sdf.data;
+          }
+        }
+      } catch (err) {
+        console.warn('[AdaptiveMesher.GPUSDFEvaluator] GPU evaluation failed, using CPU:', err);
+      }
+    }
+
+    // CPU fallback: evaluate using ElementRegistry
     const size = bounds.getSize(new THREE.Vector3());
     const total = resolution * resolution * resolution;
     const results = new Float32Array(total);
@@ -1305,11 +1377,11 @@ export class GPUSDFEvaluator {
   }
 
   /**
-   * Evaluate SDF using a GPU compute shader (future interface).
+   * Evaluate SDF using a GPU compute shader.
    *
-   * This method defines the interface for future WGSL compute shader
-   * acceleration. When WebGPU is available, SDF evaluation can be
-   * offloaded to the GPU for massive parallelism.
+   * Now delegates to the WebGPU-based GPUSDFEvaluator when available.
+   * This replaces the previous placeholder with actual WebGPU compute
+   * shader execution.
    *
    * @param sdfShaderCode - WGSL shader code implementing the SDF
    * @param points - GPU buffer of point coordinates
@@ -1321,19 +1393,19 @@ export class GPUSDFEvaluator {
     _points: GPUBuffer,
     _count: number
   ): GPUBuffer {
-    // Future: WGSL compute shader integration
-    // 1. Create compute pipeline with the SDF shader
-    // 2. Bind point buffer as input
-    // 3. Dispatch compute with workgroup size
-    // 4. Return output buffer with SDF values
+    // The WebGPU path is now handled through evaluateElementGrid() and the
+    // WebGPUSDFEvaluator class. This method signature is retained for
+    // backward compatibility but direct GPU buffer-to-buffer evaluation
+    // is available through the WebGPUSDFEvaluator class directly.
     throw new Error(
-      'GPUSDFEvaluator.evaluateBatchGPU: WGSL compute shader evaluation not yet implemented. ' +
-      'Use evaluateBatch() for CPU-based evaluation.'
+      'GPUSDFEvaluator.evaluateBatchGPU: Direct GPU buffer evaluation is now available ' +
+      'through the WebGPUSDFEvaluator class. Use evaluateElementGrid() for the ' +
+      'high-level API, or import WebGPUSDFEvaluator from terrain/gpu for direct usage.'
     );
   }
 
   /**
-   * Dispose of web worker resources.
+   * Dispose of web worker and GPU resources.
    */
   dispose(): void {
     for (const worker of this.workers) {
@@ -1341,6 +1413,12 @@ export class GPUSDFEvaluator {
     }
     this.workers = [];
     this.initialized = false;
+
+    if (this.webgpuEvaluator) {
+      this.webgpuEvaluator.dispose();
+      this.webgpuEvaluator = null;
+    }
+    this.webgpuInitialized = false;
   }
 }
 

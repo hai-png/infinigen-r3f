@@ -21,6 +21,7 @@ import { NodeWrangler } from '../core/node-wrangler';
 import { GeometryNodeContext, GeometryNodePipeline } from './GeometryNodeExecutor';
 import { NodeShaderCompiler } from './ShaderCompiler';
 import { NodeEvaluator, EvaluationMode } from './NodeEvaluator';
+import { NodeGraphMaterialBridge, type BSDFOutput } from './NodeGraphMaterialBridge';
 import { SeededNoiseGenerator, NoiseType } from '../../util/math/noise';
 
 // ============================================================================
@@ -402,63 +403,31 @@ function getNoiseFn(
 
 /**
  * Create a MeshPhysicalMaterial from the evaluation output of a shader graph.
+ * Now uses the NodeGraphMaterialBridge for consistent property mapping.
  */
 function createPhysicalMaterialFromEval(
   evalOutput: any,
   opts: Required<MaterialCompileOptions>,
 ): THREE.MeshPhysicalMaterial {
-  const params: THREE.MeshPhysicalMaterialParameters = {
-    color: 0x888888,
-    roughness: 0.5,
-    metalness: 0.0,
-    wireframe: opts.wireframe,
-    side: opts.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
-    transparent: opts.transparent || opts.opacity < 1.0,
-    opacity: opts.opacity,
-  };
+  // Use the new bridge for consistent conversion
+  const bridge = new NodeGraphMaterialBridge({
+    textureResolution: 512,
+    processTextureDescriptors: true,
+  });
 
-  // Extract BSDF parameters from the evaluation output
-  if (evalOutput) {
-    let bsdf = evalOutput;
-    if (evalOutput.BSDF) bsdf = evalOutput.BSDF;
-    else if (evalOutput.Surface) bsdf = evalOutput.Surface;
-    else if (evalOutput.Shader) bsdf = evalOutput.Shader;
+  const material = bridge.convert(evalOutput);
 
-    if (bsdf.baseColor) {
-      params.color = resolveColor(bsdf.baseColor);
-    }
-    if (bsdf.roughness !== undefined) {
-      params.roughness = Math.max(0.04, bsdf.roughness);
-    }
-    if (bsdf.metallic !== undefined) {
-      params.metalness = bsdf.metallic;
-    }
-    if (bsdf.transmission !== undefined && bsdf.transmission > 0) {
-      params.transmission = bsdf.transmission;
-      params.transparent = true;
-      params.ior = bsdf.ior ?? 1.45;
-      params.thickness = 0.5;
-    }
-    if (bsdf.emissionColor) {
-      params.emissive = resolveColor(bsdf.emissionColor);
-      params.emissiveIntensity = bsdf.emissionStrength ?? 1.0;
-    }
-    if (bsdf.alpha !== undefined && bsdf.alpha < 1.0) {
-      params.opacity = bsdf.alpha;
-      params.transparent = true;
-    }
-    if (bsdf.clearcoat !== undefined && bsdf.clearcoat > 0) {
-      params.clearcoat = bsdf.clearcoat;
-      params.clearcoatRoughness = bsdf.clearcoatRoughness ?? 0.03;
-    }
-    if (bsdf.sheen !== undefined && bsdf.sheen > 0) {
-      params.sheen = bsdf.sheen;
-      params.sheenRoughness = 0.5;
-      params.sheenColor = new THREE.Color(1, 1, 1);
-    }
+  // Apply compile options
+  material.wireframe = opts.wireframe;
+  material.side = opts.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+  if (opts.transparent || opts.opacity < 1.0) {
+    material.transparent = true;
+  }
+  if (opts.opacity < 1.0) {
+    material.opacity = opts.opacity;
   }
 
-  return new THREE.MeshPhysicalMaterial(params);
+  return material;
 }
 
 /**

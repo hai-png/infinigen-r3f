@@ -309,6 +309,17 @@ export * from './volume';
 export { NodeTranspiler, transpileNodeTree } from './transpiler';
 export type { TranspilerOptions } from './transpiler';
 
+// Code Serializer / Transpiler (NodeWrangler graph → TypeScript code)
+export {
+  NodeCodeSerializer,
+  serializeToTypeScript,
+  roundTripTest,
+} from './core/NodeCodeSerializer';
+export type {
+  CodeSerializerOptions,
+  RoundTripResult,
+} from './core/NodeCodeSerializer';
+
 // Pre-built Groups
 export * from './groups';
 

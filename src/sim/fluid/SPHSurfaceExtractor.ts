@@ -22,6 +22,7 @@
 
 import * as THREE from 'three';
 import { EDGE_TABLE, TRIANGLE_TABLE, EDGE_VERTICES, CORNER_OFFSETS } from '../../terrain/mesher/MarchingCubesLUTs';
+import { SignedDistanceField, extractIsosurface } from '../../terrain/sdf/sdf-operations';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -578,6 +579,173 @@ export class SPHSurfaceExtractor {
       }
       posAttr.needsUpdate = true;
     }
+  }
+
+  // ── SDF-based extraction using extractIsosurface() ──────────────────────
+
+  /**
+   * Extract a smooth surface mesh from SPH particles using the shared
+   * extractIsosurface() from sdf-operations.ts.
+   *
+   * This method builds a density field from particles using the Poly6 kernel,
+   * converts it to a SignedDistanceField where SDF = threshold - density
+   * (so negative inside the fluid), and delegates to extractIsosurface()
+   * for marching cubes meshing at SDF = 0.
+   *
+   * @param particles Array of particles with position property
+   * @param params Optional override parameters for this extraction call
+   * @returns THREE.BufferGeometry with the extracted watertight surface
+   */
+  extractSurfaceViaSDF(
+    particles: ParticleWithPosition[],
+    params?: Partial<SPHSurfaceExtractorConfig>,
+  ): THREE.BufferGeometry {
+    // Apply temporary parameter overrides if provided
+    const savedConfig = params ? { ...this.config } : null;
+    if (params) {
+      Object.assign(this.config, params);
+      this.poly6Coeff = poly6Coefficient(this.config.smoothingRadius);
+      this.h2 = this.config.smoothingRadius * this.config.smoothingRadius;
+
+      // Resize density field if grid resolution changed
+      const needed = this.config.gridResolution ** 3;
+      if (this.densityField.length < needed) {
+        this.densityField = new Float32Array(needed);
+      }
+    }
+
+    try {
+      if (particles.length === 0) {
+        return this.createEmptyGeometry();
+      }
+
+      // 1. Compute bounding box with padding
+      this.computeBounds(particles);
+
+      // 2. Build density field using Poly6 kernel
+      this.buildDensityField(particles);
+
+      // 3. Build SDF and extract via extractIsosurface()
+      const geometry = this.extractViaSDF();
+
+      // 4. Laplacian smoothing
+      if (this.config.smoothingIterations > 0) {
+        this.applyLaplacianSmoothing(
+          geometry,
+          this.config.smoothingIterations,
+          this.config.smoothingFactor,
+        );
+      }
+
+      // 5. Recompute normals after smoothing
+      if (this.config.smoothingIterations > 0 && geometry.getAttribute('position')) {
+        geometry.computeVertexNormals();
+      }
+
+      return geometry;
+    } finally {
+      // Restore original config if we overrode it
+      if (savedConfig) {
+        this.config = savedConfig;
+        this.poly6Coeff = poly6Coefficient(this.config.smoothingRadius);
+        this.h2 = this.config.smoothingRadius * this.config.smoothingRadius;
+      }
+    }
+  }
+
+  /**
+   * Build a SignedDistanceField from the density field and extract the
+   * isosurface using extractIsosurface().
+   *
+   * The density field has high values where fluid exists. To convert it
+   * to a proper SDF where negative = inside, we use:
+   *   SDF_value = threshold - density
+   */
+  private extractViaSDF(): THREE.BufferGeometry {
+    const res = this.config.gridResolution;
+    const threshold = this.config.isoThreshold;
+    const field = this.densityField;
+
+    // Build a SignedDistanceField with the same grid dimensions
+    const minVoxel = Math.min(this.voxelSize.x, this.voxelSize.y, this.voxelSize.z);
+    const sdf = new SignedDistanceField({
+      resolution: minVoxel,
+      bounds: this.bounds.clone(),
+    });
+
+    // Fill SDF data: SDF = threshold - density
+    const gridSize = sdf.gridSize;
+
+    if (gridSize[0] === res && gridSize[1] === res && gridSize[2] === res) {
+      // Fast path: direct copy with threshold inversion
+      const totalCells = gridSize[0] * gridSize[1] * gridSize[2];
+      for (let i = 0; i < totalCells; i++) {
+        sdf.data[i] = threshold - field[i];
+      }
+    } else {
+      // Slow path: sample density field at SDF grid positions
+      for (let gz = 0; gz < gridSize[2]; gz++) {
+        for (let gy = 0; gy < gridSize[1]; gy++) {
+          for (let gx = 0; gx < gridSize[0]; gx++) {
+            const pos = sdf.getPosition(gx, gy, gz);
+
+            // Map to density field coordinates
+            const dfx = (pos.x - this.bounds.min.x) / this.voxelSize.x - 0.5;
+            const dfy = (pos.y - this.bounds.min.y) / this.voxelSize.y - 0.5;
+            const dfz = (pos.z - this.bounds.min.z) / this.voxelSize.z - 0.5;
+
+            const density = this.sampleDensityField(dfx, dfy, dfz);
+            sdf.setValueAtGrid(gx, gy, gz, threshold - density);
+          }
+        }
+      }
+    }
+
+    // Extract isosurface at SDF = 0 (where density = threshold)
+    return extractIsosurface(sdf, 0);
+  }
+
+  /**
+   * Sample the density field at continuous grid coordinates
+   * using trilinear interpolation.
+   */
+  private sampleDensityField(gx: number, gy: number, gz: number): number {
+    const res = this.config.gridResolution;
+    const field = this.densityField;
+
+    const getDensity = (ix: number, iy: number, iz: number): number => {
+      if (ix < 0 || ix >= res || iy < 0 || iy >= res || iz < 0 || iz >= res) {
+        return 0;
+      }
+      return field[iz * res * res + iy * res + ix];
+    };
+
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const z0 = Math.floor(gz);
+    const fx = gx - x0;
+    const fy = gy - y0;
+    const fz = gz - z0;
+
+    // Trilinear interpolation
+    const c000 = getDensity(x0, y0, z0);
+    const c100 = getDensity(x0 + 1, y0, z0);
+    const c010 = getDensity(x0, y0 + 1, z0);
+    const c110 = getDensity(x0 + 1, y0 + 1, z0);
+    const c001 = getDensity(x0, y0, z0 + 1);
+    const c101 = getDensity(x0 + 1, y0, z0 + 1);
+    const c011 = getDensity(x0, y0 + 1, z0 + 1);
+    const c111 = getDensity(x0 + 1, y0 + 1, z0 + 1);
+
+    const c00 = c000 * (1 - fx) + c100 * fx;
+    const c01 = c001 * (1 - fx) + c101 * fx;
+    const c10 = c010 * (1 - fx) + c110 * fx;
+    const c11 = c011 * (1 - fx) + c111 * fx;
+
+    const c0 = c00 * (1 - fy) + c10 * fy;
+    const c1 = c01 * (1 - fy) + c11 * fy;
+
+    return c0 * (1 - fz) + c1 * fz;
   }
 
   // ── Dispose ────────────────────────────────────────────────────────────

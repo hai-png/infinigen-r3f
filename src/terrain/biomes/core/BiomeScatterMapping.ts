@@ -1424,23 +1424,160 @@ const SAVANNA_PROFILE: BiomeScatterProfile = {
 };
 
 // ============================================================================
+// Ocean Profile (underwater scatter)
+// ============================================================================
+
+const OCEAN_PROFILE: BiomeScatterProfile = {
+  biomeType: 'ocean',
+  primaryVegetation: [
+    {
+      id: 'kelp_forest',
+      label: 'Kelp Forest',
+      baseDensity: 0.08,
+      minDistance: 3.0,
+      scaleRange: [0.5, 1.5],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.4,
+    },
+    {
+      id: 'sea_grass_bed',
+      label: 'Sea Grass Bed',
+      baseDensity: 0.12,
+      minDistance: 1.5,
+      scaleRange: [0.4, 0.9],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.35,
+    },
+    {
+      id: 'coral_patch',
+      label: 'Coral Patch',
+      baseDensity: 0.05,
+      minDistance: 4.0,
+      scaleRange: [0.6, 1.8],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.25,
+    },
+  ],
+  groundCover: [
+    {
+      id: 'ocean_sand',
+      label: 'Ocean Sand',
+      baseDensity: 0.4,
+      minDistance: 0.3,
+      scaleRange: [0.5, 1.5],
+      rotationVariation: 0,
+      alignToSurface: true,
+      selectionWeight: 0.5,
+    },
+    {
+      id: 'seagrass',
+      label: 'Seagrass',
+      baseDensity: 0.25,
+      minDistance: 0.3,
+      scaleRange: [0.3, 0.7],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.3,
+    },
+    {
+      id: 'ocean_pebbles',
+      label: 'Ocean Pebbles',
+      baseDensity: 0.15,
+      minDistance: 0.2,
+      scaleRange: [0.1, 0.4],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.2,
+    },
+  ],
+  specialFeatures: [
+    {
+      id: 'ocean_shells',
+      label: 'Ocean Seashells',
+      baseDensity: 0.04,
+      minDistance: 1.5,
+      scaleRange: [0.1, 0.3],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.25,
+    },
+    {
+      id: 'sea_anemone_ocean',
+      label: 'Sea Anemone',
+      baseDensity: 0.03,
+      minDistance: 2.0,
+      scaleRange: [0.2, 0.5],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.25,
+    },
+    {
+      id: 'starfish_ocean',
+      label: 'Starfish',
+      baseDensity: 0.015,
+      minDistance: 2.5,
+      scaleRange: [0.1, 0.4],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.2,
+    },
+    {
+      id: 'ocean_urchin',
+      label: 'Sea Urchin',
+      baseDensity: 0.01,
+      minDistance: 3.0,
+      scaleRange: [0.1, 0.3],
+      rotationVariation: Math.PI,
+      alignToSurface: true,
+      selectionWeight: 0.15,
+    },
+  ],
+  densityMultipliers: {
+    vegetation: 0.8,
+    groundCover: 0.6,
+    specialFeatures: 0.5,
+    global: 0.5, // Much lower density underwater
+  },
+  defaultScatterConfig: makeDefaultScatterConfig({
+    density: 0.1,
+    minDistance: 1.0,
+    maxInstances: 500,
+  }),
+};
+
+// ============================================================================
 // BiomeScatterMapping Class
 // ============================================================================
 
 /**
  * Central registry that maps biome types to their scatter configurations.
  *
+ * Supports both legacy biome names and the task-specified Whittaker names:
+ * - 'mountain' is an alias for 'alpine'
+ * - 'coast' is an alias for 'coastal'
+ * - 'boreal_forest' is an alias for 'taiga'
+ * - 'tropical_forest' is an alias for 'tropical_rainforest'
+ *
  * Usage:
  * ```ts
  * const mapping = new BiomeScatterMapping();
  * const profile = mapping.getProfile('desert');
- * // profile.primaryVegetation → [{ id: 'desert_shrub', … }, …]
- * // profile.groundCover       → [{ id: 'sand', … }, …]
- * // profile.specialFeatures   → [{ id: 'cactus', … }, …]
+ * const mountainProfile = mapping.getProfile('mountain'); // alias → alpine
  * ```
  */
 export class BiomeScatterMapping {
   private profiles: Map<ExtendedBiomeType, BiomeScatterProfile>;
+
+  /** Alias map: task biome type → legacy profile biome type */
+  private static readonly ALIASES: Record<string, string> = {
+    'mountain': 'alpine',
+    'coast': 'coastal',
+    'boreal_forest': 'taiga',
+    'tropical_forest': 'tropical_rainforest',
+  };
 
   constructor() {
     this.profiles = new Map<ExtendedBiomeType, BiomeScatterProfile>();
@@ -1457,6 +1594,14 @@ export class BiomeScatterMapping {
     this.register(TAIGA_PROFILE);
     this.register(CORAL_REEF_PROFILE);
     this.register(SAVANNA_PROFILE);
+    this.register(OCEAN_PROFILE);
+
+    // Register alias profiles for task-specified biome names
+    // Each alias points to the same profile object as its legacy equivalent
+    this.register({ ...ALPINE_PROFILE, biomeType: 'mountain' });
+    this.register({ ...COASTAL_PROFILE, biomeType: 'coast' });
+    this.register({ ...TAIGA_PROFILE, biomeType: 'boreal_forest' });
+    this.register({ ...TROPICAL_RAINFOREST_PROFILE, biomeType: 'tropical_forest' });
   }
 
   // --------------------------------------------------------------------------
@@ -1582,6 +1727,240 @@ export class BiomeScatterMapping {
       ...overrides,
     };
   }
+
+  /**
+   * Get simplified scatter configurations for a biome type.
+   *
+   * Returns an array of BiomeScatterConfig entries with scatterType,
+   * density, scaleRange, and materialPreset for each scatter element
+   * that should appear in the given biome.
+   *
+   * @param biomeType - Biome identifier (supports both Whittaker and legacy names)
+   * @returns Array of BiomeScatterConfig entries, or empty array if biome is unknown
+   */
+  getScatterConfigForBiome(biomeType: string): BiomeScatterConfig[] {
+    return BIOME_SCATTER_CONFIGS[biomeType] ?? [];
+  }
+}
+
+// ============================================================================
+// Task-specified Biome ↔ Scatter mapping (flat config format)
+// ============================================================================
+
+/**
+ * Simplified scatter configuration entry for biome-to-scatter mapping.
+ * Each entry specifies a concrete scatter type, its density, scale range,
+ * and an optional material preset from the MaterialPresetLibrary.
+ */
+export interface BiomeScatterConfig {
+  /** Scatter type matching ScatterFactory geometry types (e.g. 'rock', 'grass', 'mushroom') */
+  scatterType: string;
+  /** Relative density per biome (instances per square unit) */
+  density: number;
+  /** Scale variation range [min, max] */
+  scaleRange: [number, number];
+  /** Material preset ID from MaterialPresetLibrary (e.g. 'sand', 'moss', 'coral') */
+  materialPreset: string;
+}
+
+/**
+ * Flat biome → scatter config mapping.
+ *
+ * Each biome maps to an array of BiomeScatterConfig entries that specify
+ * scatterType, density, scaleRange, and materialPreset for each scatter
+ * element that should appear in that biome.
+ *
+ * Desert:         sand, cactus, rocks, tumbleweed
+ * Savanna:        sparse_grass, acacia_trees, rocks
+ * Tropical Forest: dense_trees, ferns, vines, mushrooms
+ * Temperate Forest: trees, grass, ferns, mushrooms, wildflowers
+ * Boreal Forest:  pine_trees, moss, lichen, berries
+ * Tundra:         lichen, moss, snow, small_rocks
+ * Coast:          sand, seashells, driftwood, beach_grass
+ * Mountain:       rocks, sparse_grass, snow
+ * Ocean:          kelp, coral
+ */
+export const BIOME_SCATTER_CONFIGS: Record<string, BiomeScatterConfig[]> = {
+  desert: [
+    { scatterType: 'ground_leaves', density: 0.6,  scaleRange: [0.5, 1.5], materialPreset: 'sand' },
+    { scatterType: 'mushroom',      density: 0.015, scaleRange: [0.6, 1.4], materialPreset: 'succulent' },
+    { scatterType: 'rock',          density: 0.03,  scaleRange: [0.3, 1.2], materialPreset: 'sandstone' },
+    { scatterType: 'ground_leaves', density: 0.008, scaleRange: [0.3, 0.8], materialPreset: 'simple_brownish' },
+  ],
+  savanna: [
+    { scatterType: 'grass',  density: 0.4,  scaleRange: [0.5, 1.2], materialPreset: 'grass_blade' },
+    { scatterType: 'fern',   density: 0.025, scaleRange: [0.6, 1.3], materialPreset: 'simple_greenery' },
+    { scatterType: 'rock',   density: 0.008, scaleRange: [0.8, 2.0], materialPreset: 'mountain_rock' },
+  ],
+  tropical_forest: [
+    { scatterType: 'fern',      density: 0.09, scaleRange: [0.8, 1.5], materialPreset: 'simple_greenery' },
+    { scatterType: 'fern',      density: 0.2,  scaleRange: [0.5, 1.2], materialPreset: 'leaves' },
+    { scatterType: 'fern',      density: 0.06, scaleRange: [0.6, 1.5], materialPreset: 'simple_greenery' },
+    { scatterType: 'mushroom',  density: 0.025, scaleRange: [0.2, 0.5], materialPreset: 'simple_brownish' },
+  ],
+  temperate_forest: [
+    { scatterType: 'fern',      density: 0.06, scaleRange: [0.7, 1.3], materialPreset: 'simple_greenery' },
+    { scatterType: 'grass',     density: 0.5,  scaleRange: [0.5, 1.0], materialPreset: 'grass_blade' },
+    { scatterType: 'fern',      density: 0.15, scaleRange: [0.4, 0.9], materialPreset: 'leaves' },
+    { scatterType: 'mushroom',  density: 0.04, scaleRange: [0.2, 0.6], materialPreset: 'simple_brownish' },
+    { scatterType: 'flower',    density: 0.03, scaleRange: [0.3, 0.7], materialPreset: 'simple_whitish' },
+  ],
+  boreal_forest: [
+    { scatterType: 'pine_needle', density: 0.08, scaleRange: [0.6, 1.3], materialPreset: 'simple_greenery' },
+    { scatterType: 'moss',        density: 0.25, scaleRange: [0.3, 0.6], materialPreset: 'moss' },
+    { scatterType: 'lichen',      density: 0.3,  scaleRange: [0.3, 0.7], materialPreset: 'lichen' },
+    { scatterType: 'flower',      density: 0.03, scaleRange: [0.3, 0.6], materialPreset: 'simple_greenery' },
+  ],
+  tundra: [
+    { scatterType: 'lichen',      density: 0.3,  scaleRange: [0.3, 0.8], materialPreset: 'lichen' },
+    { scatterType: 'moss',        density: 0.25, scaleRange: [0.3, 0.7], materialPreset: 'moss' },
+    { scatterType: 'snow_layer',  density: 0.4,  scaleRange: [0.5, 1.5], materialPreset: 'snow' },
+    { scatterType: 'pebble',      density: 0.02, scaleRange: [0.4, 1.0], materialPreset: 'chunky_rock' },
+  ],
+  coast: [
+    { scatterType: 'ground_leaves', density: 0.5,  scaleRange: [0.5, 1.5], materialPreset: 'sand' },
+    { scatterType: 'seashell',      density: 0.06, scaleRange: [0.1, 0.3], materialPreset: 'coral' },
+    { scatterType: 'twig',          density: 0.02, scaleRange: [0.5, 1.5], materialPreset: 'old_wood' },
+    { scatterType: 'grass',         density: 0.15, scaleRange: [0.4, 0.9], materialPreset: 'grass_blade' },
+  ],
+  mountain: [
+    { scatterType: 'rock',         density: 0.04, scaleRange: [0.5, 2.0], materialPreset: 'mountain_rock' },
+    { scatterType: 'grass',        density: 0.2,  scaleRange: [0.3, 0.7], materialPreset: 'grass_blade' },
+    { scatterType: 'snow_layer',   density: 0.08, scaleRange: [0.5, 2.0], materialPreset: 'snow' },
+  ],
+  ocean: [
+    { scatterType: 'fern',   density: 0.08, scaleRange: [0.5, 1.5], materialPreset: 'simple_greenery' },
+    { scatterType: 'rock',   density: 0.05, scaleRange: [0.6, 1.8], materialPreset: 'coral' },
+  ],
+  // Legacy aliases
+  tropical_rainforest: [
+    { scatterType: 'fern',      density: 0.09, scaleRange: [0.8, 1.5], materialPreset: 'simple_greenery' },
+    { scatterType: 'fern',      density: 0.2,  scaleRange: [0.5, 1.2], materialPreset: 'leaves' },
+    { scatterType: 'fern',      density: 0.06, scaleRange: [0.6, 1.5], materialPreset: 'simple_greenery' },
+    { scatterType: 'mushroom',  density: 0.025, scaleRange: [0.2, 0.5], materialPreset: 'simple_brownish' },
+  ],
+  taiga: [
+    { scatterType: 'pine_needle', density: 0.08, scaleRange: [0.6, 1.3], materialPreset: 'simple_greenery' },
+    { scatterType: 'moss',        density: 0.25, scaleRange: [0.3, 0.6], materialPreset: 'moss' },
+    { scatterType: 'lichen',      density: 0.3,  scaleRange: [0.3, 0.7], materialPreset: 'lichen' },
+    { scatterType: 'flower',      density: 0.03, scaleRange: [0.3, 0.6], materialPreset: 'simple_greenery' },
+  ],
+  alpine: [
+    { scatterType: 'rock',         density: 0.04, scaleRange: [0.5, 2.0], materialPreset: 'mountain_rock' },
+    { scatterType: 'grass',        density: 0.2,  scaleRange: [0.3, 0.7], materialPreset: 'grass_blade' },
+    { scatterType: 'snow_layer',   density: 0.08, scaleRange: [0.5, 2.0], materialPreset: 'snow' },
+  ],
+  coastal: [
+    { scatterType: 'ground_leaves', density: 0.5,  scaleRange: [0.5, 1.5], materialPreset: 'sand' },
+    { scatterType: 'seashell',      density: 0.06, scaleRange: [0.1, 0.3], materialPreset: 'coral' },
+    { scatterType: 'twig',          density: 0.02, scaleRange: [0.5, 1.5], materialPreset: 'old_wood' },
+    { scatterType: 'grass',         density: 0.15, scaleRange: [0.4, 0.9], materialPreset: 'grass_blade' },
+  ],
+};
+
+// ============================================================================
+// Canonical scatter ID mapping (for ScatterFactory bridge)
+// ============================================================================
+
+/**
+ * Maps biome types to the canonical scatter identifiers required by the task.
+ *
+ * These IDs follow the `{feature}_scatter` naming convention and serve as
+ * stable keys that the ScatterFactory can resolve to concrete ScatterTypes.
+ *
+ * Desert:    sand_scatter, cactus_scatter, rock_scatter, tumbleweed_scatter
+ * Savanna:   sparse_grass_scatter, acacia_tree_scatter, rock_scatter
+ * Tropical:  dense_tree_scatter, fern_scatter, vine_scatter, mushroom_scatter
+ * Temperate: tree_scatter, grass_scatter, fern_scatter, mushroom_scatter, wildflower_scatter
+ * Boreal:    pine_tree_scatter, moss_scatter, lichen_scatter, berry_scatter
+ * Tundra:    lichen_scatter, moss_scatter, snow_scatter, small_rock_scatter
+ * Coast:     sand_scatter, seashell_scatter, driftwood_scatter, beach_grass_scatter
+ * Mountain:  rock_scatter, sparse_grass_scatter, snow_scatter
+ * Ocean:     kelp_scatter, coral_scatter
+ */
+export const BIOME_SCATTER_ID_MAP: Record<string, string[]> = {
+  desert:          ['sand_scatter', 'cactus_scatter', 'rock_scatter', 'tumbleweed_scatter'],
+  savanna:         ['sparse_grass_scatter', 'acacia_tree_scatter', 'rock_scatter'],
+  tropical_forest: ['dense_tree_scatter', 'fern_scatter', 'vine_scatter', 'mushroom_scatter'],
+  temperate_forest:['tree_scatter', 'grass_scatter', 'fern_scatter', 'mushroom_scatter', 'wildflower_scatter'],
+  boreal_forest:   ['pine_tree_scatter', 'moss_scatter', 'lichen_scatter', 'berry_scatter'],
+  tundra:          ['lichen_scatter', 'moss_scatter', 'snow_scatter', 'small_rock_scatter'],
+  coast:           ['sand_scatter', 'seashell_scatter', 'driftwood_scatter', 'beach_grass_scatter'],
+  mountain:        ['rock_scatter', 'sparse_grass_scatter', 'snow_scatter'],
+  ocean:           ['kelp_scatter', 'coral_scatter'],
+  // Legacy aliases
+  tropical_rainforest: ['dense_tree_scatter', 'fern_scatter', 'vine_scatter', 'mushroom_scatter'],
+  taiga:               ['pine_tree_scatter', 'moss_scatter', 'lichen_scatter', 'berry_scatter'],
+  alpine:              ['rock_scatter', 'sparse_grass_scatter', 'snow_scatter'],
+  coastal:             ['sand_scatter', 'seashell_scatter', 'driftwood_scatter', 'beach_grass_scatter'],
+};
+
+/**
+ * Maps canonical scatter IDs (from BIOME_SCATTER_ID_MAP) to ScatterFactory ScatterType values.
+ *
+ * This is the bridge between the biome-driven scatter configuration and the
+ * actual geometry/material generators registered in ScatterFactory.
+ */
+export const SCATTER_ID_TO_SCATTER_TYPE: Record<string, string> = {
+  // Ground cover
+  sand_scatter:        'ground_leaves',
+  sparse_grass_scatter:'grass',
+  grass_scatter:       'grass',
+  beach_grass_scatter: 'grass',
+
+  // Vegetation — trees
+  cactus_scatter:      'mushroom',       // closest built-in; custom registration recommended
+  acacia_tree_scatter: 'fern',           // placeholder — register a custom type
+  dense_tree_scatter:  'fern',
+  tree_scatter:        'fern',
+  pine_tree_scatter:   'pine_needle',
+
+  // Ground cover — organic
+  fern_scatter:        'fern',
+  moss_scatter:        'moss',
+  lichen_scatter:      'lichen',
+  vine_scatter:        'fern',           // placeholder — register a custom type
+  mushroom_scatter:    'mushroom',
+  wildflower_scatter:  'flower',
+  berry_scatter:       'flower',         // placeholder — register a custom type
+
+  // Rocks & debris
+  rock_scatter:        'rock',
+  small_rock_scatter:  'pebble',
+
+  // Snow
+  snow_scatter:        'snow_layer',
+
+  // Coast
+  seashell_scatter:    'seashell',
+  driftwood_scatter:   'twig',
+
+  // Desert
+  tumbleweed_scatter:  'ground_leaves',  // placeholder — register a custom type
+
+  // Ocean
+  kelp_scatter:        'fern',           // kelp uses fern-like geometry
+  coral_scatter:       'rock',           // coral uses rock-like geometry with coral material
+};
+
+/**
+ * Get the canonical scatter IDs for a given biome type.
+ *
+ * @param biomeType - Biome identifier (supports both Whittaker and legacy names)
+ * @returns Array of scatter ID strings, or empty array if biome is unknown
+ */
+export function getScatterIdsForBiome(biomeType: string): string[] {
+  return BIOME_SCATTER_ID_MAP[biomeType] ?? [];
+}
+
+/**
+ * Resolve a canonical scatter ID to a ScatterFactory ScatterType.
+ *
+ * @param scatterId - Canonical scatter ID (e.g. 'sand_scatter')
+ * @returns ScatterType string for use with ScatterFactory, or undefined
+ */
+export function resolveScatterType(scatterId: string): string | undefined {
+  return SCATTER_ID_TO_SCATTER_TYPE[scatterId];
 }
 
 // ============================================================================
@@ -1595,15 +1974,17 @@ export class BiomeScatterMapping {
 export const BIOME_SCATTER_MAPPING = new BiomeScatterMapping();
 
 /**
- * Convenience function — returns the full BiomeScatterProfile for the given
- * biome type, or `undefined` if no mapping exists.
+ * Convenience function — returns BiomeScatterConfig[] for the given biome type,
+ * with scatterType, density, scaleRange, and materialPreset for each entry.
  *
- * This is the primary export consumers should use for runtime lookups.
+ * This is the primary export consumers should use for runtime scatter lookups
+ * when working with biome masks and ScatterFactory.
+ *
+ * @param biomeType - Biome identifier (supports both Whittaker and legacy names)
+ * @returns Array of BiomeScatterConfig entries, or empty array if biome is unknown
  */
-export function getScatterConfigForBiome(
-  biomeType: string,
-): BiomeScatterProfile | undefined {
-  return BIOME_SCATTER_MAPPING.getProfile(biomeType as ExtendedBiomeType);
+export function getScatterConfigForBiome(biomeType: string): BiomeScatterConfig[] {
+  return BIOME_SCATTER_MAPPING.getScatterConfigForBiome(biomeType);
 }
 
 export default BiomeScatterMapping;

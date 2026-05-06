@@ -1,6 +1,9 @@
 /**
  * MaterialPipeline - Unified entry point for material creation
  *
+ * The ONE API to get materials, whether from presets or node graphs.
+ * MaterialPipeline is the single source of truth for material creation.
+ *
  * Bridges subsystems:
  * 1. MaterialPresetLibrary — 50+ named material presets with PBR parameters
  * 2. NodeGraphMaterialBridge — Converts NodeEvaluator BSDF output to MeshPhysicalMaterial
@@ -12,31 +15,31 @@
  * Usage:
  *   const pipeline = new MaterialPipeline();
  *
- *   // From a preset name
- *   const mat1 = pipeline.fromPreset('steel');
+ *   // THE single entry point — works with names OR node graphs
+ *   const mat1 = pipeline.createMaterial('steel');          // from preset name
+ *   const mat2 = pipeline.createMaterial(nodeGraph);        // from node graph
  *
- *   // From a node graph evaluation result
- *   const bsdfOutput = { BSDF: { type: 'principled_bsdf', baseColor: { r: 0.8, g: 0.2, b: 0.1 }, ... } };
- *   const mat2 = pipeline.fromNodeGraph(bsdfOutput);
+ *   // Convenience methods for common scenarios
+ *   const mat3 = pipeline.createTerrainMaterial('desert');
+ *   const mat4 = pipeline.createCreatureMaterial('reptile', skinConfig);
+ *   const mat5 = pipeline.createIndoorMaterial('furniture');
  *
- *   // From a preset with baked PBR textures
- *   const mat3 = pipeline.fromPresetBaked('oak');
- *
- *   // From a preset with 3D GLSL shader evaluation (runtime, no baking)
- *   const mat4 = pipeline.create3DMaterial('oak');
- *
- *   // Assign texture maps to an existing material
- *   const mat5 = pipeline.withAllMaps(material, { diffuse: tex, normal: normTex });
+ *   // Low-level access still available
+ *   const mat6 = pipeline.fromPreset('steel');
+ *   const mat7 = pipeline.fromPresetBaked('oak');
+ *   const mat8 = pipeline.create3DMaterial('oak');
+ *   const mat9 = pipeline.fromNodeGraph(bsdfOutput);
  */
 
 import * as THREE from 'three';
 import { MaterialPresetLibrary, type MaterialPreset, type MaterialCategory, type PresetVariation } from './MaterialPresetLibrary';
 import { NodeGraphMaterialBridge, type BSDFOutput, type NodeEvaluationOutput } from '../../core/nodes/execution/NodeGraphMaterialBridge';
 import { NodeGraphTextureBridge, type TextureNodeOutput } from '../../core/nodes/execution/NodeGraphTextureBridge';
-import { TextureBakePipeline, type PBRTextureSet, type BakeResolution, type MaterialPBRParams } from './textures/TextureBakePipeline';
+import { TextureBakePipeline, type PBRTextureSet, type CanvasPBRTextureSet, type BakeResolution, type MaterialPBRParams, type PresetBakeOptions } from './textures/TextureBakePipeline';
 import { Material3DEvaluator, CoordinateSpace, type Material3DConfig, DEFAULT_3D_CONFIG } from './Material3DEvaluator';
 import { RuntimeMaterialBuilder, type NodeGraph3DConfig } from './RuntimeMaterialBuilder';
-import type { NodeGraph } from '../../core/nodes/execution/NodeEvaluator';
+import { NodeGraph, NodeEvaluator, EvaluationMode } from '../../core/nodes/execution/NodeEvaluator';
+import { evaluateToMaterial, type EvaluateToMaterialOptions, type EvaluateToMaterialResult } from '../../core/nodes/execution/EvaluateToMaterial';
 
 // ============================================================================
 // Types
@@ -54,6 +57,38 @@ export interface TextureMaps {
   opacity?: THREE.Texture;
 }
 
+/** Input type for createMaterial(): string preset name or NodeGraph */
+export type MaterialInput = string | NodeGraph;
+
+/** Configuration for terrain materials */
+export interface TerrainMaterialConfig {
+  biome: 'desert' | 'tundra' | 'forest' | 'tropical' | 'mountain' | 'volcanic' | 'coastal' | 'grassland';
+  moisture?: number;
+  temperature?: number;
+  elevation?: number;
+  variation?: Partial<PresetVariation>;
+  resolution?: BakeResolution;
+}
+
+/** Configuration for creature materials */
+export interface CreatureMaterialConfig {
+  skinType: 'fur' | 'scales' | 'feathers' | 'chitin' | 'skin' | 'shell';
+  color?: THREE.Color;
+  pattern?: 'solid' | 'spotted' | 'striped' | 'mottled';
+  scale?: number;
+  variation?: Partial<PresetVariation>;
+  resolution?: BakeResolution;
+}
+
+/** Configuration for indoor materials */
+export interface IndoorMaterialConfig {
+  category: 'furniture' | 'floor' | 'wall' | 'ceiling' | 'fixture' | 'textile' | 'countertop';
+  wear?: number;
+  age?: number;
+  variation?: Partial<PresetVariation>;
+  resolution?: BakeResolution;
+}
+
 // ============================================================================
 // MaterialPipeline
 // ============================================================================
@@ -67,7 +102,354 @@ export class MaterialPipeline {
   private runtimeBuilder = new RuntimeMaterialBuilder();
 
   // ==========================================================================
-  // Preset-based Material Creation
+  // THE Single Entry Point
+  // ==========================================================================
+
+  /**
+   * Create a material from a preset name or a node graph.
+   * This is THE unified entry point — whether you have a string name
+   * or a node graph, this method produces a ready-to-use MeshPhysicalMaterial
+   * with all PBR maps (diffuse, normal, roughness, metallic, AO).
+   *
+   * If input is a string: looks up in MaterialPresetLibrary, applies procedural
+   * textures via TextureBakePipeline.bakeProceduralSet().
+   * If input is a NodeGraph: evaluates through NodeEvaluator → NodeGraphMaterialBridge.
+   *
+   * @param nameOrGraph - Preset name string or NodeGraph object
+   * @param options - Optional: { variation, resolution, useProcedural }
+   * @returns Ready-to-use MeshPhysicalMaterial with all maps
+   */
+  createMaterial(
+    nameOrGraph: MaterialInput,
+    options?: {
+      variation?: Partial<PresetVariation>;
+      resolution?: BakeResolution;
+      /** Use category-aware procedural bake instead of generic (default: true) */
+      useProcedural?: boolean;
+    }
+  ): THREE.MeshPhysicalMaterial {
+    if (typeof nameOrGraph === 'string') {
+      return this.createMaterialFromName(nameOrGraph, options);
+    } else {
+      return this.createMaterialFromGraph(nameOrGraph);
+    }
+  }
+
+  /**
+   * Create a material from a preset name with full PBR textures.
+   * Uses the TextureBakePipeline.bakeProceduralSet() for category-aware
+   * noise patterns (voronoi for scales, domain warp for wood, etc).
+   */
+  private createMaterialFromName(
+    name: string,
+    options?: {
+      variation?: Partial<PresetVariation>;
+      resolution?: BakeResolution;
+      useProcedural?: boolean;
+    }
+  ): THREE.MeshPhysicalMaterial {
+    const preset = this.presetLibrary.getPreset(name);
+    if (!preset) {
+      console.warn(`MaterialPipeline: Unknown preset "${name}", returning default material`);
+      return this.createDefaultMaterial();
+    }
+
+    const resolution = options?.resolution ?? 512;
+    const useProcedural = options?.useProcedural ?? true;
+    const params = this.applyVariation(preset.params, options?.variation);
+
+    // Use the named preset pipeline: name → category detection → procedural bake → material
+    const textureSet = this.bakePipeline.bakeFromPresetName(name, params, {
+      category: preset.category,
+      resolution,
+      useProcedural,
+      outputFormat: 'data', // MeshPhysicalMaterial works with DataTexture
+    }) as PBRTextureSet;
+
+    const material = this.bakePipeline.createMaterial(textureSet, params);
+    this.applyPhysicalOverrides(material, preset.physicalOverrides);
+
+    material.name = `Pipeline_${name}`;
+    return material;
+  }
+
+  /**
+   * Create a material from a NodeGraph.
+   * Evaluates the node graph through the full NodeEvaluator → NodeGraphMaterialBridge
+   * pipeline, then returns a ready-to-use MeshPhysicalMaterial.
+   *
+   * This properly handles the NodeGraph → evaluation → BSDF → material conversion,
+   * unlike the previous broken implementation that just cast the graph to any.
+   */
+  private createMaterialFromGraph(graph: NodeGraph): THREE.MeshPhysicalMaterial {
+    try {
+      const result = evaluateToMaterial(graph, {
+        fallbackOnErrors: true,
+        textureResolution: 512,
+        processTextureDescriptors: true,
+      });
+
+      if (result.material) {
+        // Apply any additional texture processing via the pipeline
+        const processedMaterial = this.enhanceFromEvaluatorResult(result.material, result);
+        processedMaterial.name = `Pipeline_NodeGraph_${Date.now()}`;
+        return processedMaterial;
+      }
+    } catch (err) {
+      console.warn('MaterialPipeline: Node graph evaluation failed, returning default material:', err);
+    }
+
+    return this.createDefaultMaterial();
+  }
+
+  /**
+   * Enhance a material produced by evaluateToMaterial with additional
+   * pipeline features (e.g., baked texture enhancement when the evaluator
+   * produced only plain properties without textures).
+   */
+  private enhanceFromEvaluatorResult(
+    material: THREE.MeshPhysicalMaterial,
+    evalResult: EvaluateToMaterialResult,
+  ): THREE.MeshPhysicalMaterial {
+    // If the evaluator already produced a material with textures, return as-is
+    if (material.map || material.normalMap || material.roughnessMap) {
+      return material;
+    }
+
+    // If the evaluator produced a material without textures but with PBR parameters,
+    // we can optionally bake textures to enhance it.
+    // For now, return the evaluator-produced material as-is — it already has
+    // proper PBR property values from the BSDF bridge conversion.
+    return material;
+  }
+
+  // ==========================================================================
+  // Convenience Methods
+  // ==========================================================================
+
+  /**
+   * Create a terrain material for a specific biome.
+   *
+   * Two calling conventions:
+   *   createTerrainMaterial('desert')                          — simple biome name
+   *   createTerrainMaterial({ biome: 'desert', moisture: 0.3 }) — full config
+   *
+   * Maps biome type to the best terrain preset, applies biome-specific
+   * parameter overrides (moisture, temperature, elevation), and bakes
+   * procedural PBR textures.
+   */
+  createTerrainMaterial(biomeOrConfig: TerrainMaterialConfig['biome'] | TerrainMaterialConfig): THREE.MeshPhysicalMaterial {
+    const config: TerrainMaterialConfig = typeof biomeOrConfig === 'string'
+      ? { biome: biomeOrConfig }
+      : biomeOrConfig;
+    const biomePresets: Record<string, string> = {
+      desert: 'sand',
+      tundra: 'snow',
+      forest: 'dirt',
+      tropical: 'mud',
+      mountain: 'mountain_rock',
+      volcanic: 'lava',
+      coastal: 'sandstone',
+      grassland: 'soil',
+    };
+
+    const presetName = biomePresets[config.biome] ?? 'dirt';
+    const preset = this.presetLibrary.getPreset(presetName);
+    if (!preset) {
+      return this.createDefaultMaterial();
+    }
+
+    // Apply biome-specific overrides
+    let params = { ...preset.params };
+
+    // Moisture: wetter biomes are darker and smoother
+    if (config.moisture !== undefined && config.moisture > 0.5) {
+      params.baseColor = params.baseColor.clone().multiplyScalar(1 - config.moisture * 0.15);
+      params.roughness = Math.max(0.04, params.roughness - config.moisture * 0.2);
+    }
+
+    // Temperature: hotter = more cracks, colder = smoother
+    if (config.temperature !== undefined) {
+      if (config.temperature > 0.7) {
+        params.normalStrength *= 1.3; // More pronounced surface
+        params.distortion = Math.max(params.distortion, 0.3);
+      } else if (config.temperature < 0.3) {
+        params.roughness = Math.max(0.04, params.roughness * 0.8); // Smoother when cold
+      }
+    }
+
+    // Elevation: higher = more rock-like
+    if (config.elevation !== undefined && config.elevation > 0.7) {
+      params.noiseScale *= 0.7; // Larger features
+      params.heightScale *= 1.5; // More height variation
+    }
+
+    const variation = config.variation;
+    params = this.applyVariation(params, variation);
+
+    const textureSet = this.bakePipeline.bakeFromPresetName(presetName, params, {
+      category: 'terrain',
+      resolution: config.resolution ?? 512,
+      useProcedural: true,
+    }) as PBRTextureSet;
+
+    const material = this.bakePipeline.createMaterial(textureSet, params);
+    this.applyPhysicalOverrides(material, preset.physicalOverrides);
+    material.name = `Pipeline_Terrain_${config.biome}`;
+    return material;
+  }
+
+  /**
+   * Create a creature material for a specific skin type.
+   *
+   * Two calling conventions:
+   *   createCreatureMaterial('reptile')                              — simple skin type
+   *   createCreatureMaterial('reptile', { color: new Color(0.5,0.4,0.3) }) — with overrides
+   *   createCreatureMaterial({ skinType: 'reptile', color: ... })     — full config
+   *
+   * Maps skin type to the best creature preset, applies pattern/color overrides,
+   * and bakes procedural PBR textures with voronoi (scales) or musgrave (skin) noise.
+   */
+  createCreatureMaterial(
+    typeOrConfig: CreatureMaterialConfig['skinType'] | CreatureMaterialConfig,
+    skinConfig?: Partial<Omit<CreatureMaterialConfig, 'skinType'>>
+  ): THREE.MeshPhysicalMaterial {
+    const config: CreatureMaterialConfig = typeof typeOrConfig === 'string'
+      ? { skinType: typeOrConfig, ...skinConfig }
+      : typeOrConfig;
+    const skinPresets: Record<string, string> = {
+      fur: 'fur',
+      scales: 'snake_scale',
+      feathers: 'feathers',
+      chitin: 'chitin',
+      skin: 'reptile',
+      shell: 'chitin',
+    };
+
+    const presetName = skinPresets[config.skinType] ?? 'fur';
+    const preset = this.presetLibrary.getPreset(presetName);
+    if (!preset) {
+      return this.createDefaultMaterial();
+    }
+
+    // Apply creature-specific overrides
+    let params = { ...preset.params, baseColor: preset.params.baseColor.clone() };
+
+    // Custom color override
+    if (config.color) {
+      params.baseColor = config.color.clone();
+    }
+
+    // Pattern variation
+    if (config.pattern) {
+      switch (config.pattern) {
+        case 'striped':
+          params.distortion = Math.max(params.distortion, 0.4);
+          params.warpStrength = Math.max(params.warpStrength, 0.5);
+          break;
+        case 'spotted':
+          params.noiseScale = Math.max(params.noiseScale, 8);
+          params.noiseDetail = Math.min(params.noiseDetail + 1, 8);
+          break;
+        case 'mottled':
+          params.noiseScale *= 0.7;
+          params.distortion = Math.max(params.distortion, 0.3);
+          break;
+        case 'solid':
+          // No additional variation
+          break;
+      }
+    }
+
+    // Scale override (affects noise frequency)
+    if (config.scale !== undefined) {
+      params.noiseScale *= config.scale;
+    }
+
+    const variation = config.variation;
+    params = this.applyVariation(params, variation);
+
+    const textureSet = this.bakePipeline.bakeFromPresetName(presetName, params, {
+      category: 'creature',
+      resolution: config.resolution ?? 512,
+      useProcedural: true,
+    }) as PBRTextureSet;
+
+    const material = this.bakePipeline.createMaterial(textureSet, params);
+    this.applyPhysicalOverrides(material, preset.physicalOverrides);
+    material.name = `Pipeline_Creature_${config.skinType}`;
+    return material;
+  }
+
+  /**
+   * Create an indoor material for a specific category.
+   *
+   * Two calling conventions:
+   *   createIndoorMaterial('furniture')                        — simple category name
+   *   createIndoorMaterial({ category: 'furniture', wear: 0.3 }) — full config
+   *
+   * Maps indoor category to appropriate presets, applies wear/age,
+   * and bakes procedural PBR textures.
+   */
+  createIndoorMaterial(categoryOrConfig: IndoorMaterialConfig['category'] | IndoorMaterialConfig): THREE.MeshPhysicalMaterial {
+    const config: IndoorMaterialConfig = typeof categoryOrConfig === 'string'
+      ? { category: categoryOrConfig }
+      : categoryOrConfig;
+    const indoorPresets: Record<string, string> = {
+      furniture: 'table_wood',
+      floor: 'hardwood_floor',
+      wall: 'matte_plastic',
+      ceiling: 'matte_plastic',
+      fixture: 'chrome',
+      textile: 'cotton',
+      countertop: 'marble',
+    };
+
+    const presetName = indoorPresets[config.category] ?? 'table_wood';
+    const preset = this.presetLibrary.getPreset(presetName);
+    if (!preset) {
+      return this.createDefaultMaterial();
+    }
+
+    // Apply indoor-specific overrides
+    let params = { ...preset.params, baseColor: preset.params.baseColor.clone() };
+
+    // Wear: increases roughness, reduces clearcoat
+    if (config.wear !== undefined && config.wear > 0) {
+      params.roughness = Math.min(1, params.roughness + config.wear * 0.2);
+      params.aoStrength = Math.min(1, params.aoStrength + config.wear * 0.1);
+      params.normalStrength = Math.max(0, params.normalStrength * (1 - config.wear * 0.3));
+    }
+
+    // Age: darkens and desaturates
+    if (config.age !== undefined && config.age > 0) {
+      const hsl = { h: 0, s: 0, l: 0 };
+      params.baseColor.getHSL(hsl);
+      params.baseColor.setHSL(
+        hsl.h,
+        Math.max(0, hsl.s * (1 - config.age * 0.3)),
+        Math.max(0, hsl.l * (1 - config.age * 0.2))
+      );
+    }
+
+    const variation = config.variation;
+    params = this.applyVariation(params, variation);
+
+    const category = preset.category; // Use the preset's actual category for procedural bake
+    const textureSet = this.bakePipeline.bakeFromPresetName(presetName, params, {
+      category,
+      resolution: config.resolution ?? 512,
+      useProcedural: true,
+    }) as PBRTextureSet;
+
+    const material = this.bakePipeline.createMaterial(textureSet, params);
+    this.applyPhysicalOverrides(material, preset.physicalOverrides);
+    material.name = `Pipeline_Indoor_${config.category}`;
+    return material;
+  }
+
+  // ==========================================================================
+  // Preset-based Material Creation (legacy, still available)
   // ==========================================================================
 
   /**
@@ -98,11 +480,12 @@ export class MaterialPipeline {
     // Apply variation to params
     const params = this.applyVariation(preset.params, variation);
 
-    // Bake PBR texture set
-    const textureSet = this.bakePipeline.bakePBRSet(params, {
+    // Bake PBR texture set using the named pipeline
+    const textureSet = this.bakePipeline.bakeFromPresetName(name, params, {
       category: preset.category,
       resolution,
-    });
+      useProcedural: true,
+    }) as PBRTextureSet;
 
     // Create material with baked textures
     const material = this.bakePipeline.createMaterial(textureSet, params);
@@ -142,14 +525,38 @@ export class MaterialPipeline {
 
   /**
    * Create material from a node graph evaluation result (BSDF output).
+   *
+   * Accepts either:
+   * - A BSDFOutput or NodeEvaluationOutput (already-evaluated node graph result)
+   * - A NodeGraph (will be evaluated through the full pipeline)
+   *
    * Processes any texture references in the BSDF output, then converts via materialBridge.
    */
-  fromNodeGraph(bsdfOutput: BSDFOutput | NodeEvaluationOutput): THREE.MeshPhysicalMaterial {
+  fromNodeGraph(input: BSDFOutput | NodeEvaluationOutput | NodeGraph): THREE.MeshPhysicalMaterial {
+    // If it's a NodeGraph, evaluate it first
+    if (this.isNodeGraph(input)) {
+      return this.createMaterialFromGraph(input);
+    }
+
     // Process any embedded texture node references
-    const processedOutput = this.processTextureReferences(bsdfOutput);
+    const processedOutput = this.processTextureReferences(input as BSDFOutput | NodeEvaluationOutput);
     const material = this.materialBridge.convert(processedOutput);
     material.name = `Pipeline_NodeGraph_${Date.now()}`;
     return material;
+  }
+
+  /**
+   * Check if an input looks like a NodeGraph (has nodes and links)
+   * vs a BSDFOutput (has type field) or NodeEvaluationOutput (has BSDF/Emission/Shader)
+   */
+  private isNodeGraph(input: any): input is NodeGraph {
+    if (!input || typeof input !== 'object') return false;
+    // NodeGraph has `nodes` (Map) and `links` (array)
+    // BSDFOutput has `type` (string)
+    // NodeEvaluationOutput has `BSDF`/`Emission`/`Shader`/`Volume`/`Surface`
+    if ('type' in input && typeof input.type === 'string') return false;
+    if ('BSDF' in input || 'Emission' in input || 'Shader' in input || 'Volume' in input || 'Surface' in input) return false;
+    return 'nodes' in input && 'links' in input;
   }
 
   /**

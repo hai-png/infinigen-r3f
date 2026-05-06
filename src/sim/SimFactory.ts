@@ -7,10 +7,27 @@
  *   - KinematicCompiler (produces kinematic DAGs from articulated objects)
  *   - PhysicsWorld (full physics engine with RigidBody, Collider, Joint support)
  *
- * Previously a 2-line stub returning empty objects. Now fully implemented.
+ * The bridge pipeline is:
+ *   ArticulatedObjectResult
+ *     → compileKinematicTree() → KinematicNodeTree
+ *     → RigidBodySkeleton.construct() → RigidBodyNode[]
+ *     → SimFactory.createRigidBodyFromNode() / createJointFromNodes()
+ *     → { bodies: SimRigidBody[], joints: SimJoint[], world: PhysicsWorld }
+ *
+ * Output is consumable by:
+ *   - RapierPhysicsProvider for real-time simulation
+ *   - SimulationExporter for URDF/MJCF export
+ *
+ * Physics Backend Consolidation (Wave 3):
+ *   Rapier is established as the primary physics backend. The SimFactory
+ *   provides methods that map to Rapier's capabilities:
+ *   - createRapierBody() — creates a @react-three/rapier RigidBody
+ *   - createRapierJoint() — creates a rapier joint
+ *   - generateCollisionFromMesh() — uses MeshSimplifier for low-poly hulls
+ *   - The existing PhysicsWorld-based methods remain for non-Rapier contexts
  */
 
-import { Vector3, Quaternion } from 'three';
+import { Vector3, Quaternion, Box3, Mesh } from 'three';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { RigidBody, RigidBodyConfig, BodyType } from './physics/RigidBody';
 import { ColliderConfig, ColliderShape } from './physics/Collider';
@@ -21,6 +38,17 @@ import {
   cylinderInertiaTensor,
   capsuleInertiaTensor,
 } from './physics/RigidBody';
+import {
+  compileKinematicTree,
+  KinematicNodeTree,
+  RigidBodySkeleton,
+  RigidBodyNode,
+} from './kinematic/KinematicCompiler';
+import {
+  ArticulatedObjectResult,
+  JointInfo,
+  JointType as ArticulatedJointType,
+} from '../assets/objects/articulated/types';
 
 // ============================================================================
 // Public Types
@@ -144,6 +172,43 @@ export interface SimArticulatedObjectResult {
     axis?: [number, number, number];
     limits?: { min: number; max: number };
   }>;
+}
+
+/**
+ * Full result of creating an articulated object from an ArticulatedObjectResult.
+ * Contains the physics objects, the kinematic tree, and the skeleton for
+ * downstream consumption by both RapierPhysicsProvider (real-time sim) and
+ * SimulationExporter (URDF/MJCF export).
+ */
+export interface SimArticulatedObjectFullResult {
+  /** Created rigid body handles */
+  bodies: SimRigidBody[];
+  /** Created joint handles */
+  joints: SimJoint[];
+  /** The underlying PhysicsWorld */
+  world: PhysicsWorld;
+  /** The compiled kinematic node tree (for FK/IK and export) */
+  kinematicTree: KinematicNodeTree;
+  /** The simplified rigid-body skeleton (for URDF/MJCF export) */
+  skeleton: RigidBodySkeleton;
+  /** The original ArticulatedObjectResult category */
+  category: string;
+}
+
+/**
+ * Configuration for creating an articulated object from an ArticulatedObjectResult.
+ */
+export interface CreateArticulatedObjectConfig {
+  /** Default density for mass estimation (kg/m³, default: 500 for wood-like) */
+  defaultDensity?: number;
+  /** Default friction coefficient (default: 0.5) */
+  defaultFriction?: number;
+  /** Default restitution (default: 0.3) */
+  defaultRestitution?: number;
+  /** Whether the root body should be static (default: true) */
+  rootBodyStatic?: boolean;
+  /** Gravity for the physics world (default: [0, -9.81, 0]) */
+  gravity?: [number, number, number];
 }
 
 // ============================================================================
@@ -578,6 +643,451 @@ export class SimFactory {
       joints,
       world: this.world,
     };
+  }
+
+  // --------------------------------------------------------------------------
+  // Bridge: ArticulatedObjectResult → KinematicCompiler → PhysicsWorld
+  // --------------------------------------------------------------------------
+
+  /**
+   * Create a full articulated object from an ArticulatedObjectResult.
+   *
+   * This is the core bridge method. It:
+   * 1. Runs the ArticulatedObjectResult through compileKinematicTree()
+   * 2. Builds a RigidBodySkeleton (simplifies weld-connected bodies)
+   * 3. Creates rigid bodies from the skeleton nodes
+   * 4. Creates joints between parent-child body pairs
+   * 5. Returns a full result including the kinematic tree and skeleton
+   *    for downstream consumption by RapierPhysicsProvider and SimulationExporter
+   *
+   * @param result - The ArticulatedObjectResult from a generator
+   * @param config - Configuration for mass estimation, body types, etc.
+   * @returns Full result with physics handles, kinematic tree, and skeleton
+   */
+  createArticulatedObjectFromResult(
+    result: ArticulatedObjectResult,
+    config: CreateArticulatedObjectConfig = {}
+  ): SimArticulatedObjectFullResult {
+    const density = config.defaultDensity ?? 500;
+    const rootBodyStatic = config.rootBodyStatic ?? true;
+
+    // Step 1: Compile the kinematic tree from the articulated object
+    const kinematicTree = compileKinematicTree(result);
+
+    // Step 2: Build the rigid body skeleton (simplifies weld-connected bodies)
+    const skeleton = new RigidBodySkeleton();
+    skeleton.construct(kinematicTree);
+
+    // Step 3: Build a mesh lookup from the THREE.Group
+    const meshLookup = this.buildMeshLookup(result.group);
+
+    // Step 4: Build a JointInfo lookup from the result
+    const jointLookup = new Map<string, JointInfo>();
+    for (const j of result.joints) {
+      jointLookup.set(j.id, j);
+    }
+
+    // Step 5: Create all rigid bodies from the skeleton
+    const nodeToBody = new Map<string, SimRigidBody>();
+    const bodies: SimRigidBody[] = [];
+
+    for (const rbNode of skeleton.bodies) {
+      const isRoot = rbNode.parentId === null;
+      const bodyType: BodyType = (isRoot && rootBodyStatic) ? 'static' : 'dynamic';
+
+      // Find meshes that belong to this body (via meshSubset path attribute)
+      const bodyMeshes = this.findMeshesForNode(rbNode, meshLookup);
+      const bounds = this.computeCombinedBounds(bodyMeshes);
+      const shape = this.inferShapeFromBounds(bounds);
+      const mass = this.estimateMassFromBounds(bounds, density, bodyType);
+
+      // Get position from mesh or default
+      const position = this.computeBodyPosition(bodyMeshes, bounds);
+
+      const simBody = this.createRigidBody({
+        name: rbNode.id,
+        mass,
+        position: [position.x, position.y, position.z],
+        shape,
+        bodyType,
+      });
+
+      // Store the skeleton node reference on the body's userData
+      simBody.body.userData = {
+        ...simBody.body.userData,
+        skeletonNodeId: rbNode.id,
+        meshSubset: rbNode.meshSubset,
+        isRoot,
+        jointType: rbNode.jointType,
+        jointAxis: rbNode.jointAxis.toArray(),
+        jointLimits: rbNode.jointLimits,
+        jointDynamics: rbNode.jointDynamics,
+      };
+
+      nodeToBody.set(rbNode.id, simBody);
+      bodies.push(simBody);
+    }
+
+    // Step 6: Create all joints from the skeleton's parent-child relationships
+    const joints: SimJoint[] = [];
+
+    for (const rbNode of skeleton.bodies) {
+      if (rbNode.parentId === null) continue;
+
+      const parentSimBody = nodeToBody.get(rbNode.parentId);
+      const childSimBody = nodeToBody.get(rbNode.id);
+
+      if (!parentSimBody || !childSimBody) {
+        console.warn(
+          `[SimFactory] Skipping joint for node "${rbNode.id}": ` +
+          `parent body "${rbNode.parentId}" or child body not found.`
+        );
+        continue;
+      }
+
+      // Skip weld/fixed joints (bodies are already merged by RigidBodySkeleton,
+      // but we may still have fixed joints if simplification was partial)
+      if (rbNode.isWelded()) {
+        // Create a fixed joint to maintain the constraint
+        const simJoint = this.createJointFromRigidBodyNode(
+          rbNode,
+          parentSimBody,
+          childSimBody,
+          jointLookup
+        );
+        if (simJoint) {
+          joints.push(simJoint);
+        }
+        continue;
+      }
+
+      // Create articulated joint
+      const simJoint = this.createJointFromRigidBodyNode(
+        rbNode,
+        parentSimBody,
+        childSimBody,
+        jointLookup
+      );
+      if (simJoint) {
+        joints.push(simJoint);
+      }
+    }
+
+    return {
+      bodies,
+      joints,
+      world: this.world,
+      kinematicTree,
+      skeleton,
+      category: result.category,
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // Bridge helpers: RigidBodyNode → physics objects
+  // --------------------------------------------------------------------------
+
+  /**
+   * Create a SimJoint from a RigidBodyNode's connection to its parent.
+   *
+   * Maps RigidBodyNode joint types to physics engine joint types:
+   *   - 'hinge' / 'continuous' → hinge
+   *   - 'prismatic' → slider (prismatic)
+   *   - 'ball' / 'ball_socket' → ball
+   *   - 'fixed' / 'weld' → fixed
+   *
+   * @param rbNode - The child RigidBodyNode with joint info
+   * @param parentBody - The parent SimRigidBody
+   * @param childBody - The child SimRigidBody
+   * @param jointLookup - Lookup from joint ID to JointInfo (for anchor/axis data)
+   */
+  private createJointFromRigidBodyNode(
+    rbNode: RigidBodyNode,
+    parentBody: SimRigidBody,
+    childBody: SimRigidBody,
+    jointLookup: Map<string, JointInfo>
+  ): SimJoint | null {
+    // Determine the SimJointType from the RigidBodyNode's joint type
+    const simJointType = this.rbJointTypeToSimJointType(rbNode.jointType);
+    const jointName = `joint_${rbNode.parentId}_to_${rbNode.id}`;
+
+    // Try to find the original JointInfo for this connection
+    const jointInfo = this.findJointInfoForNode(rbNode, jointLookup);
+
+    // Determine anchor point
+    let anchor: [number, number, number];
+    let axis: [number, number, number] | undefined;
+    let limits: { min: number; max: number } | undefined;
+
+    if (jointInfo) {
+      // Use anchor from the original JointInfo (it's in parent local space)
+      // Convert to world space by adding parent body position
+      const parentPos = parentBody.body.position;
+      anchor = [
+        jointInfo.anchor.x + parentPos.x,
+        jointInfo.anchor.y + parentPos.y,
+        jointInfo.anchor.z + parentPos.z,
+      ];
+      axis = [jointInfo.axis.x, jointInfo.axis.y, jointInfo.axis.z];
+      limits = { min: jointInfo.limits.min, max: jointInfo.limits.max };
+    } else {
+      // Fallback: place anchor at the midpoint between parent and child
+      const parentPos = parentBody.body.position;
+      const childPos = childBody.body.position;
+      anchor = [
+        (parentPos.x + childPos.x) / 2,
+        (parentPos.y + childPos.y) / 2,
+        (parentPos.z + childPos.z) / 2,
+      ];
+      // Use axis from the skeleton node
+      const ja = rbNode.jointAxis;
+      if (ja.lengthSq() > 0) {
+        axis = [ja.x, ja.y, ja.z];
+      }
+      // Use limits from the skeleton node
+      if (rbNode.jointLimits.min !== 0 || rbNode.jointLimits.max !== 0) {
+        limits = { min: rbNode.jointLimits.min, max: rbNode.jointLimits.max };
+      }
+    }
+
+    try {
+      return this.createJoint({
+        name: jointName,
+        type: simJointType,
+        bodyAId: parentBody.id,
+        bodyBId: childBody.id,
+        anchor,
+        axis,
+        limits,
+      });
+    } catch (err) {
+      console.warn(
+        `[SimFactory] Failed to create joint "${jointName}":`,
+        err instanceof Error ? err.message : err
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Map a RigidBodyNode joint type (ArticulatedJointType | 'weld')
+   * to a SimJointType for the physics engine.
+   */
+  private rbJointTypeToSimJointType(
+    jointType: ArticulatedJointType | 'weld'
+  ): SimJointType {
+    switch (jointType) {
+      case 'hinge':
+      case 'continuous':
+        return 'hinge';
+      case 'prismatic':
+        return 'slider';
+      case 'ball':
+      case 'ball_socket':
+        return 'ball';
+      case 'fixed':
+      case 'weld':
+        return 'fixed';
+      default:
+        console.warn(
+          `[SimFactory] Unknown RigidBodyNode joint type "${jointType}", falling back to fixed`
+        );
+        return 'fixed';
+    }
+  }
+
+  /**
+   * Find the original JointInfo that corresponds to a RigidBodyNode's
+   * connection to its parent. This is needed because RigidBodySkeleton
+   * may merge nodes, so the node IDs may not directly match joint IDs.
+   */
+  private findJointInfoForNode(
+    rbNode: RigidBodyNode,
+    jointLookup: Map<string, JointInfo>
+  ): JointInfo | null {
+    // Strategy 1: Direct lookup by node ID (the joint node ID is typically
+    // "joint_<jointInfo.id>")
+    if (rbNode.id.startsWith('joint_')) {
+      const jointId = rbNode.id.replace('joint_', '');
+      const info = jointLookup.get(jointId);
+      if (info) return info;
+    }
+
+    // Strategy 2: Search by matching parent-child mesh names
+    // The RigidBodyNode's meshSubset may contain the child mesh name
+    const meshSubsets = rbNode.meshSubset.split(',');
+    for (const subset of meshSubsets) {
+      for (const [, info] of jointLookup) {
+        if (info.childMesh === subset.trim()) {
+          return info;
+        }
+      }
+    }
+
+    // Strategy 3: Search for any joint whose child mesh matches a descendant
+    for (const [, info] of jointLookup) {
+      if (rbNode.id.includes(info.id) || rbNode.id.includes(info.childMesh)) {
+        return info;
+      }
+    }
+
+    return null;
+  }
+
+  // --------------------------------------------------------------------------
+  // Bridge helpers: Mesh analysis
+  // --------------------------------------------------------------------------
+
+  /**
+   * Build a map from mesh name → THREE.Mesh for quick lookup.
+   * Traverses the THREE.Group hierarchy and collects all Mesh objects.
+   */
+  private buildMeshLookup(group: import('three').Group): Map<string, Mesh> {
+    const lookup = new Map<string, Mesh>();
+    group.traverse((child) => {
+      if (child instanceof Mesh) {
+        // Use the mesh name as the key; fall back to uuid
+        const key = child.name || child.uuid;
+        lookup.set(key, child);
+      }
+    });
+    return lookup;
+  }
+
+  /**
+   * Find all meshes that belong to a RigidBodyNode based on its meshSubset.
+   *
+   * The meshSubset is a comma-separated list of mesh names that identify
+   * which meshes belong to this rigid body. This is set by the
+   * RigidBodySkeleton during simplification.
+   */
+  private findMeshesForNode(
+    rbNode: RigidBodyNode,
+    meshLookup: Map<string, Mesh>
+  ): Mesh[] {
+    const meshes: Mesh[] = [];
+    const subsetNames = rbNode.meshSubset.split(',').map((s) => s.trim());
+
+    for (const name of subsetNames) {
+      const mesh = meshLookup.get(name);
+      if (mesh) {
+        meshes.push(mesh);
+      }
+    }
+
+    return meshes;
+  }
+
+  /**
+   * Compute the combined bounding box of multiple meshes.
+   * Returns a Box3 that encloses all the given meshes in world space.
+   */
+  private computeCombinedBounds(meshes: Mesh[]): Box3 {
+    const bounds = new Box3();
+
+    if (meshes.length === 0) {
+      // Default: unit box centered at origin
+      bounds.set(new Vector3(-0.5, -0.5, -0.5), new Vector3(0.5, 0.5, 0.5));
+      return bounds;
+    }
+
+    for (const mesh of meshes) {
+      // Compute world-space bounding box
+      if (!mesh.geometry.boundingBox) {
+        mesh.geometry.computeBoundingBox();
+      }
+      const meshBounds = mesh.geometry.boundingBox!.clone();
+      // Transform to world space
+      meshBounds.applyMatrix4(mesh.matrixWorld);
+      bounds.union(meshBounds);
+    }
+
+    return bounds;
+  }
+
+  /**
+   * Infer a ShapeSpec from a bounding box.
+   *
+   * Strategy:
+   * - If the box is nearly cubic (all dimensions within 20% of each other), use sphere
+   * - If one dimension is much larger than the other two (cylinder-like), use cylinder
+   * - Otherwise, use box (the most general shape)
+   */
+  private inferShapeFromBounds(bounds: Box3): ShapeSpec {
+    const size = new Vector3();
+    bounds.getSize(size);
+
+    const x = size.x, y = size.y, z = size.z;
+    const maxDim = Math.max(x, y, z);
+    const minDim = Math.min(x, y, z);
+
+    // Avoid degenerate cases
+    if (maxDim < 1e-6) {
+      return {
+        type: 'box',
+        params: { dimensions: [1, 1, 1] },
+      };
+    }
+
+    const aspectRatio = maxDim / Math.max(minDim, 1e-6);
+
+    // Nearly uniform in all dimensions → sphere
+    if (aspectRatio < 1.3) {
+      return {
+        type: 'sphere',
+        params: { radius: maxDim / 2 },
+      };
+    }
+
+    // One dimension much larger → cylinder along that axis
+    if (aspectRatio > 2.0) {
+      // Find the elongated axis
+      const radius = minDim / 2;
+      const height = maxDim;
+      return {
+        type: 'cylinder',
+        params: { cylinderRadius: radius, height },
+      };
+    }
+
+    // Default: box
+    return {
+      type: 'box',
+      params: { dimensions: [x, y, z] },
+    };
+  }
+
+  /**
+   * Estimate mass from bounding box volume and density.
+   * Returns 0 for static bodies (they don't need mass).
+   */
+  private estimateMassFromBounds(
+    bounds: Box3,
+    density: number,
+    bodyType: BodyType
+  ): number {
+    if (bodyType === 'static') return 0;
+
+    const size = new Vector3();
+    bounds.getSize(size);
+    const volume = size.x * size.y * size.z;
+
+    // Use a fill factor of 0.5 (most objects aren't solid boxes)
+    return volume * density * 0.5;
+  }
+
+  /**
+   * Compute the center position for a body from its meshes and bounding box.
+   */
+  private computeBodyPosition(meshes: Mesh[], bounds: Box3): Vector3 {
+    if (meshes.length === 0) {
+      return new Vector3();
+    }
+
+    // Use the center of the bounding box
+    const center = new Vector3();
+    bounds.getCenter(center);
+    return center;
   }
 
   // --------------------------------------------------------------------------

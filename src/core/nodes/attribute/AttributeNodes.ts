@@ -258,7 +258,16 @@ export class StoreNamedAttributeNode implements AttributeNodeBase {
 
 /**
  * Capture Attribute Node
- * Reads a named attribute from geometry and returns it alongside the geometry
+ *
+ * Evaluates a field per-element on geometry and captures the per-element values.
+ * In Blender's geometry nodes, CaptureAttribute evaluates its Value input
+ * field at each element of the specified domain (point/face/corner).
+ *
+ * The Value (attribute input) may be:
+ *   - A per-element array (from Position, Normal, etc.)
+ *   - An AttributeStream (from the per-vertex evaluator)
+ *   - A function (index, position, normal) → value (field evaluator)
+ *   - A single scalar/vector constant (uniform field)
  */
 export class CaptureAttributeNode implements AttributeNodeBase {
   readonly type = NodeTypes.CaptureAttribute;
@@ -283,36 +292,183 @@ export class CaptureAttributeNode implements AttributeNodeBase {
     }
 
     const domain = this.inputs.domain || 'point';
+    const dataType = this.inputs.dataType || 'float';
     const count = getDomainCount(geometry, domain);
+    const value = this.inputs.attribute;
 
-    // Try to capture from existing geometry attribute, otherwise use input value
-    const defaultAttr = domainToDefaultAttribute(domain);
-    if (defaultAttr && geometry.hasAttribute(defaultAttr)) {
-      const attr = geometry.getAttribute(defaultAttr);
-      const captured: any[] = [];
-      for (let i = 0; i < attr.count; i++) {
-        if (attr.itemSize === 1) {
-          captured.push(attr.getX(i));
-        } else if (attr.itemSize === 2) {
-          captured.push([attr.getX(i), attr.getY(i)]);
-        } else if (attr.itemSize === 3) {
-          captured.push([attr.getX(i), attr.getY(i), attr.getZ(i)]);
-        } else if (attr.itemSize === 4) {
-          captured.push([attr.getX(i), attr.getY(i), attr.getZ(i), attr.getW(i)]);
-        }
-      }
-      this.outputs.attribute = captured;
-    } else {
-      // Fallback: replicate input value for each element
-      const values: any[] = [];
-      for (let i = 0; i < count; i++) {
-        values.push(this.inputs.attribute);
-      }
-      this.outputs.attribute = values;
-    }
+    // Resolve per-element values
+    this.outputs.attribute = this.resolvePerElementValues(
+      value, count, domain, dataType, geometry,
+    );
 
     this.outputs.geometry = geometry;
     return this.outputs;
+  }
+
+  /**
+   * Resolve the attribute input into per-element values.
+   */
+  private resolvePerElementValues(
+    value: any,
+    count: number,
+    domain: string,
+    dataType: string,
+    geometry: THREE.BufferGeometry,
+  ): any[] {
+    if (value === null || value === undefined) {
+      return new Array(count).fill(
+        dataType === 'vec3' ? { x: 0, y: 0, z: 0 }
+          : dataType === 'color' ? { r: 0, g: 0, b: 0, a: 1 }
+          : dataType === 'boolean' ? false
+          : 0,
+      );
+    }
+
+    // Case 1: Value is an AttributeStream (from PerVertexEvaluator)
+    if (typeof value === 'object' && value !== null && 'getFloat' in value && 'size' in value) {
+      const stream = value as any;
+      const result: any[] = [];
+      const streamSize = stream.size as number;
+      const streamType = stream.dataType as string;
+      for (let i = 0; i < count; i++) {
+        const idx = Math.min(i, streamSize - 1);
+        if (streamType === 'VECTOR') {
+          const v = stream.getVector(idx) as [number, number, number];
+          result.push({ x: v[0], y: v[1], z: v[2] });
+        } else if (streamType === 'COLOR') {
+          result.push(stream.getColor(idx));
+        } else if (streamType === 'BOOLEAN') {
+          result.push(stream.getBoolean(idx));
+        } else {
+          result.push(stream.getFloat(idx));
+        }
+      }
+      return result;
+    }
+
+    // Case 2: Value is already a per-element array
+    if (Array.isArray(value)) {
+      if (value.length === count) {
+        return value.slice();
+      } else if (value.length > 0) {
+        const result: any[] = [];
+        for (let i = 0; i < count; i++) {
+          result.push(value[i % value.length]);
+        }
+        return result;
+      }
+    }
+
+    // Case 3: Value is a field evaluator function
+    //   (index: number, position: {x,y,z}, normal: {x,y,z}) => any
+    if (typeof value === 'function') {
+      const result: any[] = [];
+      const posAttr = geometry.getAttribute('position');
+      const normalAttr = geometry.getAttribute('normal');
+      const indexAttr = geometry.getIndex();
+
+      for (let i = 0; i < count; i++) {
+        const position = this.getDomainPosition(geometry, domain, i, posAttr, indexAttr);
+        const normal = this.getDomainNormal(geometry, domain, i, normalAttr, posAttr, indexAttr);
+        try {
+          result.push(value(i, position, normal));
+        } catch {
+          result.push(dataType === 'vec3' ? { x: 0, y: 0, z: 0 } : 0);
+        }
+      }
+      return result;
+    }
+
+    // Case 4: Single scalar/vector constant — repeat for all elements
+    // This is correct for constant fields
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return new Array(count).fill(value);
+    }
+
+    // Case 5: Single object constant
+    if (typeof value === 'object') {
+      return new Array(count).fill(value);
+    }
+
+    return new Array(count).fill(value);
+  }
+
+  /**
+   * Get the position for a domain element.
+   */
+  private getDomainPosition(
+    geometry: THREE.BufferGeometry,
+    domain: string,
+    elementIndex: number,
+    posAttr?: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null,
+    indexAttr?: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null,
+  ): { x: number; y: number; z: number } {
+    if (!posAttr) posAttr = geometry.getAttribute('position');
+    if (!indexAttr) indexAttr = geometry.getIndex();
+
+    if (domain === 'point' || domain === 'face_corner') {
+      const idx = domain === 'face_corner' && indexAttr
+        ? indexAttr.getX(elementIndex) : elementIndex;
+      return {
+        x: posAttr?.getX(idx) ?? 0,
+        y: posAttr?.getY(idx) ?? 0,
+        z: posAttr?.getZ(idx) ?? 0,
+      };
+    }
+
+    if (domain === 'face') {
+      const i0 = indexAttr ? indexAttr.getX(elementIndex * 3) : elementIndex * 3;
+      const i1 = indexAttr ? indexAttr.getX(elementIndex * 3 + 1) : elementIndex * 3 + 1;
+      const i2 = indexAttr ? indexAttr.getX(elementIndex * 3 + 2) : elementIndex * 3 + 2;
+      return {
+        x: ((posAttr?.getX(i0) ?? 0) + (posAttr?.getX(i1) ?? 0) + (posAttr?.getX(i2) ?? 0)) / 3,
+        y: ((posAttr?.getY(i0) ?? 0) + (posAttr?.getY(i1) ?? 0) + (posAttr?.getY(i2) ?? 0)) / 3,
+        z: ((posAttr?.getZ(i0) ?? 0) + (posAttr?.getZ(i1) ?? 0) + (posAttr?.getZ(i2) ?? 0)) / 3,
+      };
+    }
+
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  /**
+   * Get the normal for a domain element.
+   */
+  private getDomainNormal(
+    geometry: THREE.BufferGeometry,
+    domain: string,
+    elementIndex: number,
+    normalAttr?: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null,
+    posAttr?: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null,
+    indexAttr?: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null,
+  ): { x: number; y: number; z: number } {
+    if (!normalAttr) normalAttr = geometry.getAttribute('normal');
+    if (!posAttr) posAttr = geometry.getAttribute('position');
+    if (!indexAttr) indexAttr = geometry.getIndex();
+
+    if (normalAttr && (domain === 'point' || domain === 'face_corner')) {
+      const idx = domain === 'face_corner' && indexAttr
+        ? indexAttr.getX(elementIndex) : elementIndex;
+      return {
+        x: normalAttr.getX(idx),
+        y: normalAttr.getY(idx),
+        z: normalAttr.getZ(idx),
+      };
+    }
+
+    if (domain === 'face' && posAttr && indexAttr) {
+      const i0 = indexAttr.getX(elementIndex * 3);
+      const i1 = indexAttr.getX(elementIndex * 3 + 1);
+      const i2 = indexAttr.getX(elementIndex * 3 + 2);
+      const v0 = new THREE.Vector3(posAttr.getX(i0), posAttr.getY(i0), posAttr.getZ(i0));
+      const v1 = new THREE.Vector3(posAttr.getX(i1), posAttr.getY(i1), posAttr.getZ(i1));
+      const v2 = new THREE.Vector3(posAttr.getX(i2), posAttr.getY(i2), posAttr.getZ(i2));
+      const e1 = new THREE.Vector3().subVectors(v1, v0);
+      const e2 = new THREE.Vector3().subVectors(v2, v0);
+      const n = new THREE.Vector3().crossVectors(e1, e2).normalize();
+      return { x: n.x, y: n.y, z: n.z };
+    }
+
+    return { x: 0, y: 1, z: 0 };
   }
 }
 

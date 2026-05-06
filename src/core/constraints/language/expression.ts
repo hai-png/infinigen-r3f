@@ -139,6 +139,49 @@ export abstract class ScalarExpression extends Expression {
   greaterThanOrEqual(other: ScalarExpression): BoolOperatorExpression {
     return new BoolOperatorExpression(this, 'gte', other);
   }
+
+  /**
+   * Hinge loss: penalizes deviation of a value from a range [low, high].
+   *
+   * This is the primary mechanism for soft constraints in the original Infinigen.
+   * The original Python implementation uses hinge(val, low, high) which returns:
+   *   - 0 if val is in [low, high]
+   *   - (low - val) if val < low  (penalty for being below range)
+   *   - (val - high) if val > high (penalty for being above range)
+   *
+   * This is used pervasively for "prefer X between A and B" constraints:
+   *   - distance between objects should be in [0.5, 2.0]
+   *   - coverage ratio should be in [0.3, 1.0]
+   *   - alignment offset should be in [-0.1, 0.1]
+   *
+   * Without hinge loss, the constraint system cannot naturally express
+   * soft preference constraints and falls back to hard binary checks.
+   */
+  hinge(low: number | ScalarExpression, high: number | ScalarExpression): HingeLossExpression {
+    const lowExpr = typeof low === 'number' ? new ScalarConstant(low) : low;
+    const highExpr = typeof high === 'number' ? new ScalarConstant(high) : high;
+    return new HingeLossExpression(this, lowExpr, highExpr);
+  }
+
+  /**
+   * Safe division: division that returns fallback when divisor is zero
+   */
+  safeDiv(other: ScalarExpression, fallback: number = 0): ScalarIfElse {
+    return new ScalarIfElse(
+      this.equals(other).not(),  // if divisor != 0
+      this.div(other),            // then: this / other
+      new ScalarConstant(fallback) // else: fallback
+    );
+  }
+
+  /**
+   * Clip/clamp: constrain value to [min, max] range
+   */
+  clip(minVal: number | ScalarExpression, maxVal: number | ScalarExpression): ScalarExpression {
+    const minExpr = typeof minVal === 'number' ? new ScalarConstant(minVal) : minVal;
+    const maxExpr = typeof maxVal === 'number' ? new ScalarConstant(maxVal) : maxVal;
+    return this.max(minExpr).min(maxExpr);
+  }
 }
 
 /**
@@ -182,6 +225,67 @@ export abstract class BoolExpression extends Expression {
    */
   implies(other: BoolExpression): BoolOperatorExpression {
     return new BoolOperatorExpression(this, 'implies', other);
+  }
+}
+
+/**
+ * Hinge Loss Expression
+ *
+ * The most critical missing expression for constraint-based scene composition.
+ * Implements hinge(val, low, high) which penalizes deviation from a preferred range.
+ *
+ * Mathematical definition:
+ *   hinge(val, low, high) = max(0, low - val) + max(0, val - high)
+ *
+ * This produces:
+ *   - 0 when val is in [low, high] (satisfied, no penalty)
+ *   - (low - val) when val < low (below range, linear penalty)
+ *   - (val - high) when val > high (above range, linear penalty)
+ *
+ * This matches the original Infinigen's hinge loss behavior and enables
+ * soft constraint expressions like "prefer distance between 0.5 and 2.0"
+ * which are fundamental to scene composition.
+ */
+export class HingeLossExpression extends ScalarExpression {
+  readonly type = 'HingeLossExpression';
+
+  constructor(
+    public readonly value: ScalarExpression,
+    public readonly low: ScalarExpression,
+    public readonly high: ScalarExpression
+  ) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map([
+      ['value', this.value],
+      ['low', this.low],
+      ['high', this.high]
+    ]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const val = this.value.evaluate(state);
+    const low = this.low.evaluate(state);
+    const high = this.high.evaluate(state);
+
+    // hinge(val, low, high) = max(0, low - val) + max(0, val - high)
+    const lowPenalty = Math.max(0, low - val);  // Penalty for being below range
+    const highPenalty = Math.max(0, val - high); // Penalty for being above range
+    return lowPenalty + highPenalty;
+  }
+
+  clone(): HingeLossExpression {
+    return new HingeLossExpression(
+      this.value.clone() as ScalarExpression,
+      this.low.clone() as ScalarExpression,
+      this.high.clone() as ScalarExpression
+    );
+  }
+
+  toString(): string {
+    return `hinge(${this.value}, ${this.low}, ${this.high})`;
   }
 }
 

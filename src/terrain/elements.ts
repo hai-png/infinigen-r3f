@@ -48,6 +48,7 @@ export {
   CaveElement,
   VoronoiRockElement,
   WaterbodyElement,
+  UpsideDownMountainElement,
   SceneComposer,
   DEFAULT_SCENE_COMPOSITION_CONFIG,
   buildSDFFromElements,

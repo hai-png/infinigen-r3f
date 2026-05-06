@@ -9,20 +9,22 @@
  *   1. Compute axis-aligned bounding box of particles (with padding)
  *   2. Rasterise particle contributions onto a regular scalar grid using
  *      the SPH Poly6 kernel  →  density field
- *   3. Run marching cubes on the density field at `restDensity` threshold
- *   4. Swap the result into a double-buffered THREE.Mesh
+ *   3. Convert density field to a SignedDistanceField where
+ *      SDF = threshold - density (negative inside fluid)
+ *   4. Run extractIsosurface() from sdf-operations.ts (marching cubes at SDF = 0)
+ *   5. Swap the result into a double-buffered THREE.Mesh
  *
  * Target: 30+ FPS for 500 particles on a 32³ grid.
  */
 
 import * as THREE from 'three';
-import { EDGE_TABLE, TRIANGLE_TABLE, EDGE_VERTICES, CORNER_OFFSETS } from '../../terrain/mesher/MarchingCubesLUTs';
+import { SignedDistanceField, extractIsosurface } from '../../terrain/sdf/sdf-operations';
 import { getDefaultLibrary } from '../../assets/materials/MaterialPresetLibrary';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 export interface FluidSurfaceRendererConfig {
-  /** Grid resolution per axis (default 32) */
+  /** Grid resolution per axis (default 32, max 64 for quality) */
   gridResolution: number;
   /** Smoothing radius – must match FluidSimulation.h (default 0.1) */
   smoothingRadius: number;
@@ -35,7 +37,7 @@ export interface FluidSurfaceRendererConfig {
   /**
    * Material preset id from MaterialPresetLibrary (e.g. 'river_water'),
    * or 'default' for a built-in MeshPhysicalMaterial water look.
-   * Ignored if `customMaterial` is provided. (default 'default')
+   * Ignored if `customMaterial` is provided. (default 'river_water')
    */
   materialPreset: string;
   /** Optional pre-built material; overrides materialPreset if supplied. */
@@ -48,7 +50,7 @@ const DEFAULT_CONFIG: FluidSurfaceRendererConfig = {
   particleMass: 0.1,
   restDensity: 1000,
   boundsPadding: 0.15,
-  materialPreset: 'default',
+  materialPreset: 'river_water',
 };
 
 // ─── Pre-computed Poly6 constants ───────────────────────────────────────────
@@ -62,15 +64,6 @@ const DEFAULT_CONFIG: FluidSurfaceRendererConfig = {
 function poly6Coefficient(h: number): number {
   return 315 / (64 * Math.PI * Math.pow(h, 9));
 }
-
-// ─── Reusable typed arrays for edge-vertex cache ────────────────────────────
-
-/** Per-cell cache: 12 edges × 3 position components */
-const EDGE_POS = new Float32Array(12 * 3);
-/** Per-cell cache: 12 edges × 3 normal components */
-const EDGE_NORM = new Float32Array(12 * 3);
-/** Per-cell bitmask: which edges have been computed */
-const EDGE_COMPUTED = new Uint8Array(12);
 
 // ─── FluidSurfaceRenderer ───────────────────────────────────────────────────
 
@@ -101,6 +94,10 @@ export class FluidSurfaceRenderer {
 
   constructor(config: Partial<FluidSurfaceRendererConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+
+    // Clamp grid resolution to [8, 64]
+    this.config.gridResolution = Math.max(8, Math.min(64, this.config.gridResolution));
+
     this.poly6Coeff = poly6Coefficient(this.config.smoothingRadius);
     this.h2 = this.config.smoothingRadius * this.config.smoothingRadius;
 
@@ -149,15 +146,51 @@ export class FluidSurfaceRenderer {
     // 1. Compute bounding box with padding
     this.computeBounds(particlePositions);
 
-    // 2. Build density field
+    // 2. Build density field using Poly6 kernel
     this.buildDensityField(particlePositions);
 
-    // 3. Marching cubes
-    const geometry = this.getWriteGeometry();
-    this.march(geometry);
+    // 3. Build SDF and extract isosurface via extractIsosurface()
+    const geometry = this.extractSurfaceViaSDF();
 
-    // 4. Swap double-buffer
+    // 4. Copy into double-buffered geometry
+    const writeGeo = this.getWriteGeometry();
+    this.copyGeometry(geometry, writeGeo);
+    geometry.dispose();
+
+    // 5. Swap double-buffer
     this.swapGeometry();
+  }
+
+  /** Get the current configuration. */
+  getConfig(): FluidSurfaceRendererConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Update grid resolution at runtime.
+   * Valid range: 8–64. Higher = better quality, lower FPS.
+   */
+  setGridResolution(res: number): void {
+    res = Math.max(8, Math.min(64, res));
+    if (res === this.config.gridResolution) return;
+    this.config.gridResolution = res;
+    this.densityField = new Float32Array(res * res * res);
+  }
+
+  /**
+   * Update the smoothing radius. Must match the simulation's smoothing radius.
+   */
+  setSmoothingRadius(h: number): void {
+    this.config.smoothingRadius = h;
+    this.poly6Coeff = poly6Coefficient(h);
+    this.h2 = h * h;
+  }
+
+  /**
+   * Update the rest density threshold for the isosurface.
+   */
+  setRestDensity(density: number): void {
+    this.config.restDensity = density;
   }
 
   /** Clean up GPU resources. */
@@ -268,181 +301,117 @@ export class FluidSurfaceRenderer {
     }
   }
 
-  // ── Marching cubes ───────────────────────────────────────────────────────
+  // ── SDF construction and isosurface extraction ────────────────────────────
 
   /**
-   * Run marching cubes on the density field, writing triangles directly
-   * into the given BufferGeometry's draw-range.
+   * Build a SignedDistanceField from the density field and extract the
+   * isosurface using the shared extractIsosurface() from sdf-operations.ts.
    *
-   * This mirrors extractIsosurface() from sdf-operations.ts but operates on
-   * our flat density field instead of a SignedDistanceField object, avoiding
-   * per-voxel object allocations.
+   * The density field has high values where fluid exists. To convert it
+   * to a proper SDF where negative = inside, we use:
+   *   SDF_value = threshold - density
+   *
+   * This means:
+   *   - Where density > threshold → SDF < 0 (inside the fluid)
+   *   - Where density = threshold → SDF = 0 (surface)
+   *   - Where density < threshold → SDF > 0 (outside the fluid)
+   *
+   * extractIsosurface() then extracts the surface at SDF = 0, which
+   * corresponds to where density equals the rest density threshold.
    */
-  private march(geometry: THREE.BufferGeometry): void {
+  private extractSurfaceViaSDF(): THREE.BufferGeometry {
     const res = this.config.gridResolution;
-    const isolevel = this.config.restDensity;
+    const threshold = this.config.restDensity;
     const field = this.densityField;
 
-    const cellsX = res - 1;
-    const cellsY = res - 1;
-    const cellsZ = res - 1;
+    // Build a SignedDistanceField with the same grid dimensions
+    const sdf = new SignedDistanceField({
+      resolution: Math.min(this.voxelSize.x, this.voxelSize.y, this.voxelSize.z),
+      bounds: this.bounds.clone(),
+    });
 
-    if (cellsX <= 0 || cellsY <= 0 || cellsZ <= 0) {
-      this.clearGeometry(geometry);
-      return;
-    }
+    // Fill SDF data: SDF = threshold - density
+    // Where density > threshold → SDF < 0 → inside fluid
+    // Where density < threshold → SDF > 0 → outside fluid
+    const gridSize = sdf.gridSize;
+    const totalCells = gridSize[0] * gridSize[1] * gridSize[2];
 
-    // Dynamic arrays – only a fraction of cells will produce triangles.
-    const posArr: number[] = [];
-    const normArr: number[] = [];
-
-    const bMinX = this.bounds.min.x;
-    const bMinY = this.bounds.min.y;
-    const bMinZ = this.bounds.min.z;
-    const dx = this.voxelSize.x;
-    const dy = this.voxelSize.y;
-    const dz = this.voxelSize.z;
-
-    // ── Local helpers (closures for speed) ───────────────────────────────
-
-    /** Get density value at grid vertex (gx, gy, gz); 0 outside bounds. */
-    const getDensity = (gx: number, gy: number, gz: number): number => {
-      if (gx < 0 || gx >= res || gy < 0 || gy >= res || gz < 0 || gz >= res) {
-        return 0;
+    // If the SDF grid doesn't match our density field resolution,
+    // we sample from the density field with interpolation.
+    // In practice, they should match closely since we derive both
+    // from the same bounds and resolution.
+    if (gridSize[0] === res && gridSize[1] === res && gridSize[2] === res) {
+      // Fast path: direct copy with threshold inversion
+      for (let i = 0; i < totalCells; i++) {
+        sdf.data[i] = threshold - field[i];
       }
-      return field[gz * res * res + gy * res + gx];
-    };
+    } else {
+      // Slow path: sample density field at SDF grid positions
+      for (let gz = 0; gz < gridSize[2]; gz++) {
+        for (let gy = 0; gy < gridSize[1]; gy++) {
+          for (let gx = 0; gx < gridSize[0]; gx++) {
+            const pos = sdf.getPosition(gx, gy, gz);
 
-    /** World position of grid *vertex* (integer coords, no +0.5). */
-    const worldX = (gx: number) => bMinX + gx * dx;
-    const worldY = (gy: number) => bMinY + gy * dy;
-    const worldZ = (gz: number) => bMinZ + gz * dz;
+            // Map to density field coordinates
+            const dfx = (pos.x - this.bounds.min.x) / this.voxelSize.x - 0.5;
+            const dfy = (pos.y - this.bounds.min.y) / this.voxelSize.y - 0.5;
+            const dfz = (pos.z - this.bounds.min.z) / this.voxelSize.z - 0.5;
 
-    /** Density-gradient normal via central differences (1-grid-cell step). */
-    const computeNormal = (wx: number, wy: number, wz: number): void => {
-      const gx0 = Math.round((wx - bMinX) / dx);
-      const gy0 = Math.round((wy - bMinY) / dy);
-      const gz0 = Math.round((wz - bMinZ) / dz);
-
-      const ndx = getDensity(gx0 + 1, gy0, gz0) - getDensity(gx0 - 1, gy0, gz0);
-      const ndy = getDensity(gx0, gy0 + 1, gz0) - getDensity(gx0, gy0 - 1, gz0);
-      const ndz = getDensity(gx0, gy0, gz0 + 1) - getDensity(gx0, gy0, gz0 - 1);
-
-      const len = Math.sqrt(ndx * ndx + ndy * ndy + ndz * ndz);
-      if (len < 1e-10) {
-        _normalOut[0] = 0; _normalOut[1] = 1; _normalOut[2] = 0;
-      } else {
-        _normalOut[0] = ndx / len;
-        _normalOut[1] = ndy / len;
-        _normalOut[2] = ndz / len;
-      }
-    };
-
-    // Reusable output for computeNormal (avoids array allocation per vertex)
-    const _normalOut = [0, 1, 0];
-
-    // ── Main loop over cells ─────────────────────────────────────────────
-
-    for (let cz = 0; cz < cellsZ; cz++) {
-      for (let cy = 0; cy < cellsY; cy++) {
-        for (let cx = 0; cx < cellsX; cx++) {
-
-          // 8 corner density values
-          const c0 = getDensity(cx,     cy,     cz);
-          const c1 = getDensity(cx + 1, cy,     cz);
-          const c2 = getDensity(cx + 1, cy + 1, cz);
-          const c3 = getDensity(cx,     cy + 1, cz);
-          const c4 = getDensity(cx,     cy,     cz + 1);
-          const c5 = getDensity(cx + 1, cy,     cz + 1);
-          const c6 = getDensity(cx + 1, cy + 1, cz + 1);
-          const c7 = getDensity(cx,     cy + 1, cz + 1);
-
-          const cornerValues = [c0, c1, c2, c3, c4, c5, c6, c7];
-
-          // Build case index: bit i = 1 if corner i is *inside* (density < threshold)
-          let caseIndex = 0;
-          if (c0 < isolevel) caseIndex |= 1;
-          if (c1 < isolevel) caseIndex |= 2;
-          if (c2 < isolevel) caseIndex |= 4;
-          if (c3 < isolevel) caseIndex |= 8;
-          if (c4 < isolevel) caseIndex |= 16;
-          if (c5 < isolevel) caseIndex |= 32;
-          if (c6 < isolevel) caseIndex |= 64;
-          if (c7 < isolevel) caseIndex |= 128;
-
-          // Skip entirely inside / entirely outside cells
-          if (caseIndex === 0 || caseIndex === 255) continue;
-
-          const edgeFlags = EDGE_TABLE[caseIndex];
-          if (edgeFlags === 0) continue;
-
-          // ── Compute edge intersection vertices & normals ──────────────
-
-          EDGE_COMPUTED.fill(0);
-
-          for (let edge = 0; edge < 12; edge++) {
-            if ((edgeFlags & (1 << edge)) === 0) continue;
-
-            const v0 = EDGE_VERTICES[edge * 2];
-            const v1 = EDGE_VERTICES[edge * 2 + 1];
-
-            const d0 = cornerValues[v0];
-            const d1 = cornerValues[v1];
-            const diff = d0 - d1;
-            const t = Math.abs(diff) > 1e-10 ? (d0 - isolevel) / diff : 0.5;
-
-            // Corner world positions
-            const p0x = worldX(cx + CORNER_OFFSETS[v0][0]);
-            const p0y = worldY(cy + CORNER_OFFSETS[v0][1]);
-            const p0z = worldZ(cz + CORNER_OFFSETS[v0][2]);
-            const p1x = worldX(cx + CORNER_OFFSETS[v1][0]);
-            const p1y = worldY(cy + CORNER_OFFSETS[v1][1]);
-            const p1z = worldZ(cz + CORNER_OFFSETS[v1][2]);
-
-            // Interpolated position
-            const ix = p0x + t * (p1x - p0x);
-            const iy = p0y + t * (p1y - p0y);
-            const iz = p0z + t * (p1z - p0z);
-
-            const off = edge * 3;
-            EDGE_POS[off]     = ix;
-            EDGE_POS[off + 1] = iy;
-            EDGE_POS[off + 2] = iz;
-
-            // Normal from density gradient
-            computeNormal(ix, iy, iz);
-            EDGE_NORM[off]     = _normalOut[0];
-            EDGE_NORM[off + 1] = _normalOut[1];
-            EDGE_NORM[off + 2] = _normalOut[2];
-
-            EDGE_COMPUTED[edge] = 1;
-          }
-
-          // ── Generate triangles from the lookup table ──────────────────
-
-          const base = caseIndex * 16;
-          for (let i = 0; i < 16; i += 3) {
-            const e0 = TRIANGLE_TABLE[base + i];
-            if (e0 === -1) break;
-
-            const e1 = TRIANGLE_TABLE[base + i + 1];
-            const e2 = TRIANGLE_TABLE[base + i + 2];
-
-            // Push three vertices for this triangle
-            const triEdges = [e0, e1, e2];
-            for (let vi = 0; vi < 3; vi++) {
-              const e = triEdges[vi];
-              const off = e * 3;
-              posArr.push(EDGE_POS[off], EDGE_POS[off + 1], EDGE_POS[off + 2]);
-              normArr.push(EDGE_NORM[off], EDGE_NORM[off + 1], EDGE_NORM[off + 2]);
-            }
+            // Trilinear interpolation of density
+            const density = this.sampleDensityField(dfx, dfy, dfz);
+            sdf.setValueAtGrid(gx, gy, gz, threshold - density);
           }
         }
       }
     }
 
-    // Write into geometry buffers
-    this.writeGeometry(geometry, posArr, normArr);
+    // Extract isosurface at SDF = 0 (where density = threshold)
+    const geometry = extractIsosurface(sdf, 0);
+
+    return geometry;
+  }
+
+  /**
+   * Sample the density field at continuous grid coordinates
+   * using trilinear interpolation.
+   */
+  private sampleDensityField(gx: number, gy: number, gz: number): number {
+    const res = this.config.gridResolution;
+    const field = this.densityField;
+
+    const getDensity = (ix: number, iy: number, iz: number): number => {
+      if (ix < 0 || ix >= res || iy < 0 || iy >= res || iz < 0 || iz >= res) {
+        return 0;
+      }
+      return field[iz * res * res + iy * res + ix];
+    };
+
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const z0 = Math.floor(gz);
+    const fx = gx - x0;
+    const fy = gy - y0;
+    const fz = gz - z0;
+
+    // Trilinear interpolation
+    const c000 = getDensity(x0, y0, z0);
+    const c100 = getDensity(x0 + 1, y0, z0);
+    const c010 = getDensity(x0, y0 + 1, z0);
+    const c110 = getDensity(x0 + 1, y0 + 1, z0);
+    const c001 = getDensity(x0, y0, z0 + 1);
+    const c101 = getDensity(x0 + 1, y0, z0 + 1);
+    const c011 = getDensity(x0, y0 + 1, z0 + 1);
+    const c111 = getDensity(x0 + 1, y0 + 1, z0 + 1);
+
+    const c00 = c000 * (1 - fx) + c100 * fx;
+    const c01 = c001 * (1 - fx) + c101 * fx;
+    const c10 = c010 * (1 - fx) + c110 * fx;
+    const c11 = c011 * (1 - fx) + c111 * fx;
+
+    const c0 = c00 * (1 - fy) + c10 * fy;
+    const c1 = c01 * (1 - fy) + c11 * fy;
+
+    return c0 * (1 - fz) + c1 * fz;
   }
 
   // ── Geometry helpers ─────────────────────────────────────────────────────
@@ -458,46 +427,47 @@ export class FluidSurfaceRenderer {
   }
 
   /**
-   * Write position and normal arrays into the geometry, growing the
-   * underlying buffers if necessary.
+   * Copy geometry from source into target, growing the target buffers
+   * if necessary.
    */
-  private writeGeometry(
-    geometry: THREE.BufferGeometry,
-    positions: number[],
-    normals: number[],
-  ): void {
-    const vertCount = positions.length / 3;
+  private copyGeometry(source: THREE.BufferGeometry, target: THREE.BufferGeometry): void {
+    const srcPos = source.getAttribute('position') as THREE.BufferAttribute;
+    const srcNorm = source.getAttribute('normal') as THREE.BufferAttribute;
 
-    if (vertCount === 0) {
-      geometry.setDrawRange(0, 0);
+    if (!srcPos || srcPos.count === 0) {
+      target.setDrawRange(0, 0);
       return;
     }
 
-    let posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
-    let normAttr = geometry.getAttribute('normal') as THREE.BufferAttribute;
+    const vertCount = srcPos.count;
 
-    // Grow buffers if needed
-    if (posAttr.count < vertCount) {
-      const newSize = Math.max(vertCount, posAttr.count * 2);
-      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(newSize * 3), 3));
-      geometry.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(newSize * 3), 3));
-      posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
-      normAttr = geometry.getAttribute('normal') as THREE.BufferAttribute;
+    // Grow target buffers if needed
+    let tgtPos = target.getAttribute('position') as THREE.BufferAttribute;
+    let tgtNorm = target.getAttribute('normal') as THREE.BufferAttribute;
+
+    if (tgtPos.count < vertCount) {
+      const newSize = Math.max(vertCount, tgtPos.count * 2);
+      target.setAttribute('position', new THREE.BufferAttribute(new Float32Array(newSize * 3), 3));
+      target.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(newSize * 3), 3));
+      tgtPos = target.getAttribute('position') as THREE.BufferAttribute;
+      tgtNorm = target.getAttribute('normal') as THREE.BufferAttribute;
     }
 
-    const posArray = posAttr.array as Float32Array;
-    const normArray = normAttr.array as Float32Array;
+    const srcPosArr = srcPos.array as Float32Array;
+    const srcNormArr = srcNorm.array as Float32Array;
+    const tgtPosArr = tgtPos.array as Float32Array;
+    const tgtNormArr = tgtNorm.array as Float32Array;
 
-    // Copy data – positions/normals are plain number[], so build a typed view
-    for (let i = 0, len = vertCount * 3; i < len; i++) {
-      posArray[i] = positions[i];
-      normArray[i] = normals[i];
+    const len = vertCount * 3;
+    for (let i = 0; i < len; i++) {
+      tgtPosArr[i] = srcPosArr[i];
+      tgtNormArr[i] = srcNormArr[i];
     }
 
-    posAttr.needsUpdate = true;
-    normAttr.needsUpdate = true;
-    geometry.setDrawRange(0, vertCount);
-    geometry.computeBoundingSphere();
+    tgtPos.needsUpdate = true;
+    tgtNorm.needsUpdate = true;
+    target.setDrawRange(0, vertCount);
+    target.computeBoundingSphere();
   }
 
   private clearGeometry(geometry: THREE.BufferGeometry): void {
@@ -524,23 +494,27 @@ export class FluidSurfaceRenderer {
       try {
         const lib = getDefaultLibrary();
         const mat = lib.getSimpleMaterial(this.config.materialPreset);
-        if (mat) return mat;
+        if (mat) {
+          // Ensure the material has water-like properties
+          mat.envMapIntensity = 1.0;
+          return mat;
+        }
       } catch (err) {
         // Library unavailable – fall through to built-in material
         if (process.env.NODE_ENV === 'development') console.debug('[FluidSurfaceRenderer] MaterialPresetLibrary fallback:', err);
       }
     }
 
-    // Fallback: a water-like MeshPhysicalMaterial
+    // Fallback: a water-like MeshPhysicalMaterial matching river_water preset
     return new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(0x0077be),
-      roughness: 0.05,
+      color: new THREE.Color(0.03, 0.27, 0.67),  // river_water baseColor
+      roughness: 0.0,
       metalness: 0.0,
       transmission: 0.85,
       thickness: 2.0,
       ior: 1.33,
       clearcoat: 0.8,
-      clearcoatRoughness: 0.1,
+      clearcoatRoughness: 0.05,
       transparent: true,
       opacity: 0.92,
       side: THREE.DoubleSide,
@@ -555,7 +529,7 @@ export class FluidSurfaceRenderer {
  * High-level integration class for fluid rendering.
  *
  * Provides seamless integration between:
- * - FLIP solver output → rendered fluid surface mesh
+ * - SPH/FLIP solver output → rendered fluid surface mesh
  * - WhitewaterGenerator → foam/spray/bubble overlay
  * - Depth-based refraction for underwater views
  *
@@ -577,7 +551,7 @@ export class FluidRenderIntegration {
   }
 
   /**
-   * Create a fluid mesh from FLIP solver output and surface extractor.
+   * Create a fluid mesh from particle positions and surface extractor.
    * The mesh is updated each frame with the latest surface geometry.
    */
   createFluidMesh(

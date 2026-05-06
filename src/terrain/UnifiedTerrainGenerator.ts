@@ -38,6 +38,13 @@ import {
 } from '@/terrain/sdf/TerrainElementSystem';
 import { SignedDistanceField, extractIsosurface } from '@/terrain/sdf/sdf-operations';
 import {
+  GPUSDFEvaluator,
+  type GPUSDFEvaluatorConfig,
+  type SDFEvaluationResult,
+  DEFAULT_GPU_SDF_EVALUATOR_CONFIG,
+  buildCompositionFromRegistry,
+} from '@/terrain/gpu/GPUSDFEvaluator';
+import {
   TerrainSurfaceBridge,
   TerrainSurfaceBridgeConfig,
   DEFAULT_TERRAIN_SURFACE_BRIDGE_CONFIG,
@@ -242,6 +249,8 @@ export interface UnifiedTerrainConfig {
   erosionStrength: number;
   /** Number of erosion iterations for HEIGHTMAP mode */
   erosionIterations: number;
+  /** GPU SDF evaluator configuration (enables GPU-accelerated SDF evaluation) */
+  gpuSDFConfig: Partial<GPUSDFEvaluatorConfig>;
 }
 
 /**
@@ -349,6 +358,7 @@ export const DEFAULT_UNIFIED_TERRAIN_CONFIG: UnifiedTerrainConfig = {
   roughness: 0.9,
   erosionStrength: 0.3,
   erosionIterations: 20,
+  gpuSDFConfig: {},
 };
 
 // ============================================================================
@@ -626,6 +636,7 @@ export class UnifiedTerrainGenerator {
   private noise: NoiseUtils;
   private registry: ElementRegistry | null = null;
   private surfaceBridge: TerrainSurfaceBridge | null = null;
+  private gpuSDFEvaluator: GPUSDFEvaluator | null = null;
 
   /**
    * Create a new UnifiedTerrainGenerator.
@@ -636,6 +647,14 @@ export class UnifiedTerrainGenerator {
     this.config = { ...DEFAULT_UNIFIED_TERRAIN_CONFIG, ...config };
     this.rng = new SeededRandom(this.config.seed);
     this.noise = new NoiseUtils(this.config.seed);
+
+    // Create GPU SDF evaluator if enabled
+    if (this.config.gpuSDFConfig.enabled !== false) {
+      this.gpuSDFEvaluator = new GPUSDFEvaluator({
+        ...DEFAULT_GPU_SDF_EVALUATOR_CONFIG,
+        ...this.config.gpuSDFConfig,
+      });
+    }
   }
 
   // =====================================================================
@@ -692,6 +711,158 @@ export class UnifiedTerrainGenerator {
     this.noise = new NoiseUtils(presetConfig.seed);
     this.config = presetConfig;
     return this.generate();
+  }
+
+  /**
+   * Async terrain generation with GPU-accelerated SDF evaluation.
+   *
+   * When WebGPU is available, this uses GPUSDFEvaluator to evaluate
+   * the SDF grid in parallel on the GPU, providing orders-of-magnitude
+   * speedup over the synchronous CPU path. Falls back to CPU evaluation
+   * when WebGPU is unavailable.
+   *
+   * @param device - Optional pre-existing GPUDevice
+   * @param config - Optional per-call config overrides
+   * @returns SDFGenerationResult with mesh, attributes, registry, and SDF
+   */
+  async generateAsync(device?: GPUDevice, config: Partial<UnifiedTerrainConfig> = {}): Promise<SDFGenerationResult> {
+    const effectiveConfig = { ...this.config, ...config };
+
+    // Build the element registry based on mode
+    this.registry = this.buildElementRegistry(effectiveConfig);
+
+    // Build SDF bounds
+    const bounds = new THREE.Box3(
+      new THREE.Vector3(
+        effectiveConfig.bounds.minX,
+        effectiveConfig.bounds.minY,
+        effectiveConfig.bounds.minZ,
+      ),
+      new THREE.Vector3(
+        effectiveConfig.bounds.maxX,
+        effectiveConfig.bounds.maxY,
+        effectiveConfig.bounds.maxZ,
+      ),
+    );
+
+    // For PLANET mode, adjust bounds
+    if (effectiveConfig.mode === TerrainGenerationMode.PLANET) {
+      const planetParams = {
+        ...DEFAULT_PLANET_PARAMS,
+        ...effectiveConfig.planetParams,
+      };
+      const r = planetParams.radius;
+      const padding = r * 0.3;
+      bounds.min.set(-r - padding, -r - padding, -r - padding);
+      bounds.max.set(r + padding, r + padding, r + padding);
+    }
+
+    let sdf: SignedDistanceField;
+    let gpuUsed = false;
+
+    // Try GPU SDF evaluation
+    if (this.gpuSDFEvaluator) {
+      try {
+        await this.gpuSDFEvaluator.initialize(device);
+
+        // Build composition from registry for GPU evaluation
+        const elements = buildCompositionFromRegistry(this.registry, effectiveConfig.smoothBlend);
+
+        if (elements.length > 0 && this.gpuSDFEvaluator.isGPUAvailable()) {
+          const result = await this.gpuSDFEvaluator.evaluate(
+            elements,
+            bounds,
+            effectiveConfig.resolution,
+            this.registry,
+            CompositionOperation.DIFFERENCE,
+          );
+          sdf = result.sdf;
+          gpuUsed = result.gpuUsed;
+          console.log(`[UnifiedTerrainGenerator] SDF evaluation: ${result.gpuUsed ? 'GPU' : 'CPU'} (${result.executionTimeMs.toFixed(1)}ms)`);
+        } else {
+          // No GPU-compatible elements, use CPU fallback via ElementRegistry
+          sdf = buildSDFFromElements(
+            this.registry,
+            bounds,
+            effectiveConfig.resolution,
+            CompositionOperation.DIFFERENCE,
+          );
+        }
+      } catch (err) {
+        console.warn('[UnifiedTerrainGenerator] GPU SDF evaluation failed, using CPU:', err);
+        sdf = buildSDFFromElements(
+          this.registry,
+          bounds,
+          effectiveConfig.resolution,
+          CompositionOperation.DIFFERENCE,
+        );
+      }
+    } else {
+      // No GPU evaluator, use CPU path
+      sdf = buildSDFFromElements(
+        this.registry,
+        bounds,
+        effectiveConfig.resolution,
+        CompositionOperation.DIFFERENCE,
+      );
+    }
+
+    // Extract isosurface
+    let geometry = extractIsosurface(sdf, 0);
+
+    if (geometry.attributes.position.count === 0) {
+      console.warn('[UnifiedTerrainGenerator] extractIsosurface produced empty geometry');
+      const emptyMesh = new THREE.Mesh(
+        geometry,
+        new THREE.MeshStandardMaterial({ color: effectiveConfig.color }),
+      );
+      return {
+        mesh: emptyMesh,
+        attributes: new Map(),
+        registry: this.registry,
+        sdf,
+      };
+    }
+
+    // Compute per-vertex attributes from element evaluation
+    const attributes = this.computeVertexAttributes(geometry, this.registry);
+
+    // Apply surface material
+    let material: THREE.Material;
+    if (effectiveConfig.applySurface) {
+      this.surfaceBridge = new TerrainSurfaceBridge({
+        ...DEFAULT_TERRAIN_SURFACE_BRIDGE_CONFIG,
+        ...effectiveConfig.surfaceConfig,
+        seed: effectiveConfig.seed,
+      });
+
+      const vertexAttrs = this.extractVertexAttributes(geometry, this.registry);
+      material = this.surfaceBridge.generateTerrainMaterial(vertexAttrs);
+      (material as THREE.MeshStandardMaterial).vertexColors = true;
+      this.surfaceBridge.applyVertexColors(geometry, vertexAttrs, effectiveConfig.surfaceConfig);
+    } else {
+      material = new THREE.MeshStandardMaterial({
+        color: effectiveConfig.color,
+        roughness: effectiveConfig.roughness,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+        flatShading: false,
+      });
+    }
+
+    geometry.computeBoundingSphere();
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = 'UnifiedTerrainMesh';
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return {
+      mesh,
+      attributes,
+      registry: this.registry,
+      sdf,
+    };
   }
 
   // =====================================================================
@@ -1316,5 +1487,17 @@ export class UnifiedTerrainGenerator {
   dispose(): void {
     this.registry = null;
     this.surfaceBridge = null;
+    if (this.gpuSDFEvaluator) {
+      this.gpuSDFEvaluator.dispose();
+      this.gpuSDFEvaluator = null;
+    }
+  }
+
+  /**
+   * Get the GPU SDF evaluator instance (for external configuration).
+   * Returns null if GPU evaluation is disabled.
+   */
+  getGPUSDFEvaluator(): GPUSDFEvaluator | null {
+    return this.gpuSDFEvaluator;
   }
 }

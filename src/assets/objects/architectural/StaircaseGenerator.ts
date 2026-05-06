@@ -26,6 +26,10 @@ export interface StaircaseParams extends BaseGeneratorConfig {
   stringerMaterial: string;
   hasRailing: boolean;
   railingHeight: number;
+  /** L-shaped variant: use winder steps instead of flat landing (default: false) */
+  useWinders: boolean;
+  /** Number of winder steps when useWinders is true (default: 3) */
+  winderCount: number;
 }
 
 const DEFAULT_PARAMS: StaircaseParams = {
@@ -46,6 +50,8 @@ const DEFAULT_PARAMS: StaircaseParams = {
   stringerMaterial: 'wood',
   hasRailing: true,
   railingHeight: 0.9,
+  useWinders: false,
+  winderCount: 3,
 };
 
 export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
@@ -218,6 +224,8 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
   ): void {
     const firstFlightSteps = Math.floor(numSteps / 2);
     const landingSize = width;
+    const useWinders = this.validateAndMerge({}).useWinders;
+    const winderCount = this.validateAndMerge({}).winderCount;
 
     // First flight
     for (let i = 0; i < firstFlightSteps; i++) {
@@ -233,16 +241,57 @@ export class StaircaseGenerator extends BaseObjectGenerator<StaircaseParams> {
     // Landing
     const landingY = firstFlightSteps * rise;
     const landingX = firstFlightSteps * run;
-    const landing = new Mesh(new BoxGeometry(landingSize, treadThickness, landingSize), treadMat);
-    landing.position.set(landingX + landingSize / 2, landingY + treadThickness / 2, 0);
-    landing.castShadow = true;
-    landing.name = 'landing';
-    group.add(landing);
 
-    // Second flight
-    const secondFlightSteps = numSteps - firstFlightSteps;
+    if (useWinders && winderCount > 0) {
+      // Winder steps: tapered treads using ExtrudeGeometry that turn the corner
+      for (let w = 0; w < winderCount; w++) {
+        const t = (w + 1) / (winderCount + 1); // 0..1 progress around the turn
+        const angle = t * (Math.PI / 2); // quarter turn
+
+        const y = landingY + w * rise;
+        const innerWidth = width * 0.4;
+        const outerWidth = width * 1.1;
+
+        // Create winder tread shape (tapered trapezoid)
+        const winderShape = new THREE.Shape();
+        winderShape.moveTo(-innerWidth / 2, 0);
+        winderShape.lineTo(-outerWidth / 2, run * 1.2);
+        winderShape.lineTo(outerWidth / 2, run * 1.2);
+        winderShape.lineTo(innerWidth / 2, 0);
+        winderShape.closePath();
+
+        const winderGeom = new ExtrudeGeometry(winderShape, {
+          depth: treadThickness,
+          bevelEnabled: false,
+        });
+        const winder = new Mesh(winderGeom, treadMat);
+        // Position at the corner turn
+        winder.position.set(
+          landingX + Math.cos(angle) * landingSize * 0.5,
+          y + treadThickness / 2,
+          -Math.sin(angle) * landingSize * 0.5,
+        );
+        winder.rotation.x = -Math.PI / 2;
+        winder.rotation.z = angle;
+        winder.castShadow = true;
+        winder.name = `winder_${w}`;
+        group.add(winder);
+      }
+    } else {
+      // Flat square landing
+      const landing = new Mesh(new BoxGeometry(landingSize, treadThickness, landingSize), treadMat);
+      landing.position.set(landingX + landingSize / 2, landingY + treadThickness / 2, 0);
+      landing.castShadow = true;
+      landing.name = 'landing';
+      group.add(landing);
+    }
+
+    // Second flight (goes in Z direction after the turn)
+    const winderOffset = useWinders ? winderCount : 0;
+    const secondFlightSteps = numSteps - firstFlightSteps - winderOffset;
+    const secondStartY = landingY + (useWinders ? winderCount * rise : 0);
     for (let i = 0; i < secondFlightSteps; i++) {
-      const y = landingY + (i + 1) * rise;
+      const y = secondStartY + (i + 1) * rise;
       const tread = new Mesh(new BoxGeometry(run + 0.02, treadThickness, width), treadMat);
       tread.position.set(landingX + landingSize / 2, y + treadThickness / 2, landingSize / 2 - width / 2 + i * run);
       tread.rotation.y = -Math.PI / 2;

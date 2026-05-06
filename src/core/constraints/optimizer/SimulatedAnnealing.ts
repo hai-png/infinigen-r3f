@@ -17,6 +17,14 @@ export interface AnnealingConfig {
   randomSeed?: number;
   debugMode: boolean;
   acceptanceThreshold: number;
+  /** Whether to use violation-aware acceptance (always accept violation-reducing moves) */
+  violationAware?: boolean;
+  /** Whether to separate hard constraints from soft scores */
+  separateHardSoft?: boolean;
+  /** Linear decay schedule for move weights: addition dominates early, continuous dominates late */
+  linearDecaySchedule?: boolean;
+  /** Total iterations for linear decay schedule calculation */
+  totalIterationsEstimate?: number;
 }
 
 export interface AnnealingStats {
@@ -38,6 +46,12 @@ export class SimulatedAnnealing {
   private stats: AnnealingStats;
   private rng: SeededRandom;
 
+  /** Count of hard constraint violations in current state */
+  private currentHardViolations: number = Infinity;
+
+  /** Move weight schedule for linear decay (addition heavy early, continuous heavy late) */
+  private moveWeights: Map<MoveType, number> = new Map();
+
   constructor(domain: ConstraintDomain, config: Partial<AnnealingConfig> = {}) {
     this.domain = domain;
     this.config = {
@@ -48,6 +62,10 @@ export class SimulatedAnnealing {
       randomSeed: config.randomSeed,
       debugMode: config.debugMode ?? false,
       acceptanceThreshold: config.acceptanceThreshold ?? 0.001,
+      violationAware: config.violationAware ?? false,
+      separateHardSoft: config.separateHardSoft ?? false,
+      linearDecaySchedule: config.linearDecaySchedule ?? false,
+      totalIterationsEstimate: config.totalIterationsEstimate ?? 10000,
     };
     
     this.rng = new SeededRandom(this.config.randomSeed ?? 42);
@@ -60,6 +78,11 @@ export class SimulatedAnnealing {
       temperatureSchedule: [],
       energyHistory: [],
     };
+
+    // Initialize move weights (equal by default)
+    for (const mt of Object.values(MoveType)) {
+      this.moveWeights.set(mt, 1.0);
+    }
   }
 
   /**
@@ -85,14 +108,21 @@ export class SimulatedAnnealing {
         this.iterationCount++;
         
         // Generate and evaluate a move
-        const move = this.generateRandomMove();
+        const move = this.generateWeightedRandomMove();
         const result = this.tryMove(move);
         
         if (result.success) {
-          if (result.energyChange <= 0 || this.acceptWithProbability(result.energyChange)) {
+          const shouldAccept = this.config.violationAware
+            ? this.violationAwareAccept(result)
+            : (result.energyChange <= 0 || this.acceptWithProbability(result.energyChange));
+
+          if (shouldAccept) {
             // Accept the move
             this.stats.acceptedMoves++;
             this.currentEnergy += result.energyChange;
+            if (result.hardViolationChange !== undefined) {
+              this.currentHardViolations += result.hardViolationChange;
+            }
             
             if (this.config.debugMode && this.iterationCount % 100 === 0) {
               Logger.debug('Annealing', `Iter ${this.iterationCount}, Temp: ${this.currentTemperature.toFixed(2)}, Energy: ${this.currentEnergy.toFixed(2)}`);
@@ -134,21 +164,105 @@ export class SimulatedAnnealing {
   }
 
   /**
+   * Violation-aware acceptance: always accept moves that reduce hard constraint violations,
+   * always reject moves that increase hard constraint violations, use standard
+   * Metropolis-Hastings for moves that don't change violation count.
+   * 
+   * This is the most critical improvement for convergence: hard constraints
+   * (like collision, stability, containment) must be satisfied before
+   * optimizing soft scores (like alignment, proximity preferences).
+   */
+  private violationAwareAccept(result: MoveResult & { energyChange: number; hardViolationChange?: number }): boolean {
+    const violationChange = result.hardViolationChange ?? 0;
+
+    // Always accept moves that reduce hard constraint violations
+    if (violationChange < 0) return true;
+
+    // Always reject moves that increase hard constraint violations
+    if (violationChange > 0) return false;
+
+    // For moves that don't change violation count, use standard Metropolis-Hastings
+    return result.energyChange <= 0 || this.acceptWithProbability(result.energyChange);
+  }
+
+  /**
+   * Update move weights using linear decay schedule.
+   * Addition moves dominate early (to populate the scene),
+   * continuous moves (translate, rotate) dominate late (to fine-tune positions).
+   * 
+   * Based on the original's LinearDecaySchedule:
+   *   addition_weight = max(0, 1 - progress)
+   *   deletion_weight = max(0, 0.5 - progress)  
+   *   continuous_weight = progress
+   *   reassignment_weight = 0.3
+   */
+  private updateMoveWeights(progress: number): void {
+    if (!this.config.linearDecaySchedule) return;
+
+    const p = Math.max(0, Math.min(1, progress));
+
+    // Addition: high early, zero late
+    this.moveWeights.set(MoveType.ADD, Math.max(0.05, 1 - p));
+    // Deletion: moderate early, zero late
+    this.moveWeights.set(MoveType.DELETE, Math.max(0.05, 0.5 - p * 0.5));
+    // Pose (continuous): low early, high late
+    this.moveWeights.set(MoveType.POSE, 0.1 + p * 0.9);
+    // Swap: moderate throughout
+    this.moveWeights.set(MoveType.SWAP, 0.3);
+    // Reassignment: moderate throughout
+    this.moveWeights.set(MoveType.REASSIGN, 0.3);
+  }
+
+  /**
+   * Generate a weighted random move using the current move weights.
+   * Moves with higher weights are more likely to be selected.
+   */
+  private generateWeightedRandomMove(): Move {
+    if (this.config.linearDecaySchedule) {
+      const totalEstimate = this.config.totalIterationsEstimate ?? 10000;
+      const progress = this.iterationCount / totalEstimate;
+      this.updateMoveWeights(progress);
+    }
+
+    // Weighted random selection of move type
+    const moveTypes = Object.values(MoveType);
+    const weights = moveTypes.map(mt => this.moveWeights.get(mt) ?? 1.0);
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    
+    let random = this.rng.next() * totalWeight;
+    let selectedType = moveTypes[0];
+    for (let i = 0; i < moveTypes.length; i++) {
+      random -= weights[i];
+      if (random <= 0) {
+        selectedType = moveTypes[i];
+        break;
+      }
+    }
+
+    // Build move with selected type (reuse existing logic)
+    return this.generateMoveOfType(selectedType);
+  }
+
+  /**
    * Generate a random move based on current state
    */
   private generateRandomMove(): Move {
-    const moveTypes = Object.values(MoveType);
-    const randomType = moveTypes[this.rng.nextInt(0, moveTypes.length - 1)];
-    
+    return this.generateWeightedRandomMove();
+  }
+
+  /**
+   * Generate a move of a specific type
+   */
+  private generateMoveOfType(moveType: MoveType): Move {
     const objects = Array.from(this.domain.objects.keys());
     const rooms = Array.from(this.domain.rooms.keys());
     
     const move: Move = {
       id: `move_${this.iterationCount}`,
-      type: randomType,
+      type: moveType,
     };
 
-    switch (randomType) {
+    switch (moveType) {
       case MoveType.SWAP:
         if (objects.length >= 2) {
           const idx1 = this.rng.nextInt(0, objects.length - 1);

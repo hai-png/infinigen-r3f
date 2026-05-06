@@ -120,3 +120,31 @@ export type {
   InstanceOnPointsNode,
   RealizeInstancesNode,
 } from './SampleNodes';
+
+// Mesh Primitives
+export {
+  MeshCubeNode,
+  MeshUVSphereNode,
+  MeshIcoSphereNode,
+  MeshCircleNode,
+  MeshCylinderNode,
+  MeshConeNode,
+  MeshGridNode,
+  MeshLineNode,
+  MeshTorusNode,
+  createMeshCubeNode,
+  createMeshUVSphereNode,
+  createMeshIcoSphereNode,
+  createMeshCircleNode,
+  createMeshCylinderNode,
+  createMeshConeNode,
+  createMeshGridNode,
+  createMeshLineNode,
+  createMeshTorusNode,
+  registerMeshPrimitiveExecutors,
+} from './MeshPrimitiveNodes';
+
+export type {
+  MeshPrimitiveInputs,
+  MeshPrimitiveOutputs,
+} from './MeshPrimitiveNodes';

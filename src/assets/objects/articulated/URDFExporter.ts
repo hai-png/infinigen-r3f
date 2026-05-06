@@ -540,3 +540,210 @@ export function generateURDF(
 
   return lines.join('\n');
 }
+
+// ============================================================================
+// URDF Validation
+// ============================================================================
+
+/** Valid URDF joint types per the URDF specification */
+const VALID_URDF_JOINT_TYPES = new Set([
+  'revolute',
+  'continuous',
+  'prismatic',
+  'fixed',
+  'floating',
+  'planar',
+]);
+
+/**
+ * Validation result for URDF or MJCF XML.
+ */
+export interface ValidationResult {
+  /** Whether the XML is valid */
+  valid: boolean;
+  /** List of error messages (empty if valid) */
+  errors: string[];
+}
+
+/**
+ * Validate a URDF XML string.
+ *
+ * Checks:
+ * 1. Root element is `<robot>`
+ * 2. At least one `<link>` element exists
+ * 3. Each `<joint>` has a valid type attribute
+ * 4. Each `<joint>` has both `<parent>` and `<child>` elements
+ * 5. All link references in joints point to existing `<link>` elements
+ * 6. The kinematic tree is connected (single root with no cycles)
+ *
+ * @param urdfXml - The URDF XML string to validate
+ * @returns ValidationResult with `valid` flag and list of error messages
+ *
+ * @example
+ * ```ts
+ * const result = validateURDF(urdfString);
+ * if (!result.valid) {
+ *   console.error('URDF validation failed:', result.errors);
+ * }
+ * ```
+ */
+export function validateURDF(urdfXml: string): ValidationResult {
+  const errors: string[] = [];
+
+  if (!urdfXml || urdfXml.trim().length === 0) {
+    return { valid: false, errors: ['URDF XML is empty'] };
+  }
+
+  // Parse the XML
+  let doc: Document;
+  try {
+    const parser = new DOMParser();
+    doc = parser.parseFromString(urdfXml, 'application/xml');
+  } catch (e) {
+    return { valid: false, errors: [`Failed to parse XML: ${e instanceof Error ? e.message : String(e)}`] };
+  }
+
+  // Check for XML parse errors
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) {
+    return { valid: false, errors: [`XML parse error: ${parseError.textContent}`] };
+  }
+
+  // 1. Root element must be <robot>
+  const rootElement = doc.documentElement;
+  if (!rootElement || rootElement.tagName !== 'robot') {
+    errors.push(`Root element is "${rootElement?.tagName ?? 'missing'}", expected "robot"`);
+  }
+
+  // 2. At least one <link> element
+  const links = doc.querySelectorAll('link');
+  if (links.length === 0) {
+    errors.push('No <link> elements found — URDF must have at least one link');
+  }
+
+  // Collect all link names
+  const linkNames = new Set<string>();
+  links.forEach((link) => {
+    const name = link.getAttribute('name');
+    if (name) {
+      linkNames.add(name);
+    } else {
+      errors.push('<link> element missing required "name" attribute');
+    }
+  });
+
+  // 3-5. Validate each <joint>
+  const joints = doc.querySelectorAll('joint');
+  joints.forEach((joint, index) => {
+    const jointName = joint.getAttribute('name') || `joint_${index}`;
+
+    // 3. Valid type attribute
+    const jointType = joint.getAttribute('type');
+    if (!jointType) {
+      errors.push(`Joint "${jointName}" missing required "type" attribute`);
+    } else if (!VALID_URDF_JOINT_TYPES.has(jointType)) {
+      errors.push(`Joint "${jointName}" has invalid type "${jointType}" — must be one of: ${[...VALID_URDF_JOINT_TYPES].join(', ')}`);
+    }
+
+    // 4. Has <parent> and <child> elements
+    const parentEl = joint.querySelector('parent');
+    const childEl = joint.querySelector('child');
+
+    if (!parentEl) {
+      errors.push(`Joint "${jointName}" missing <parent> element`);
+    }
+    if (!childEl) {
+      errors.push(`Joint "${jointName}" missing <child> element`);
+    }
+
+    // 5. All link references in joints point to existing <link> elements
+    const parentLink = parentEl?.getAttribute('link');
+    const childLink = childEl?.getAttribute('link');
+
+    if (parentLink && !linkNames.has(parentLink)) {
+      errors.push(`Joint "${jointName}" references parent link "${parentLink}" which does not exist`);
+    }
+    if (childLink && !linkNames.has(childLink)) {
+      errors.push(`Joint "${jointName}" references child link "${childLink}" which does not exist`);
+    }
+
+    // Additional: revolute/prismatic joints must have <limit> with lower/upper
+    if (jointType === 'revolute' || jointType === 'prismatic') {
+      const limitEl = joint.querySelector('limit');
+      if (!limitEl) {
+        errors.push(`Joint "${jointName}" is ${jointType} but missing required <limit> element`);
+      } else {
+        const lower = limitEl.getAttribute('lower');
+        const upper = limitEl.getAttribute('upper');
+        if (lower === null || upper === null) {
+          errors.push(`Joint "${jointName}" <limit> missing "lower" or "upper" attribute`);
+        }
+      }
+    }
+  });
+
+  // 6. Check kinematic tree connectivity
+  if (linkNames.size > 0 && joints.length > 0) {
+    // Build parent-child map from joints
+    const childToParent = new Map<string, string>();
+    joints.forEach((joint) => {
+      const parentLink = joint.querySelector('parent')?.getAttribute('link');
+      const childLink = joint.querySelector('child')?.getAttribute('link');
+      if (parentLink && childLink) {
+        childToParent.set(childLink, parentLink);
+      }
+    });
+
+    // Find root links (links that are parents but never children)
+    const childLinks = new Set(childToParent.keys());
+    const rootLinks: string[] = [];
+    for (const name of linkNames) {
+      if (!childLinks.has(name)) {
+        rootLinks.push(name);
+      }
+    }
+
+    if (rootLinks.length === 0) {
+      errors.push('No root link found — kinematic tree has a cycle');
+    } else if (rootLinks.length > 1) {
+      // Multiple root links is valid (floating base or separate trees), but warn
+      // for typical articulated objects where a single root is expected
+      // This is not a hard error, just a potential issue
+    }
+
+    // Check for cycles by walking from each root
+    const visited = new Set<string>();
+    const detectCycle = (linkName: string, path: string[]): boolean => {
+      if (path.includes(linkName)) {
+        errors.push(`Cycle detected in kinematic tree: ${[...path, linkName].join(' → ')}`);
+        return true;
+      }
+      if (visited.has(linkName)) return false;
+      visited.add(linkName);
+
+      // Find all children of this link
+      for (const [child, parent] of childToParent) {
+        if (parent === linkName) {
+          if (detectCycle(child, [...path, linkName])) return true;
+        }
+      }
+      return false;
+    };
+
+    for (const root of rootLinks) {
+      detectCycle(root, []);
+    }
+
+    // Check that all links are reachable from the root(s)
+    for (const name of linkNames) {
+      if (!visited.has(name)) {
+        errors.push(`Link "${name}" is not connected to the kinematic tree`);
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}

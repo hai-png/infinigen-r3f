@@ -3,18 +3,37 @@
  * Cube Spherical Mesher for Hybrid Planet/Cube Mapping
  *
  * Based on original: infinigen/terrain/mesher/cube_spherical_mesher.py
- * Combines spherical and cube mapping for reduced distortion at poles
+ *
+ * Refactored to use the extractIsosurface() pipeline (same as
+ * SphericalMesher / UniformMesher / AdaptiveMesher) for reliable
+ * marching-cubes mesh generation.
+ *
+ * The cube-sphere hybrid mapping is used to compute a tighter bounding
+ * box for the SDF grid, reducing wasted samples in areas that the
+ * cube-sphere projection cannot reach.
+ *
+ * The cubeToSphere() and smoothCorners() helpers are retained for
+ * potential use in coordinate remapping or LOD selection.
  */
 
-import { Vector3, Matrix4, BufferGeometry, Float32BufferAttribute, Box3 } from 'three';
+import { Vector3, Box3, BufferGeometry, Float32BufferAttribute } from 'three';
 import { SphericalMesher, SphericalMesherConfig, CameraPose } from './SphericalMesher';
 import { SDFKernel } from '../sdf/SDFOperations';
+import { SignedDistanceField, extractIsosurface } from '../sdf/sdf-operations';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 export interface CubeSphericalConfig extends SphericalMesherConfig {
   cubeMapResolution: number;
   blendFactor: number;
   cornerSmoothing: number;
 }
+
+// ---------------------------------------------------------------------------
+// CubeSphericalMesher
+// ---------------------------------------------------------------------------
 
 export class CubeSphericalMesher extends SphericalMesher {
   protected cubeConfig: CubeSphericalConfig;
@@ -34,118 +53,102 @@ export class CubeSphericalMesher extends SphericalMesher {
     };
   }
 
+  // -----------------------------------------------------------------------
+  // Public API
+  // -----------------------------------------------------------------------
+
   /**
-   * Generate mesh using cube-sphere hybrid mapping
-   * Projects sphere onto cube faces for more uniform sampling
+   * Generate mesh from SDF kernels using an SDF grid + extractIsosurface
+   * pipeline, with a bounding box informed by the cube-sphere mapping.
+   *
+   * Algorithm:
+   *   1. Compute a bounding box from the camera position and rMax,
+   *      representing the inscribed cube of the sampling sphere.
+   *   2. Build a SignedDistanceField within that box at a resolution
+   *      derived from cubeMapResolution.
+   *   3. Evaluate all SDF kernels at each grid point (union = minimum).
+   *   4. Delegate to extractIsosurface() for marching-cubes extraction.
    */
   public generateMesh(kernels: SDFKernel[]): BufferGeometry {
-    const vertices: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
+    const rMax = this.config.rMax ?? 100;
+    const rMin = this.config.rMin ?? 0.5;
 
-    const { rMin, rMax } = this.config;
-    const { cubeMapResolution, blendFactor, cornerSmoothing } = this.cubeConfig;
+    // The cube-sphere mesher samples within the inscribed cube of the
+    // sphere of radius rMax centred on the camera.  This gives a tighter
+    // bounding box than the full sphere, reducing wasted voxels.
+    const halfSide = rMax;
+    const camPos = this.cameraPose.position;
 
-    // Define cube face normals and up vectors
-    const faces = [
-      { normal: new Vector3(1, 0, 0), up: new Vector3(0, 1, 0), name: 'right' },
-      { normal: new Vector3(-1, 0, 0), up: new Vector3(0, 1, 0), name: 'left' },
-      { normal: new Vector3(0, 1, 0), up: new Vector3(0, 0, -1), name: 'top' },
-      { normal: new Vector3(0, -1, 0), up: new Vector3(0, 0, 1), name: 'bottom' },
-      { normal: new Vector3(0, 0, 1), up: new Vector3(0, 1, 0), name: 'front' },
-      { normal: new Vector3(0, 0, -1), up: new Vector3(0, 1, 0), name: 'back' },
-    ];
+    // Intersect with the terrain bounds to avoid sampling outside the
+    // region where SDF kernels are defined.
+    const [xMin, xMax, yMin, yMax, zMin, zMax] = this.bounds;
+    const bbox = new Box3(
+      new Vector3(
+        Math.max(xMin, camPos.x - halfSide),
+        Math.max(yMin, camPos.y - halfSide),
+        Math.max(zMin, camPos.z - halfSide)
+      ),
+      new Vector3(
+        Math.min(xMax, camPos.x + halfSide),
+        Math.min(yMax, camPos.y + halfSide),
+        Math.min(zMax, camPos.z + halfSide)
+      )
+    );
 
-    let vertexIndex = 0;
-    const faceVertexCounts: number[] = [];
+    // If the intersection is empty, return an empty geometry
+    if (bbox.min.x >= bbox.max.x ||
+        bbox.min.y >= bbox.max.y ||
+        bbox.min.z >= bbox.max.z) {
+      const empty = new BufferGeometry();
+      empty.setAttribute('position', new Float32BufferAttribute([], 3));
+      return empty;
+    }
 
-    // Generate vertices for each cube face
-    for (const face of faces) {
-      const faceStartIndex = vertexIndex;
-      const right = new Vector3().crossVectors(face.up, face.normal).normalize();
+    // Resolution derived from cubeMapResolution: each cube face gets
+    // cubeMapResolution samples, so the linear resolution is
+    // (2 * halfSide) / cubeMapResolution.
+    const boxSize = bbox.getSize(new Vector3());
+    const maxDim = Math.max(boxSize.x, boxSize.y, boxSize.z);
+    const resolution = maxDim / this.cubeConfig.cubeMapResolution;
 
-      for (let y = 0; y <= cubeMapResolution; y++) {
-        for (let x = 0; x <= cubeMapResolution; x++) {
-          // Calculate UV coordinates for this face
-          const u = x / cubeMapResolution;
-          const v = y / cubeMapResolution;
+    const sdf = new SignedDistanceField({
+      resolution,
+      bounds: bbox,
+      maxDistance: 1000,
+    });
 
-          // Map to cube face space (-1 to 1)
-          const faceX = (u - 0.5) * 2;
-          const faceY = (v - 0.5) * 2;
+    // Evaluate all SDF kernels at each grid point (union = minimum)
+    for (let gz = 0; gz < sdf.gridSize[2]; gz++) {
+      for (let gy = 0; gy < sdf.gridSize[1]; gy++) {
+        for (let gx = 0; gx < sdf.gridSize[0]; gx++) {
+          const pos = sdf.getPosition(gx, gy, gz);
 
-          // Convert cube face coordinates to spherical direction
-          let direction = this.cubeToSphere(face.normal, right, face.up, faceX, faceY, blendFactor);
-          direction.applyMatrix4(this.cameraPose.rotation);
-
-          // Apply corner smoothing
-          if (cornerSmoothing > 0) {
-            direction = this.smoothCorners(direction, face.normal, right, face.up, faceX, faceY, cornerSmoothing);
+          // Only evaluate within the spherical shell [rMin, rMax]
+          const distToCam = pos.distanceTo(camPos);
+          if (distToCam < rMin || distToCam > rMax) {
+            sdf.setValueAtGrid(gx, gy, gz, 1000); // far outside
+            continue;
           }
 
-          // Ray march to find surface
-          const raySteps = this.config.testDownscale;
-          const distance = this.rayMarchSurface(kernels, direction, rMin, rMax, raySteps);
-
-          // Calculate vertex position
-          const position = this.cameraPose.position.clone().add(
-            direction.clone().multiplyScalar(distance)
-          );
-
-          vertices.push(position.x, position.y, position.z);
-
-          // Calculate normal
-          const normal = this.calculateNormal(kernels, position, direction);
-          normals.push(normal.x, normal.y, normal.z);
-
-          // Store UV with face index encoded
-          uvs.push(u, v);
-
-          vertexIndex++;
+          let minSDF = Infinity;
+          for (const kernel of kernels) {
+            minSDF = Math.min(minSDF, kernel.evaluate(pos));
+          }
+          sdf.setValueAtGrid(gx, gy, gz, minSDF);
         }
       }
-
-      faceVertexCounts.push(vertexIndex - faceStartIndex);
     }
 
-    // Generate indices for each face
-    let currentIndex = 0;
-    for (let faceIdx = 0; faceIdx < faces.length; faceIdx++) {
-      const faceVerts = faceVertexCounts[faceIdx];
-      const resolution = cubeMapResolution;
-
-      for (let y = 0; y < resolution; y++) {
-        for (let x = 0; x < resolution; x++) {
-          const current = currentIndex + y * (resolution + 1) + x;
-          const next = current + 1;
-          const below = currentIndex + (y + 1) * (resolution + 1) + x;
-          const belowNext = below + 1;
-
-          // First triangle
-          indices.push(current, below, next);
-
-          // Second triangle
-          indices.push(next, below, belowNext);
-        }
-      }
-
-      currentIndex += faceVerts;
-    }
-
-    // Create geometry
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
-    geometry.setIndex(indices);
-
-    return geometry;
+    return extractIsosurface(sdf, 0);
   }
 
+  // -----------------------------------------------------------------------
+  // Protected helpers (retained for coordinate remapping / LOD)
+  // -----------------------------------------------------------------------
+
   /**
-   * Convert cube face coordinates to spherical direction
-   * Uses blend factor to interpolate between cube and sphere projection
+   * Convert cube face coordinates to spherical direction.
+   * Uses blend factor to interpolate between cube and sphere projection.
    */
   protected cubeToSphere(
     normal: Vector3,
@@ -168,7 +171,6 @@ export class CubeSphericalMesher extends SphericalMesher {
       .add(right.clone().multiplyScalar(x))
       .add(up.clone().multiplyScalar(y));
 
-    // Normalize sphere direction
     if (sphereDir.length() > 0) {
       sphereDir.normalize();
     }
@@ -179,22 +181,20 @@ export class CubeSphericalMesher extends SphericalMesher {
   }
 
   /**
-   * Smooth cube corners to reduce sharp edges
+   * Smooth cube corners to reduce sharp edges.
    */
   protected smoothCorners(
     direction: Vector3,
     normal: Vector3,
-    right: Vector3,
-    up: Vector3,
+    _right: Vector3,
+    _up: Vector3,
     x: number,
     y: number,
     smoothing: number
   ): Vector3 {
-    // Calculate distance from center of face
     const distFromCenter = Math.sqrt(x * x + y * y);
     const maxDist = Math.sqrt(2); // Corner distance
 
-    // Apply smoothing near corners
     if (distFromCenter > 0.7) {
       const t = Math.pow((distFromCenter - 0.7) / (maxDist - 0.7), 2);
       const smoothed = new Vector3().lerpVectors(direction, normal, t * smoothing);
