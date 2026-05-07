@@ -10,7 +10,7 @@
  */
 
 import * as THREE from 'three';
-import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
+import { performCSGBoolean, mergeGeometries } from './csg-boolean';
 
 // ============================================================================
 // Seeded Random Utility
@@ -1028,126 +1028,103 @@ export function executeTrimCurve(inputs: Record<string, any>): any {
  * Inputs: Geometry (or MeshA / Mesh1), Operand (or MeshB / Mesh2), Operation, _nodeType
  * Outputs: Geometry
  */
-export function executeMeshBoolean(inputs: Record<string, any>): any {
+/**
+ * Helper: resolve the boolean operation from various input formats.
+ *
+ * Supported formats:
+ *  - String (case-insensitive): 'union' | 'subtract' | 'intersect' |
+ *    'UNION' | 'DIFFERENCE' | 'INTERSECT' | 'INTERSECTION' | 'addition'
+ *  - Numeric (Blender enum index):
+ *    0 = INTERSECT, 1 = UNION, 2 = DIFFERENCE
+ *  - Defaults to 'union' if unresolvable
+ */
+function resolveBooleanOperation(
+  rawOp: any,
+  nodeType?: string,
+): 'union' | 'subtract' | 'intersect' {
+  // If we already have a normalised string, return early
+  if (rawOp === 'union' || rawOp === 'subtract' || rawOp === 'intersect') {
+    return rawOp;
+  }
+
+  // Numeric enum (Blender MeshBoolean operation indices)
+  if (typeof rawOp === 'number') {
+    switch (rawOp) {
+      case 0: return 'intersect';  // INTERSECT
+      case 1: return 'union';      // UNION
+      case 2: return 'subtract';   // DIFFERENCE
+      default: return 'union';
+    }
+  }
+
+  // String normalisation
+  if (rawOp != null) {
+    const op = String(rawOp).toLowerCase().trim();
+    if (op === 'union' || op === 'addition') return 'union';
+    if (op === 'subtract' || op === 'difference') return 'subtract';
+    if (op === 'intersect' || op === 'intersection') return 'intersect';
+  }
+
+  // Infer from node type name
+  if (nodeType) {
+    const nt = String(nodeType).toLowerCase();
+    if (nt.includes('union')) return 'union';
+    if (nt.includes('intersect')) return 'intersect';
+    if (nt.includes('difference')) return 'subtract';
+  }
+
+  // Default
+  return 'union';
+}
+
+export function executeMeshBoolean(
+  inputs: Record<string, any>,
+  settings?: Record<string, any>,
+): any {
   const geometry: THREE.BufferGeometry | null =
     inputs.Geometry ?? inputs.geometry ?? inputs.MeshA ?? inputs['Mesh 1'] ?? inputs.Mesh1 ?? null;
   const operand: THREE.BufferGeometry | null =
     inputs.Operand ?? inputs.operand ?? inputs.MeshB ?? inputs.geometry2 ?? inputs['Mesh 2'] ?? inputs.Mesh2 ?? null;
 
-  // Resolve the operation string.
-  // Priority: explicit Operation input > node property > _nodeType inference > default 'union'
-  let operation = inputs.Operation ?? inputs.operation ?? null;
+  // Resolve the operation from multiple possible sources (in priority order):
+  //  1. Explicit Operation input socket value
+  //  2. Node settings / properties (passed via wrapWithSettings)
+  //  3. Legacy fallback properties on the inputs object
+  //  4. _nodeType inference for individual boolean nodes
+  const rawOperation =
+    inputs.Operation ?? inputs.operation ??
+    settings?.operation ??
+    inputs.properties?.operation ?? inputs.operation_property ??
+    inputs._nodeType ??
+    null;
 
-  // Check for node-level property (set by BooleanUnionNode / BooleanIntersectNode / BooleanDifferenceNode)
-  if (!operation) {
-    const propOp = inputs.properties?.operation ?? inputs.operation_property ?? null;
-    if (propOp) {
-      operation = String(propOp).toLowerCase();
-    }
-  }
+  const operation = resolveBooleanOperation(rawOperation, inputs._nodeType);
 
-  // Infer operation from _nodeType for individual boolean nodes
-  if (!operation && inputs._nodeType) {
-    const nt = String(inputs._nodeType).toLowerCase();
-    if (nt.includes('union')) operation = 'union';
-    else if (nt.includes('intersect')) operation = 'intersect';
-    else if (nt.includes('difference')) operation = 'subtract';
-  }
-
-  // Final fallback
-  operation = operation ?? 'union';
-
-  // Normalise aliases
-  if (operation === 'difference') operation = 'subtract';
-  if (operation === 'addition') operation = 'union';
-  if (operation === 'intersection') operation = 'intersect';
-
+  // Edge cases: missing inputs
   if (!geometry) return { Geometry: new THREE.BufferGeometry() };
   if (!operand) return { Geometry: geometry };
 
   try {
-    return { Geometry: performCSGBoolean(geometry, operand, operation as 'union' | 'subtract' | 'intersect') };
+    return { Geometry: performCSGBoolean(geometry, operand, operation) };
   } catch (err) {
-    if (process.env.NODE_ENV === 'development') console.debug('[CoreNodeExecutors] meshBoolean CSG fallback:', err);
-    // Fall back to simple merge for union, or clone for other ops
+    if (typeof console !== 'undefined') {
+      console.warn('[CoreNodeExecutors] meshBoolean CSG fallback for', operation, ':', err);
+    }
+    // Fall back to simple merge for union; return first geometry for other ops
     if (operation === 'union') {
       try { return { Geometry: mergeGeometries(geometry, operand) }; } catch { /* ignore */ }
     }
-    return { Geometry: geometry.clone() };
+    return { Geometry: geometry };
   }
 }
 
-/**
- * Perform a CSG boolean operation using three-bvh-csg.
- *
- * Wraps the input BufferGeometry instances as Brush objects and delegates
- * the boolean evaluation to the three-bvh-csg Evaluator.
- *
- * Supported operations:
- *  - 'union'     → ADDITION       (A ∪ B)
- *  - 'subtract'  → SUBTRACTION    (A − B)
- *  - 'intersect' → INTERSECTION   (A ∩ B)
- */
-function performCSGBoolean(
-  geoA: THREE.BufferGeometry,
-  geoB: THREE.BufferGeometry,
-  operation: 'union' | 'subtract' | 'intersect',
-): THREE.BufferGeometry {
-  // Validate that both geometries have position data
-  const posA = geoA.getAttribute('position');
-  const posB = geoB.getAttribute('position');
-  if (!posA) {
-    return new THREE.BufferGeometry();
-  }
-  if (!posB) {
-    return geoA.clone();
-  }
-
-  // Ensure both geometries are indexed; three-bvh-csg requires indexed geometry.
-  const ensureIndexed = (geo: THREE.BufferGeometry): THREE.BufferGeometry => {
-    if (geo.getIndex()) return geo;
-    const count = geo.getAttribute('position').count;
-    const indices = new Uint32Array(count);
-    for (let i = 0; i < count; i++) indices[i] = i;
-    const indexed = geo.clone();
-    indexed.setIndex(new THREE.BufferAttribute(indices, 1));
-    return indexed;
-  };
-
-  const preparedA = ensureIndexed(geoA);
-  const preparedB = ensureIndexed(geoB);
-
-  // Map our operation names to three-bvh-csg operation constants
-  const operationMap: Record<string, typeof ADDITION> = {
-    union: ADDITION,
-    subtract: SUBTRACTION,
-    intersect: INTERSECTION,
-  };
-
-  const csgOp = operationMap[operation];
-  if (csgOp === undefined) {
-    return geoA.clone();
-  }
-
-  // Create Brush instances from the geometries.
-  // Brush extends Mesh, so it needs a geometry and a material.
-  const brushA = new Brush(preparedA, new THREE.MeshBasicMaterial());
-  const brushB = new Brush(preparedB, new THREE.MeshBasicMaterial());
-
-  // Ensure the BVH cache is built for each brush
-  brushA.prepareGeometry();
-  brushB.prepareGeometry();
-
-  // Perform the CSG evaluation
-  const evaluator = new Evaluator();
-  const resultBrush = evaluator.evaluate(brushA, brushB, csgOp);
-
-  // Extract the resulting BufferGeometry
-  const resultGeo = resultBrush.geometry;
-  resultGeo.computeVertexNormals();
-
-  return resultGeo;
-}
+// performCSGBoolean and mergeGeometries are now imported from ./csg-boolean.ts
+// which has proper geometry cloning, missing attribute handling, and
+// Evaluator attribute list configuration. The previous inline version
+// had bugs that caused subtract/intersect to silently return the first
+// geometry unchanged (missing UVs crashed the Evaluator, and the
+// ensureIndexed helper did not clone already-indexed geometries,
+// leading to mutation by Brush.prepareGeometry()).
 
 /**
  * 16. MeshToCurve
@@ -1662,43 +1639,4 @@ function quickhull(points: THREE.Vector3[]): [number, number, number][] {
   return faces;
 }
 
-/** Simple geometry merge (union-like for non-CSG) */
-function mergeGeometries(a: THREE.BufferGeometry, b: THREE.BufferGeometry): THREE.BufferGeometry {
-  const posA = a.getAttribute('position');
-  const posB = b.getAttribute('position');
-  if (!posA || !posB) return a.clone();
-
-  const allPositions: number[] = [];
-  const allNormals: number[] = [];
-  const allIndices: number[] = [];
-  let offset = 0;
-
-  for (const geo of [a, b]) {
-    const pos = geo.getAttribute('position');
-    const norm = geo.getAttribute('normal');
-    const idx = geo.getIndex();
-
-    const posArr = pos.array as Float32Array;
-    for (let i = 0; i < posArr.length; i++) allPositions.push(posArr[i]);
-
-    if (norm) {
-      const nArr = norm.array as Float32Array;
-      for (let i = 0; i < nArr.length; i++) allNormals.push(nArr[i]);
-    }
-
-    if (idx) {
-      const iArr = idx.array as Uint32Array | Uint16Array;
-      for (let i = 0; i < iArr.length; i++) allIndices.push(iArr[i] + offset);
-    } else {
-      for (let i = 0; i < pos.count; i++) allIndices.push(i + offset);
-    }
-    offset += pos.count;
-  }
-
-  const result = new THREE.BufferGeometry();
-  result.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
-  if (allNormals.length > 0) result.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
-  result.setIndex(allIndices);
-  if (allNormals.length === 0) result.computeVertexNormals();
-  return result;
-}
+// mergeGeometries is now imported from ./csg-boolean.ts

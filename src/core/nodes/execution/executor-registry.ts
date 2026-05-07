@@ -303,7 +303,7 @@ export function registerAllExecutors(): void {
   registerExecutor('GeometryNodeResampleCurve', wrap(CoreExecutors.executeCurveResample));
   registerExecutor('GeometryNodeFillCurve', wrap(CoreExecutors.executeFillCurve));
   registerExecutor('GeometryNodeTrimCurve', wrap(CoreExecutors.executeTrimCurve));
-  registerExecutor('GeometryNodeMeshBoolean', wrap(CoreExecutors.executeMeshBoolean));
+  registerExecutor('GeometryNodeMeshBoolean', wrapWithSettings(CoreExecutors.executeMeshBoolean));
   registerExecutor('GeometryNodeMeshToCurve', wrap(CoreExecutors.executeMeshToCurve));
   registerExecutor('GeometryNodeFaceSetBoundaries', wrap(CoreExecutors.executeFaceSetBoundaries));
   registerExecutor('GeometryNodeStoreNamedAttribute', wrap(CoreExecutors.executeStoreNamedAttribute));

@@ -33,6 +33,13 @@ import {
   executeNode,
   type ExecutorContext,
 } from './execution/ExecutorRegistry';
+import {
+  applyCompatibility,
+  resolveAllDeferred,
+  isSocketReference,
+  type CompatibilityResult,
+  type DeferredNodeSpec,
+} from './compatibility/CompatibilityLayer';
 
 // ============================================================================
 // Internal helper — NodeDefinition shape used by getNodeDefinition()
@@ -51,6 +58,50 @@ interface ResolvedNodeDefinition {
   properties?: Record<string, unknown>;
   defaultData?: unknown;
 }
+
+// ============================================================================
+// Singleton Node Types
+// ============================================================================
+
+/**
+ * Set of node types that should only have a single instance per node group.
+ *
+ * Mirrors `SINGLETON_NODES` from the Python `node_info.py` module.
+ * When `new_node()` is called for one of these types, it will first check
+ * whether an instance already exists in the active group and reuse it
+ * rather than creating a duplicate.
+ */
+const SINGLETON_NODES: ReadonlySet<string> = new Set([
+  'NodeGroupInput',
+  'NodeGroupOutput',
+  'ShaderNodeOutputMaterial',
+  'ShaderNodeOutputWorld',
+  'ShaderNodeOutputLight',
+  'CompositorNodeComposite',
+  'CompositorNodeViewer',
+]);
+
+/**
+ * Type representing a value that can be passed as an input to `new_node()`.
+ *
+ * Duck-typed resolution is applied:
+ * - `NodeInstance` → connect the node's first enabled output
+ * - `NodeSocket` → connect directly
+ * - `[NodeInstance, string]` tuple → connect a specific named output
+ * - Literal value (number, string, boolean) → assign as `default_value`
+ * - `null` / `undefined` → skip (no-op)
+ * - Array of the above → for multi-input sockets, connect each item
+ */
+export type NodeInputItem =
+  | NodeInstance
+  | NodeSocket
+  | [NodeInstance, string]
+  | number
+  | string
+  | boolean
+  | null
+  | undefined
+  | NodeInputItem[];
 
 // ============================================================================
 // NodeWrangler
@@ -203,6 +254,559 @@ export class NodeWrangler {
 
     group.nodes.set(nodeId, node);
     return node;
+  }
+
+  // ===========================================================================
+  // Python-compatible new_node() API
+  // ===========================================================================
+
+  /**
+   * Create and configure a node using the Python `new_node()` API.
+   *
+   * This is the primary node-creation method matching infinigen's Python
+   * `NodeWrangler.new_node()`. It differs from the simpler `newNode()` by
+   * supporting:
+   *
+   * - **Compatibility layer**: When `compatMode` is `true` (default),
+   *   deprecated node types (e.g. `ShaderNodeMixRGB`) are automatically
+   *   converted to their modern equivalents via the `CompatibilityLayer`.
+   * - **Singleton reuse**: For types like `NodeGroupInput`,
+   *   `NodeGroupOutput`, `ShaderNodeOutputMaterial`, etc., an existing
+   *   instance in the active group is reused rather than creating a
+   *   duplicate.
+   * - **attrs**: Node properties (like `operation`, `data_type`, `domain`)
+   *   are applied via dot-path notation (e.g. `"operation"` sets
+   *   `node.properties.operation`).
+   * - **inputArgs**: Positional input connections — connect to the first N
+   *   input sockets by index. Each arg can be a `NodeInstance`, `NodeSocket`,
+   *   `[NodeInstance, string]` tuple, or a literal value.
+   * - **inputKwargs**: Named input connections — dict of `socket_name → value`.
+   *   Same duck-typed resolution as `inputArgs`.
+   * - **label**: Sets the node's display label.
+   * - **exposeInput**: If provided, exposes certain inputs to the node
+   *   group's interface.
+   *
+   * @param nodeType    - Canonical Blender-style node type identifier
+   * @param inputArgs   - Positional input arguments (connected by index)
+   * @param attrs       - Node properties to set (e.g. `{operation: 'ADD'}`)
+   * @param inputKwargs - Named input arguments (socket name → value/connection)
+   * @param label       - Optional display label for the node
+   * @param exposeInput - If provided, expose inputs to the group interface.
+   *   - `true` → expose all inputs that have non-null values
+   *   - `Record<string, any>` → map of `{socketName: {dtype, name, val}}`
+   * @param compatMode  - If `true` (default), apply the CompatibilityLayer
+   *   to convert deprecated node types
+   * @returns The newly created (or reused singleton) `NodeInstance`
+   *
+   * @example
+   * ```ts
+   * // Simple node with attrs
+   * const mathNode = nw.new_node('ShaderNodeMath', [], { operation: 'ADD' });
+   *
+   * // Connect inputs positionally
+   * const addNode = nw.new_node('ShaderNodeVectorMath', [nodeA, nodeB]);
+   *
+   * // Connect inputs by name
+   * const mixNode = nw.new_node(
+   *   'ShaderNodeMix',
+   *   [],
+   *   { data_type: 'RGBA' },
+   *   { Factor: 0.5, A: color1, B: color2 },
+   * );
+   *
+   * // Reuse singleton GroupInput
+   * const groupIn = nw.new_node('NodeGroupInput');
+   * ```
+   */
+  new_node(
+    nodeType: string,
+    inputArgs?: NodeInputItem[],
+    attrs?: Record<string, any>,
+    inputKwargs?: Record<string, NodeInputItem>,
+    label?: string,
+    exposeInput?: Record<string, any> | boolean,
+    compatMode: boolean = true,
+  ): NodeInstance {
+    // Normalise defaults
+    const args = inputArgs ?? [];
+    const kwargs = inputKwargs ?? {};
+    const nodeAttrs = attrs ?? {};
+
+    // ── Step 1: Apply compatibility layer ──
+    if (compatMode) {
+      const compatResult = applyCompatibility(nodeType, args, kwargs, nodeAttrs);
+
+      // Resolve any deferred intermediate nodes before proceeding
+      const resolved = resolveAllDeferred(compatResult, (spec: DeferredNodeSpec) => {
+        return this.new_node(
+          spec.nodeType,
+          [],
+          spec.attrs as Record<string, any>,
+          spec.inputKwargs as Record<string, NodeInputItem>,
+          undefined,
+          undefined,
+          false, // Don't re-apply compat layer for intermediate nodes
+        );
+      });
+
+      // Recurse with the converted parameters (but skip compat to avoid infinite loop)
+      if (resolved.converted) {
+        return this.new_node(
+          resolved.nodeType,
+          resolved.inputArgs as NodeInputItem[],
+          resolved.attrs as Record<string, any>,
+          resolved.inputKwargs as Record<string, NodeInputItem>,
+          label,
+          exposeInput,
+          false, // Already applied compat — don't re-apply
+        );
+      }
+    }
+
+    // ── Step 2: Create or reuse the node ──
+    const canonicalType = resolveNodeType(nodeType);
+    const node = this._makeNode(canonicalType);
+
+    // ── Step 3: Set label ──
+    if (label !== undefined) {
+      node.name = label;
+    }
+
+    // ── Step 4: Apply attrs (dot-path property assignment) ──
+    for (const [keyPath, val] of Object.entries(nodeAttrs)) {
+      const keys = keyPath.split('.');
+      let obj: Record<string, any> = node.properties;
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!(keys[i] in obj)) {
+          obj[keys[i]] = {};
+        }
+        obj = obj[keys[i]] as Record<string, any>;
+      }
+      obj[keys[keys.length - 1]] = val;
+    }
+
+    // ── Step 5: Connect inputs ──
+    // Build a combined list: positional args (indexed by socket position) + named kwargs
+    const inputKeyvalList: Array<[string | number, NodeInputItem]> = [
+      ...args.map((item, idx) => [idx as number, item] as [number, NodeInputItem]),
+      ...Object.entries(kwargs).map(([k, v]) => [k as string, v] as [string, NodeInputItem]),
+    ];
+
+    for (const [inputSocketName, inputItem] of inputKeyvalList) {
+      if (inputItem === null || inputItem === undefined) {
+        continue;
+      }
+
+      // Resolve the input socket on the node
+      const inputSocket = this._inferInputSocket(node, inputSocketName);
+      if (!inputSocket) {
+        // Socket doesn't exist on this node — skip silently
+        // (In Python, GroupOutput dynamically creates sockets, but we handle that separately)
+        continue;
+      }
+
+      this.connectInput(inputSocket, inputItem);
+    }
+
+    // ── Step 6: Handle exposeInput ──
+    if (exposeInput !== undefined && exposeInput !== false) {
+      if (typeof exposeInput === 'object') {
+        // exposeInput is a dict of { socketName: { dtype, name, val } }
+        for (const [_key, entry] of Object.entries(exposeInput)) {
+          if (Array.isArray(entry) && entry.length >= 3) {
+            // Python format: [nodeclass, name, val]
+            const [_nodeclass, name, val] = entry as [unknown, string, unknown];
+            this._exposeInputToGroup(node, name, val);
+          } else if (entry && typeof entry === 'object' && 'name' in entry) {
+            const e = entry as { name: string; val?: unknown; dtype?: string };
+            this._exposeInputToGroup(node, e.name, e.val);
+          }
+        }
+      } else if (exposeInput === true) {
+        // Expose all non-null inputKwargs that aren't already linked
+        for (const [socketName, item] of Object.entries(kwargs)) {
+          if (item !== null && item !== undefined) {
+            this._exposeInputToGroup(node, socketName, item);
+          }
+        }
+      }
+    }
+
+    return node;
+  }
+
+  /**
+   * Create a new Value node with the given float default value.
+   *
+   * Mirrors the Python `NodeWrangler.new_value()` convenience method.
+   * The Value node outputs a single float that can be connected to other
+   * nodes' inputs.
+   *
+   * @param v     - The default value for the node's output
+   * @param label - Optional display label
+   * @returns The newly created Value `NodeInstance`
+   *
+   * @example
+   * ```ts
+   * const threshold = nw.new_value(0.5, 'Threshold');
+   * ```
+   */
+  new_value(v: number, label?: string): NodeInstance {
+    const node = this.new_node('ShaderNodeValue', [], {}, {}, label, undefined, false);
+    // Set the output socket's default_value
+    const outputSocket = node.outputs.values().next().value;
+    if (outputSocket) {
+      outputSocket.value = v;
+      outputSocket.defaultValue = v;
+    }
+    // Also store on the properties dict for serialisation
+    node.properties['default_value'] = v;
+    return node;
+  }
+
+  /**
+   * Trace connections **backwards** from an input socket — find all links
+   * whose `toSocket` matches the given socket.
+   *
+   * Mirrors the Python `NodeWrangler.find_from()` method.
+   *
+   * @param socket - The input `NodeSocket` to trace from
+   * @returns Array of `NodeLink`s feeding into this socket
+   */
+  find_from(socket: NodeSocket): NodeLink[] {
+    const group = this.getActiveGroup();
+    const results: NodeLink[] = [];
+    for (const link of group.links.values()) {
+      if (link.toSocket === socket.name || link.toSocket === socket.id) {
+        results.push(link);
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Trace connections **forwards** from an output socket — find all links
+   * whose `fromSocket` matches the given socket.
+   *
+   * Mirrors the Python `NodeWrangler.find_to()` method.
+   *
+   * @param socket - The output `NodeSocket` to trace from
+   * @returns Array of `NodeLink`s going out from this socket
+   */
+  find_to(socket: NodeSocket): NodeLink[] {
+    const group = this.getActiveGroup();
+    const results: NodeLink[] = [];
+    for (const link of group.links.values()) {
+      if (link.fromSocket === socket.name || link.fromSocket === socket.id) {
+        results.push(link);
+      }
+    }
+    return results;
+  }
+
+  // ===========================================================================
+  // Private helpers for new_node()
+  // ===========================================================================
+
+  /**
+   * Create or reuse a node instance, handling singleton types.
+   *
+   * For node types in the `SINGLETON_NODES` set, this method searches the
+   * active group for an existing instance and returns it if found. Otherwise,
+   * a new `NodeInstance` is created via `newNode()`.
+   *
+   * @param canonicalType - The resolved canonical node type string
+   * @returns A `NodeInstance` — either a reused singleton or a new node
+   */
+  private _makeNode(canonicalType: string): NodeInstance {
+    const group = this.getActiveGroup();
+
+    // Check for singleton reuse
+    if (SINGLETON_NODES.has(canonicalType)) {
+      for (const existingNode of group.nodes.values()) {
+        if (existingNode.type === canonicalType) {
+          return existingNode;
+        }
+      }
+    }
+
+    // Create a fresh node using the existing newNode() method
+    return this.newNode(canonicalType);
+  }
+
+  /**
+   * Resolve an input socket reference on a node by name or index.
+   *
+   * Matches the Python `infer_input_socket()` utility. When given a number,
+   * it returns the Nth input socket. When given a string, it returns the
+   * socket with that name (or `undefined` if not found).
+   *
+   * @param node         - The node whose input sockets to search
+   * @param socketRef    - A socket name (string) or index (number)
+   * @returns The matching `NodeSocket`, or `undefined` if not found
+   */
+  private _inferInputSocket(
+    node: NodeInstance,
+    socketRef: string | number,
+  ): NodeSocket | undefined {
+    if (typeof socketRef === 'number') {
+      // Return the Nth input socket by insertion order
+      const sockets = Array.from(node.inputs.values());
+      return sockets[socketRef] ?? undefined;
+    }
+
+    // String lookup by name
+    return node.inputs.get(socketRef);
+  }
+
+  /**
+   * Connect an input item to a socket, applying duck-typed resolution.
+   *
+   * This implements the Python `connect_input()` / `_update_socket()` logic:
+   *
+   * - **NodeInstance**: Use the node's first enabled output socket and
+   *   create a link.
+   * - **NodeSocket**: Create a link directly from this output socket.
+   * - **[NodeInstance, string] tuple**: Create a link from the named
+   *   output socket on the specified node.
+   * - **Array of items**: If the target socket is a multi-input socket,
+   *   connect each item individually. Otherwise, connect the first item only.
+   * - **Literal value** (number, string, boolean): Assign as the socket's
+   *   `value` / `defaultValue` property.
+   *
+   * @param inputSocket - The target input socket to connect to
+   * @param inputItem   - The value/connection to resolve and connect
+   */
+  private connectInput(inputSocket: NodeSocket, inputItem: NodeInputItem): void {
+    if (inputItem === null || inputItem === undefined) {
+      return;
+    }
+
+    // Handle arrays of items (multi-input sockets)
+    if (Array.isArray(inputItem)) {
+      // Check if any element is a socket reference (not a plain number/string/boolean)
+      const hasSocketRef = inputItem.some(
+        item => isSocketReference(item) || Array.isArray(item),
+      );
+
+      if (hasSocketRef) {
+        // Connect each item to the same input (multi-input)
+        for (const item of inputItem) {
+          this.connectInput(inputSocket, item);
+        }
+        return;
+      }
+      // If it's just an array of literals (like a vector), fall through to literal assignment
+    }
+
+    // Resolve the input to determine the connection strategy
+    const resolved = this._resolveInputItem(inputItem);
+
+    if (resolved.type === 'link') {
+      // We need to find the node that owns this inputSocket
+      const toNode = this._findNodeForSocket(inputSocket);
+      if (toNode) {
+        this.connect(resolved.fromNode!, resolved.fromSocket!, toNode, inputSocket.name);
+      }
+    } else if (resolved.type === 'value') {
+      // Assign the literal value to the socket
+      inputSocket.value = resolved.value;
+    }
+    // 'none' → skip
+  }
+
+  /**
+   * Resolve a `NodeInputItem` into either a link specification or a literal value.
+   *
+   * @param item - The input item to resolve
+   * @returns An object describing how to apply the item:
+   *   - `{ type: 'link', fromNode, fromSocket, toNode, toSocket }` for connections
+   *   - `{ type: 'value', value }` for literal assignments
+   *   - `{ type: 'none' }` for unresolvable items (skip)
+   */
+  private _resolveInputItem(item: NodeInputItem): {
+    type: 'link' | 'value' | 'none';
+    fromNode?: string;
+    fromSocket?: string;
+    value?: unknown;
+  } {
+    // ── NodeInstance → first enabled output ──
+    if (this._isNodeInstance(item)) {
+      const node = item as NodeInstance;
+      // Find the first output socket
+      const firstOutput = node.outputs.values().next().value;
+      if (firstOutput) {
+        return {
+          type: 'link',
+          fromNode: node.id,
+          fromSocket: firstOutput.name,
+        };
+      }
+      return { type: 'none' };
+    }
+
+    // ── [NodeInstance, string] tuple → specific named output ──
+    if (Array.isArray(item) && item.length === 2) {
+      const [maybeNode, maybeSocketName] = item;
+      if (this._isNodeInstance(maybeNode) && typeof maybeSocketName === 'string') {
+        const node = maybeNode as NodeInstance;
+        return {
+          type: 'link',
+          fromNode: node.id,
+          fromSocket: maybeSocketName,
+        };
+      }
+    }
+
+    // ── NodeSocket → direct link ──
+    if (this._isNodeSocket(item)) {
+      const socket = item as NodeSocket;
+      // We need to find which node this socket belongs to
+      const group = this.getActiveGroup();
+      for (const node of group.nodes.values()) {
+        for (const outSocket of node.outputs.values()) {
+          if (outSocket.id === socket.id || outSocket === socket) {
+            return {
+              type: 'link',
+              fromNode: node.id,
+              fromSocket: outSocket.name,
+            };
+          }
+        }
+      }
+      return { type: 'none' };
+    }
+
+    // ── Literal value (number, string, boolean) ──
+    if (typeof item === 'number' || typeof item === 'string' || typeof item === 'boolean') {
+      return { type: 'value', value: item };
+    }
+
+    return { type: 'none' };
+  }
+
+  /**
+   * Find the node ID that owns a given input socket.
+   *
+   * Searches all nodes in the active group for one whose inputs contain
+   * the given socket reference (by identity or by `id` match).
+   *
+   * @param socket - The input socket to search for
+   * @returns The node ID string, or `undefined` if not found
+   */
+  private _findNodeForSocket(socket: NodeSocket): string | undefined {
+    const group = this.getActiveGroup();
+    for (const [nodeId, node] of group.nodes.entries()) {
+      for (const inp of node.inputs.values()) {
+        if (inp === socket || inp.id === socket.id) {
+          return nodeId;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Type guard: check if a value looks like a `NodeInstance`.
+   *
+   * A `NodeInstance` is an object with `id`, `type`, `name`, `inputs`,
+   * `outputs`, and `properties` fields.
+   */
+  private _isNodeInstance(value: unknown): value is NodeInstance {
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      'id' in (value as object) &&
+      'type' in (value as object) &&
+      'inputs' in (value as object) &&
+      'outputs' in (value as object) &&
+      !(Array.isArray(value))
+    );
+  }
+
+  /**
+   * Type guard: check if a value looks like a `NodeSocket`.
+   *
+   * A `NodeSocket` is an object with `name`, `type`, and `isInput` fields
+   * but NOT `inputs`/`outputs` (which would indicate a `NodeInstance`).
+   */
+  private _isNodeSocket(value: unknown): value is NodeSocket {
+    return (
+      value !== null &&
+      typeof value === 'object' &&
+      'name' in (value as object) &&
+      'type' in (value as object) &&
+      'isInput' in (value as object) &&
+      !('inputs' in (value as object))
+    );
+  }
+
+  /**
+   * Expose a node's input to the group interface, making it accessible
+   * from outside the node group.
+   *
+   * This creates a group-level input socket and wires it through the
+   * GroupInput node to the specified node's input.
+   *
+   * @param node     - The node whose input is being exposed
+   * @param name     - The name for the exposed group input
+   * @param val      - Optional default value for the exposed input
+   */
+  private _exposeInputToGroup(
+    node: NodeInstance,
+    name: string,
+    val?: unknown,
+  ): void {
+    const group = this.getActiveGroup();
+
+    // Ensure a GroupInput node exists (singleton)
+    const groupInput = this.new_node('NodeGroupInput', undefined, undefined, undefined, undefined, undefined, false);
+
+    // Check if this input already exists in the group's interface
+    if (group.inputs.has(name)) {
+      return; // Already exposed
+    }
+
+    // Determine the socket type for the group input
+    let socketType = SocketType.VALUE;
+    if (typeof val === 'number') {
+      socketType = SocketType.FLOAT;
+    } else if (typeof val === 'boolean') {
+      socketType = SocketType.BOOLEAN;
+    } else if (typeof val === 'string') {
+      socketType = SocketType.STRING;
+    } else if (Array.isArray(val)) {
+      socketType = SocketType.VECTOR;
+    } else if (this._isNodeInstance(val)) {
+      // Infer type from the connected node's first output
+      const srcNode = val as NodeInstance;
+      const firstOut = srcNode.outputs.values().next().value;
+      if (firstOut) {
+        socketType = firstOut.type;
+      }
+    }
+
+    // Create the group-level input socket
+    const exposedSocket: NodeSocket = {
+      id: `group_input_${name}`,
+      name,
+      type: socketType,
+      value: val,
+      defaultValue: val,
+      isInput: true,
+    };
+
+    group.inputs.set(name, exposedSocket);
+
+    // Ensure the GroupInput node has a corresponding output socket
+    if (!groupInput.outputs.has(name)) {
+      groupInput.outputs.set(name, {
+        id: `${groupInput.id}_out_${name}`,
+        name,
+        type: socketType,
+        isInput: false,
+      });
+    }
   }
 
   /**
