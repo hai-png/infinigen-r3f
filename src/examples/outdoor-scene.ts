@@ -9,7 +9,8 @@ import * as THREE from 'three';
 import { BoulderFactory } from '../assets/geometries/boulder-factory';
 import { SimplePlantFactory } from '../assets/geometries/plant-factory';
 import { TerrainFactory } from '../assets/geometries/terrain-factory';
-import { setupSkyLighting, SkyConfig } from '../assets/lighting/sky-lighting';
+import { LightingOrchestrator, LIGHTING_PRESETS, type LightingPresetType } from '../assets/lighting/LightingOrchestrator';
+import type { AtmospherePipelineConfig, TimeOfDay } from '../assets/lighting/AtmospherePipeline';
 import { InstanceScatter, ScatterConfig } from '../core/placement/instance-scatter';
 import { DensityFilter, DensityConfig } from '../core/placement/density';
 
@@ -54,25 +55,22 @@ export async function createOutdoorScene(
   const terrain = await terrainFactory.generateAsset();
   scene.add(terrain);
   
-  // 2. Setup sky lighting
+  // 2. Setup sky lighting using LightingOrchestrator
   console.log('Setting up sky lighting...');
-  const skyConfig: Partial<SkyConfig> = {
-    seed: finalConfig.seed,
-    hour: finalConfig.timeOfDay,
-    turbidity: 10,
-    rayleigh: 2,
-    mieCoefficient: 0.005,
-    mieDirectionalG: 0.7,
-  };
-  
-  const skyResult = setupSkyLighting(skyConfig);
-  const skyGroup = skyResult instanceof THREE.Group ? skyResult : (() => {
-    const g = new THREE.Group();
-    g.add(skyResult.sunLight);
-    g.add(skyResult.ambientLight);
-    return g;
-  })();
-  scene.add(skyGroup);
+  const orchestrator = new LightingOrchestrator();
+  orchestrator.setup(
+    scene as unknown as THREE.Scene,
+    undefined,
+    undefined,
+    {
+      preset: 'outdoor',
+      atmosphere: {
+        timeOfDay: finalConfig.timeOfDay < 12 ? 'morning' : finalConfig.timeOfDay < 17 ? 'afternoon' : 'dusk',
+        turbidity: 10,
+        seed: finalConfig.seed,
+      },
+    },
+  );
   
   // 3. Scatter boulders
   console.log('Scattering boulders...');
