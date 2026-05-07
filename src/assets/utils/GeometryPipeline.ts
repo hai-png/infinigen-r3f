@@ -1,65 +1,92 @@
 /**
  * GeometryPipeline - Utilities for geometry processing and manipulation
  * Provides mesh processing, optimization, and transformation utilities
+ *
+ * The `mergeGeometries` function is the canonical implementation used across
+ * the entire project. It handles both indexed and non-indexed geometries,
+ * preserves position/normal/UV attributes, and correctly offsets indices.
  */
 
 import { BufferGeometry, BufferAttribute, Float32BufferAttribute, Mesh, Vector3, Matrix4 } from 'three';
 
 export class GeometryPipeline {
   /**
-   * Merge multiple geometries into a single geometry
+   * Merge multiple BufferGeometries into a single geometry.
+   *
+   * This is the canonical merge implementation for the project.
+   * Handles both indexed and non-indexed geometries, merges
+   * position, normal, and UV attributes, and correctly offsets
+   * index values for each source geometry.
+   *
+   * @param geometries - Array of BufferGeometries to merge
+   * @returns A single merged BufferGeometry
    */
-  static mergeGeometries(geometries: BufferGeometry[], useGroups: boolean = false): BufferGeometry {
+  static mergeGeometries(geometries: BufferGeometry[]): BufferGeometry {
     if (!geometries || geometries.length === 0) {
-      throw new Error('No geometries provided to merge');
+      return new BufferGeometry();
     }
-    
+
     if (geometries.length === 1) {
       return geometries[0];
     }
 
-    const totalVertices = geometries.reduce((sum, geo) => sum + geo.attributes.position.count, 0);
-    const mergedGeometry = new BufferGeometry();
-    
-    // Merge position attribute
-    const positions: number[] = [];
-    geometries.forEach(geo => {
-      const pos = geo.attributes.position.array;
-      for (let i = 0; i < pos.length; i++) {
-        positions.push(pos[i]);
-      }
-    });
-    
-    mergedGeometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-    
-    // Merge normal attribute if present
-    const hasNormals = geometries.every(geo => geo.attributes.normal);
-    if (hasNormals) {
-      const normals: number[] = [];
-      geometries.forEach(geo => {
-        const norm = geo.attributes.normal.array;
-        for (let i = 0; i < norm.length; i++) {
-          normals.push(norm[i]);
-        }
-      });
-      mergedGeometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-    }
-    
-    // Merge UV attribute if present
-    const hasUVs = geometries.every(geo => geo.attributes.uv);
-    if (hasUVs) {
-      const uvs: number[] = [];
-      geometries.forEach(geo => {
-        const uv = geo.attributes.uv.array;
-        for (let i = 0; i < uv.length; i++) {
-          uvs.push(uv[i]);
-        }
-      });
-      mergedGeometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+    let totalVertices = 0;
+    let totalIndices = 0;
+
+    for (const geo of geometries) {
+      totalVertices += geo.attributes.position.count;
+      totalIndices += geo.index ? geo.index.count : geo.attributes.position.count;
     }
 
-    mergedGeometry.computeVertexNormals();
-    return mergedGeometry;
+    const mergedPositions = new Float32Array(totalVertices * 3);
+    const mergedNormals = new Float32Array(totalVertices * 3);
+    const mergedUVs = new Float32Array(totalVertices * 2);
+    const mergedIndices: number[] = [];
+    let vertexOffset = 0;
+
+    for (const geo of geometries) {
+      const posAttr = geo.attributes.position;
+      const normAttr = geo.attributes.normal;
+      const uvAttr = geo.attributes.uv;
+
+      for (let i = 0; i < posAttr.count; i++) {
+        mergedPositions[(vertexOffset + i) * 3] = posAttr.getX(i);
+        mergedPositions[(vertexOffset + i) * 3 + 1] = posAttr.getY(i);
+        mergedPositions[(vertexOffset + i) * 3 + 2] = posAttr.getZ(i);
+
+        if (normAttr) {
+          mergedNormals[(vertexOffset + i) * 3] = normAttr.getX(i);
+          mergedNormals[(vertexOffset + i) * 3 + 1] = normAttr.getY(i);
+          mergedNormals[(vertexOffset + i) * 3 + 2] = normAttr.getZ(i);
+        }
+
+        if (uvAttr) {
+          mergedUVs[(vertexOffset + i) * 2] = uvAttr.getX(i);
+          mergedUVs[(vertexOffset + i) * 2 + 1] = uvAttr.getY(i);
+        }
+      }
+
+      if (geo.index) {
+        for (let i = 0; i < geo.index.count; i++) {
+          mergedIndices.push(geo.index.getX(i) + vertexOffset);
+        }
+      } else {
+        for (let i = 0; i < posAttr.count; i++) {
+          mergedIndices.push(vertexOffset + i);
+        }
+      }
+
+      vertexOffset += posAttr.count;
+    }
+
+    const merged = new BufferGeometry();
+    merged.setAttribute('position', new BufferAttribute(mergedPositions, 3));
+    merged.setAttribute('normal', new BufferAttribute(mergedNormals, 3));
+    merged.setAttribute('uv', new BufferAttribute(mergedUVs, 2));
+    merged.setIndex(mergedIndices);
+    merged.computeVertexNormals();
+
+    return merged;
   }
 
   /**

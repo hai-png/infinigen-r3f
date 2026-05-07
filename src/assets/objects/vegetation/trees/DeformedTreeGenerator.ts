@@ -21,6 +21,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom, seededNoise3D, hsvToRgb } from '@/core/util/MathUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Public Types
@@ -192,43 +193,11 @@ function applyCylindricalNoiseDisplacement(
 }
 
 /**
- * Merge multiple BufferGeometries into one (simplified — no index handling
- * for the typical deformed-tree geometry sizes).
+ * Merge multiple BufferGeometries into one.
+ * Delegates to the canonical GeometryPipeline.mergeGeometries.
  */
 function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  let totalVertices = 0;
-  for (const geo of geometries) {
-    totalVertices += geo.attributes.position.count;
-  }
-
-  const mergedPositions = new Float32Array(totalVertices * 3);
-  const mergedNormals = new Float32Array(totalVertices * 3);
-  let offset = 0;
-
-  for (const geo of geometries) {
-    const posAttr = geo.attributes.position;
-    const normAttr = geo.attributes.normal;
-
-    for (let i = 0; i < posAttr.count; i++) {
-      mergedPositions[(offset + i) * 3]     = posAttr.getX(i);
-      mergedPositions[(offset + i) * 3 + 1] = posAttr.getY(i);
-      mergedPositions[(offset + i) * 3 + 2] = posAttr.getZ(i);
-
-      if (normAttr) {
-        mergedNormals[(offset + i) * 3]     = normAttr.getX(i);
-        mergedNormals[(offset + i) * 3 + 1] = normAttr.getY(i);
-        mergedNormals[(offset + i) * 3 + 2] = normAttr.getZ(i);
-      }
-    }
-
-    offset += posAttr.count;
-  }
-
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
-  merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
-  merged.computeVertexNormals();
-  return merged;
+  return GeometryPipeline.mergeGeometries(geometries);
 }
 
 // ============================================================================

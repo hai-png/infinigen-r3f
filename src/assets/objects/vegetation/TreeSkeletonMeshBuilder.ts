@@ -15,6 +15,7 @@
 
 import * as THREE from 'three';
 import type { TreeSkeleton, TreeVertex, TreeEdge } from './SpaceColonization';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Configuration
@@ -504,6 +505,8 @@ export class TreeSkeletonMeshBuilder {
   /**
    * Merge multiple BufferGeometries into one, preserving the 'generation'
    * custom vertex attribute.
+   * Uses GeometryPipeline.mergeGeometries for the base merge, then
+   * re-adds the generation attribute.
    */
   private mergeGeometriesWithGeneration(
     geometries: THREE.BufferGeometry[]
@@ -511,63 +514,26 @@ export class TreeSkeletonMeshBuilder {
     if (geometries.length === 0) return this.createEmptyGeometry();
     if (geometries.length === 1) return geometries[0];
 
+    // Collect generation data before merging
     let totalVertices = 0;
-    let totalIndices = 0;
-
     for (const geo of geometries) {
       totalVertices += geo.attributes.position.count;
-      totalIndices += geo.index ? geo.index.count : 0;
     }
-
-    const mergedPositions = new Float32Array(totalVertices * 3);
-    const mergedNormals = new Float32Array(totalVertices * 3);
-    const mergedUVs = new Float32Array(totalVertices * 2);
     const mergedGeneration = new Float32Array(totalVertices);
-    const mergedIndices: number[] = [];
     let vertexOffset = 0;
 
     for (const geo of geometries) {
-      const posAttr = geo.attributes.position;
-      const normAttr = geo.attributes.normal;
-      const uvAttr = geo.attributes.uv;
       const genAttr = geo.attributes.generation;
-
-      for (let i = 0; i < posAttr.count; i++) {
-        mergedPositions[(vertexOffset + i) * 3] = posAttr.getX(i);
-        mergedPositions[(vertexOffset + i) * 3 + 1] = posAttr.getY(i);
-        mergedPositions[(vertexOffset + i) * 3 + 2] = posAttr.getZ(i);
-
-        if (normAttr) {
-          mergedNormals[(vertexOffset + i) * 3] = normAttr.getX(i);
-          mergedNormals[(vertexOffset + i) * 3 + 1] = normAttr.getY(i);
-          mergedNormals[(vertexOffset + i) * 3 + 2] = normAttr.getZ(i);
-        }
-
-        if (uvAttr) {
-          mergedUVs[(vertexOffset + i) * 2] = uvAttr.getX(i);
-          mergedUVs[(vertexOffset + i) * 2 + 1] = uvAttr.getY(i);
-        }
-
-        if (genAttr) {
+      if (genAttr) {
+        for (let i = 0; i < genAttr.count; i++) {
           mergedGeneration[vertexOffset + i] = genAttr.getX(i);
         }
       }
-
-      if (geo.index) {
-        for (let i = 0; i < geo.index.count; i++) {
-          mergedIndices.push(geo.index.getX(i) + vertexOffset);
-        }
-      }
-
-      vertexOffset += posAttr.count;
+      vertexOffset += geo.attributes.position.count;
     }
 
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
-    merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
-    merged.setAttribute('uv', new THREE.BufferAttribute(mergedUVs, 2));
+    const merged = GeometryPipeline.mergeGeometries(geometries);
     merged.setAttribute('generation', new THREE.BufferAttribute(mergedGeneration, 1));
-    merged.setIndex(mergedIndices);
 
     return merged;
   }

@@ -193,3 +193,54 @@ export {
   type AttractorGeneratorFn,
   type SpeciesAttractorPreset,
 } from './trees/TreeSpeciesPresets';
+
+// ── Overhaul Additions ─────────────────────────────────────────────────────
+
+// Shared vegetation types (canonical Season type, VegetationCategory, etc.)
+export type {
+  Season as VegetationSeason,
+  VegetationCategory,
+  SeasonalSpeciesCategory,
+  SeasonalWeights,
+  SeasonalColors,
+  SpeciesDescriptor,
+} from './types';
+export { SEASONS } from './types';
+
+// Species Registry — single source of truth for tree/plant species presets
+export {
+  SpeciesRegistry,
+  getSpeciesRegistry,
+  resetSpeciesRegistry,
+  type SpeciesEntry,
+} from './SpeciesRegistry';
+
+// Grass System — unified API for grass generation and scattering
+export {
+  GrassSystem,
+  type GrassBladeConfig,
+  type GrassFieldConfig,
+  type GrassScatterConfig,
+} from './GrassSystem';
+
+// Deformed Tree Generator
+export {
+  DeformedTreeGenerator,
+  createDeformedTree,
+  DEFORMED_TREE_VARIANTS,
+  type DeformedTreeVariant,
+  type DeformedTreeConfig,
+  type BarkRingParams,
+} from './trees/DeformedTreeGenerator';
+
+// Root System Generator (canonical 1006-line version)
+export {
+  RootSystemGenerator,
+  createRootGeometry,
+  generateRootSystemFromPreset,
+  generateRootSystem,
+  ROOT_PRESETS,
+  type RootSystemConfig,
+  type RootSegment,
+  type RootSystemResult,
+} from './trees/RootSystemGenerator';

@@ -23,6 +23,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom, seededNoise3D, seededFbm, hsvToRgb, clamp } from '@/core/util/MathUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Interfaces
@@ -775,60 +776,12 @@ function generateDepthColors(rng: SeededRandom): THREE.Color[] {
 
 /**
  * Merge multiple BufferGeometries into a single geometry.
- * Combines positions, normals, and indices with proper vertex offsets.
+ * Delegates to the canonical GeometryPipeline.mergeGeometries.
  */
 function mergeBufferGeometries(
   geometries: THREE.BufferGeometry[]
 ): THREE.BufferGeometry {
-  let totalVertices = 0;
-  let totalIndices = 0;
-
-  for (const geo of geometries) {
-    totalVertices += geo.attributes.position.count;
-    totalIndices += geo.index ? geo.index.count : geo.attributes.position.count;
-  }
-
-  const mergedPositions = new Float32Array(totalVertices * 3);
-  const mergedNormals = new Float32Array(totalVertices * 3);
-  const mergedIndices: number[] = [];
-  let vertexOffset = 0;
-
-  for (const geo of geometries) {
-    const posAttr = geo.attributes.position;
-    const normAttr = geo.attributes.normal;
-
-    for (let i = 0; i < posAttr.count; i++) {
-      mergedPositions[(vertexOffset + i) * 3] = posAttr.getX(i);
-      mergedPositions[(vertexOffset + i) * 3 + 1] = posAttr.getY(i);
-      mergedPositions[(vertexOffset + i) * 3 + 2] = posAttr.getZ(i);
-
-      if (normAttr) {
-        mergedNormals[(vertexOffset + i) * 3] = normAttr.getX(i);
-        mergedNormals[(vertexOffset + i) * 3 + 1] = normAttr.getY(i);
-        mergedNormals[(vertexOffset + i) * 3 + 2] = normAttr.getZ(i);
-      }
-    }
-
-    if (geo.index) {
-      for (let i = 0; i < geo.index.count; i++) {
-        mergedIndices.push(geo.index.getX(i) + vertexOffset);
-      }
-    } else {
-      for (let i = 0; i < posAttr.count; i++) {
-        mergedIndices.push(vertexOffset + i);
-      }
-    }
-
-    vertexOffset += posAttr.count;
-  }
-
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
-  merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
-  merged.setIndex(mergedIndices);
-  merged.computeVertexNormals();
-
-  return merged;
+  return GeometryPipeline.mergeGeometries(geometries);
 }
 
 // ============================================================================

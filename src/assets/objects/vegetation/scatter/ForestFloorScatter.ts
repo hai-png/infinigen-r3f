@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
 import { NoiseUtils } from '@/core/util/math/noise';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Types
@@ -475,38 +476,8 @@ export class ForestFloorScatter {
   }
 
   private mergeGeos(geo1: THREE.BufferGeometry, geo2: THREE.BufferGeometry, offset: THREE.Vector3): THREE.BufferGeometry {
-    const pos1 = geo1.attributes.position;
-    const pos2 = geo2.attributes.position;
-    const norm1 = geo1.attributes.normal;
-    const norm2 = geo2.attributes.normal;
-    const totalVerts = pos1.count + pos2.count;
-    const positions = new Float32Array(totalVerts * 3);
-    const normals = new Float32Array(totalVerts * 3);
-    const indices: number[] = [];
-
-    for (let i = 0; i < pos1.count; i++) {
-      positions[i * 3] = pos1.getX(i);
-      positions[i * 3 + 1] = pos1.getY(i);
-      positions[i * 3 + 2] = pos1.getZ(i);
-      if (norm1) { normals[i * 3] = norm1.getX(i); normals[i * 3 + 1] = norm1.getY(i); normals[i * 3 + 2] = norm1.getZ(i); }
-    }
-
-    const o = pos1.count;
-    for (let i = 0; i < pos2.count; i++) {
-      positions[(o + i) * 3] = pos2.getX(i) + offset.x;
-      positions[(o + i) * 3 + 1] = pos2.getY(i) + offset.y;
-      positions[(o + i) * 3 + 2] = pos2.getZ(i) + offset.z;
-      if (norm2) { normals[(o + i) * 3] = norm2.getX(i); normals[(o + i) * 3 + 1] = norm2.getY(i); normals[(o + i) * 3 + 2] = norm2.getZ(i); }
-    }
-
-    if (geo1.index) { for (let i = 0; i < geo1.index.count; i++) indices.push(geo1.index.getX(i)); }
-    if (geo2.index) { for (let i = 0; i < geo2.index.count; i++) indices.push(geo2.index.getX(i) + o); }
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-    if (indices.length > 0) merged.setIndex(indices);
-    merged.computeVertexNormals();
-    return merged;
+    // Offset the second geometry before merging
+    geo2.translate(offset.x, offset.y, offset.z);
+    return GeometryPipeline.mergeGeometries([geo1, geo2]);
   }
 }

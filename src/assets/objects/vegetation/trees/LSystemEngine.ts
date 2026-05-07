@@ -25,6 +25,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Interfaces
@@ -417,65 +418,7 @@ export class LSystemEngine {
   }
 
   private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-    if (geometries.length === 0) return new THREE.BufferGeometry();
-
-    let totalVertices = 0;
-    let totalIndices = 0;
-
-    for (const geo of geometries) {
-      totalVertices += geo.attributes.position.count;
-      totalIndices += geo.index ? geo.index.count : geo.attributes.position.count;
-    }
-
-    const mergedPositions = new Float32Array(totalVertices * 3);
-    const mergedNormals = new Float32Array(totalVertices * 3);
-    const mergedUVs = new Float32Array(totalVertices * 2);
-    const mergedIndices: number[] = [];
-    let vertexOffset = 0;
-
-    for (const geo of geometries) {
-      const posAttr = geo.attributes.position;
-      const normAttr = geo.attributes.normal;
-      const uvAttr = geo.attributes.uv;
-
-      for (let i = 0; i < posAttr.count; i++) {
-        mergedPositions[(vertexOffset + i) * 3] = posAttr.getX(i);
-        mergedPositions[(vertexOffset + i) * 3 + 1] = posAttr.getY(i);
-        mergedPositions[(vertexOffset + i) * 3 + 2] = posAttr.getZ(i);
-
-        if (normAttr) {
-          mergedNormals[(vertexOffset + i) * 3] = normAttr.getX(i);
-          mergedNormals[(vertexOffset + i) * 3 + 1] = normAttr.getY(i);
-          mergedNormals[(vertexOffset + i) * 3 + 2] = normAttr.getZ(i);
-        }
-
-        if (uvAttr) {
-          mergedUVs[(vertexOffset + i) * 2] = uvAttr.getX(i);
-          mergedUVs[(vertexOffset + i) * 2 + 1] = uvAttr.getY(i);
-        }
-      }
-
-      if (geo.index) {
-        for (let i = 0; i < geo.index.count; i++) {
-          mergedIndices.push(geo.index.getX(i) + vertexOffset);
-        }
-      } else {
-        for (let i = 0; i < posAttr.count; i++) {
-          mergedIndices.push(vertexOffset + i);
-        }
-      }
-
-      vertexOffset += posAttr.count;
-    }
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
-    merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
-    merged.setAttribute('uv', new THREE.BufferAttribute(mergedUVs, 2));
-    merged.setIndex(mergedIndices);
-    merged.computeVertexNormals();
-
-    return merged;
+    return GeometryPipeline.mergeGeometries(geometries);
   }
 }
 
@@ -680,65 +623,8 @@ export function generateLSystemTree(
 }
 
 /**
- * Merge BufferGeometries utility
+ * Merge BufferGeometries utility — delegates to canonical GeometryPipeline.
  */
 function mergeBufferGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  if (geometries.length === 0) return new THREE.BufferGeometry();
-  if (geometries.length === 1) return geometries[0];
-
-  let totalVertices = 0;
-  let totalIndices = 0;
-
-  for (const geo of geometries) {
-    totalVertices += geo.attributes.position.count;
-    totalIndices += geo.index ? geo.index.count : geo.attributes.position.count;
-  }
-
-  const positions = new Float32Array(totalVertices * 3);
-  const normals = new Float32Array(totalVertices * 3);
-  const uvs = new Float32Array(totalVertices * 2);
-  const indices: number[] = [];
-  let offset = 0;
-
-  for (const geo of geometries) {
-    const pos = geo.attributes.position;
-    const norm = geo.attributes.normal;
-    const uv = geo.attributes.uv;
-
-    for (let i = 0; i < pos.count; i++) {
-      positions[(offset + i) * 3] = pos.getX(i);
-      positions[(offset + i) * 3 + 1] = pos.getY(i);
-      positions[(offset + i) * 3 + 2] = pos.getZ(i);
-      if (norm) {
-        normals[(offset + i) * 3] = norm.getX(i);
-        normals[(offset + i) * 3 + 1] = norm.getY(i);
-        normals[(offset + i) * 3 + 2] = norm.getZ(i);
-      }
-      if (uv) {
-        uvs[(offset + i) * 2] = uv.getX(i);
-        uvs[(offset + i) * 2 + 1] = uv.getY(i);
-      }
-    }
-
-    if (geo.index) {
-      for (let i = 0; i < geo.index.count; i++) {
-        indices.push(geo.index.getX(i) + offset);
-      }
-    } else {
-      for (let i = 0; i < pos.count; i++) {
-        indices.push(offset + i);
-      }
-    }
-
-    offset += pos.count;
-  }
-
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-  merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-  merged.setIndex(indices);
-  merged.computeVertexNormals();
-
-  return merged;
+  return GeometryPipeline.mergeGeometries(geometries);
 }

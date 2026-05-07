@@ -21,6 +21,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Root System Types
@@ -485,48 +486,10 @@ export class RootSystemGenerator {
 
   /**
    * Merge multiple BufferGeometries into one.
+   * Delegates to the canonical GeometryPipeline.mergeGeometries.
    */
   private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const indices: number[] = [];
-    let vertexOffset = 0;
-
-    for (const geo of geometries) {
-      const posAttr = geo.getAttribute('position');
-      const normAttr = geo.getAttribute('normal');
-      const idxAttr = geo.getIndex();
-
-      if (!posAttr) continue;
-
-      for (let i = 0; i < posAttr.count; i++) {
-        positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-        if (normAttr) {
-          normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
-        }
-      }
-
-      if (idxAttr) {
-        for (let i = 0; i < idxAttr.count; i++) {
-          indices.push(idxAttr.getX(i) + vertexOffset);
-        }
-      }
-
-      vertexOffset += posAttr.count;
-      geo.dispose();
-    }
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    if (normals.length > 0) {
-      merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    }
-    if (indices.length > 0) {
-      merged.setIndex(indices);
-    }
-
-    merged.computeVertexNormals();
-    return merged;
+    return GeometryPipeline.mergeGeometries(geometries);
   }
 }
 
