@@ -5,7 +5,7 @@
  */
 
 import { Vector3, Quaternion } from 'three';
-import type { CompositionTemplate } from '../CompositionEngine';
+import type { CompositionTemplate } from '../types';
 
 /**
  * Living Room Template

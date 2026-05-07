@@ -4,7 +4,7 @@
  * Provides automated scene composition through rules, constraints, and templates.
  */
 
-// Core engine
+// Core engine (thin orchestrator — delegates to extracted modules)
 export {
   CompositionEngine,
   compositionEngine,
@@ -12,8 +12,9 @@ export {
   AestheticPrinciple,
 } from './CompositionEngine';
 
-// Types
+// Types (canonical definitions in types.ts, re-exported via CompositionEngine)
 export type {
+  SceneGraphNode,
   CompositionRule,
   CompositionConstraint,
   CompositionTemplate,
@@ -22,7 +23,14 @@ export type {
   CompositionContext,
   CompositionResult,
   CompositionMetrics,
+  CompositionConflict,
 } from './CompositionEngine';
+
+// Extracted modules (available for direct use)
+export { CompositionRules } from './CompositionRules';
+export { SpatialIndex, generateVisibilitySamplePoints, computeLateralOverlap } from './SpatialIndex';
+export type { CompositionConflict as SpatialConflict } from './SpatialIndex';
+export { CompositionScorer } from './CompositionScorer';
 
 // Basic rules
 export {

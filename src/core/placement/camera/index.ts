@@ -101,8 +101,15 @@ export {
   calculateEquivalentFocalLength,
   calculateExposureValue,
   applyCameraProperties,
-  CAMERA_PRESETS,
+  CAMERA_PRESETS as PLACEMENT_CAMERA_PRESETS,
 } from './CameraProperties';
+
+// Camera pose search engine (extracted from DensityPlacementSystem)
+export {
+  CameraPoseSearchEngine,
+  type CameraConstraint,
+  type CameraPoseResult,
+} from './CameraPoseSearchEngine';
 
 // Trajectories (consolidated implementations)
 export {

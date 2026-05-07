@@ -8,7 +8,7 @@
 import { Vector3, Euler } from 'three';
 import { Variable, ConstraintNode } from '../../constraints/language/types';
 import { item } from '../../constraints/language/constants';
-import { Tag } from '../../constraints/tags/index';
+import { Tag as UnifiedTag } from '../../UnifiedTagSystem';
 import {
   Visible,
   Proximity,

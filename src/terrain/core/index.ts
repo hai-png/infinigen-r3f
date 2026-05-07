@@ -13,7 +13,7 @@
 
 export {
   TerrainGenerator,
-  type TerrainData,
+  type TerrainData as TerrainCoreData,
   type MaskMap,
   type TerrainConfig,
   type TerrainGeneratorConfig,

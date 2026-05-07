@@ -5,8 +5,8 @@
  */
 
 import { Vector3, Quaternion, Matrix4, Box3, Sphere } from 'three';
-import type { CompositionRule, CompositionContext, CompositionResult } from '../CompositionEngine';
-import { SpatialRelation, AestheticPrinciple } from '../CompositionEngine';
+import type { CompositionRule, CompositionContext, CompositionResult } from '../types';
+import { SpatialRelation, AestheticPrinciple } from '../types';
 
 /**
  * Rule: Center object in bounds
@@ -43,8 +43,8 @@ export const centerObjectRule: CompositionRule = {
     const center = context.center?.clone() || new Vector3();
     
     // Apply axis-specific centering
-    const axis = centerObjectRule.parameters.axis || 'xz';
-    const offset = centerObjectRule.parameters.offset || { x: 0, y: 0, z: 0 };
+    const axis = (centerObjectRule.parameters.axis as string) || 'xz';
+    const offset = (centerObjectRule.parameters.offset as Record<string, number>) || { x: 0, y: 0, z: 0 };
     
     if (axis.includes('x')) center.x += offset.x || 0;
     if (axis.includes('y')) center.y += offset.y || 0;
@@ -96,10 +96,10 @@ export const alignObjectsRule: CompositionRule = {
 
     if (context.existingObjects.length < 2) return result;
 
-    const axis = alignObjectsRule.parameters.axis || 'x';
-    const spacing = alignObjectsRule.parameters.spacing || 1.0;
-    const alignTo = alignObjectsRule.parameters.alignTo || 'center';
-    const startOffset = alignObjectsRule.parameters.startOffset || 0;
+    const axis = (alignObjectsRule.parameters.axis as string) || 'x';
+    const spacing = (alignObjectsRule.parameters.spacing as number) || 1.0;
+    const alignTo = (alignObjectsRule.parameters.alignTo as string) || 'center';
+    const startOffset = (alignObjectsRule.parameters.startOffset as number) || 0;
 
     // Sort objects by their current position on the axis
     const sorted = [...context.existingObjects].sort((a, b) => {
@@ -183,11 +183,11 @@ export const gridDistributionRule: CompositionRule = {
       },
     };
 
-    const columns = gridDistributionRule.parameters.columns || 3;
-    const rows = gridDistributionRule.parameters.rows || 3;
-    const xSpacing = gridDistributionRule.parameters.xSpacing || 1.0;
-    const ySpacing = gridDistributionRule.parameters.ySpacing || 1.0;
-    const zSpacing = gridDistributionRule.parameters.zSpacing || 0;
+    const columns = (gridDistributionRule.parameters.columns as number) || 3;
+    const rows = (gridDistributionRule.parameters.rows as number) || 3;
+    const xSpacing = (gridDistributionRule.parameters.xSpacing as number) || 1.0;
+    const ySpacing = (gridDistributionRule.parameters.ySpacing as number) || 1.0;
+    const zSpacing = (gridDistributionRule.parameters.zSpacing as number) || 0;
     const centerGrid = gridDistributionRule.parameters.centerGrid !== false;
 
     const totalObjects = Math.min(context.existingObjects.length, columns * rows);
@@ -258,10 +258,10 @@ export const radialArrangementRule: CompositionRule = {
 
     if (context.existingObjects.length < 2) return result;
 
-    const radius = radialArrangementRule.parameters.radius || 2.0;
-    const startAngle = radialArrangementRule.parameters.startAngle || 0;
-    const endAngle = radialArrangementRule.parameters.endAngle || Math.PI * 2;
-    const axis = radialArrangementRule.parameters.axis || 'y';
+    const radius = (radialArrangementRule.parameters.radius as number) || 2.0;
+    const startAngle = (radialArrangementRule.parameters.startAngle as number) || 0;
+    const endAngle = (radialArrangementRule.parameters.endAngle as number) || Math.PI * 2;
+    const axis = (radialArrangementRule.parameters.axis as string) || 'y';
     const faceCenter = radialArrangementRule.parameters.faceCenter !== false;
 
     const angleStep = (endAngle - startAngle) / (context.existingObjects.length - 1);
@@ -347,9 +347,9 @@ export const separationRule: CompositionRule = {
 
     if (context.existingObjects.length < 2) return result;
 
-    const minDistance = separationRule.parameters.minDistance || 0.5;
-    const maxIterations = separationRule.parameters.maxIterations || 10;
-    const relaxationFactor = separationRule.parameters.relaxationFactor || 0.3;
+    const minDistance = (separationRule.parameters.minDistance as number) || 0.5;
+    const maxIterations = (separationRule.parameters.maxIterations as number) || 10;
+    const relaxationFactor = (separationRule.parameters.relaxationFactor as number) || 0.3;
 
     // Create working copies of positions
     const positions = context.existingObjects.map(obj => 
@@ -427,7 +427,7 @@ export const symmetryRule: CompositionRule = {
 
     if (context.existingObjects.length < 2) return result;
 
-    const axis = symmetryRule.parameters.axis || 'x';
+    const axis = (symmetryRule.parameters.axis as string) || 'x';
     const center = context.center || new Vector3();
     const pairsParam = symmetryRule.parameters.pairs;
 

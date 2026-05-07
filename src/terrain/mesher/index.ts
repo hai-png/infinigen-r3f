@@ -7,7 +7,7 @@ export { TerrainMesher } from './TerrainMesher';
 export type { MeshConfig, ChunkData } from './TerrainMesher';
 
 export { SphericalMesher, OpaqueSphericalMesher, TransparentSphericalMesher } from './SphericalMesher';
-export type { SphericalMesherConfig, CameraPose } from './SphericalMesher';
+export type { SphericalMesherConfig, CameraPose as SphericalCameraPose } from './SphericalMesher';
 
 export { UniformMesher } from './UniformMesher';
 export type { UniformMesherConfig } from './UniformMesher';
