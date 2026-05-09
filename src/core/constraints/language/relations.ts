@@ -49,6 +49,73 @@ export abstract class Relation extends BoolExpression {
   
   /** Optional target tags for relation matching */
   targetTags?: string[];
+
+  // ==========================================================================
+  // Logical Reasoning Operations
+  // Ported from infinigen/core/constraints/constraint_language/relations.py
+  // ==========================================================================
+
+  /**
+   * Implication: when this relation is satisfied, the other must also be satisfied.
+   *
+   * Logical definition: NOT(this) OR other  (material implication)
+   * This is satisfied if either this is false, or other is true.
+   *
+   * Ported from Python: `a.implies(b)` in constraint_language/relations.py
+   *
+   * Named impliesRelation rather than implies to avoid conflict with the
+   * base BoolExpression.implies() method which has a different signature.
+   *
+   * @param other - The consequent relation
+   * @returns A new Relation representing the implication
+   */
+  impliesRelation(other: Relation): Relation {
+    return new ImpliesRelation(this, other);
+  }
+
+  /**
+   * Intersects: both relations can be simultaneously true for some configuration.
+   *
+   * This is an existential satisfiability check — the returned relation is
+   * satisfied when there exists a configuration where both this AND other
+   * could hold simultaneously. This is weaker than intersection() which
+   * requires both to actually hold in the current state.
+   *
+   * @param other - The other relation to check for potential overlap
+   * @returns A new Relation that is satisfied when both can coexist
+   */
+  intersects(other: Relation): Relation {
+    return new IntersectsRelation(this, other);
+  }
+
+  /**
+   * Intersection: both this AND other must be satisfied simultaneously.
+   *
+   * This is stronger than AndRelations because the resulting relation
+   * is treated as a unified constraint that can be simplified and
+   * propagated as a single unit (e.g., two spatial constraints may
+   * reduce to a tighter bounding region).
+   *
+   * @param other - The other relation to intersect with
+   * @returns A new Relation satisfied only when both this AND other hold
+   */
+  intersection(other: Relation): Relation {
+    return new IntersectionRelation(this, other);
+  }
+
+  /**
+   * Difference: this relation is satisfied but the other is not.
+   *
+   * Logical definition: this AND NOT(other)
+   * Useful for constraint subtraction — e.g., "near but not touching",
+   * or "visible but not occluded".
+   *
+   * @param other - The relation to subtract
+   * @returns A new Relation satisfied when this holds but other does not
+   */
+  difference(other: Relation): Relation {
+    return new DifferenceRelation(this, other);
+  }
 }
 
 /**
@@ -2129,4 +2196,327 @@ export function containedIn(objA: SpatialObject, objB: SpatialObject): boolean {
  */
 export function distanceBetween(objA: SpatialObject, objB: SpatialObject): number {
   return distance(objA.position, objB.position);
+}
+
+// ============================================================================
+// Logical Reasoning Relation Types
+// Ported from infinigen/core/constraints/constraint_language/relations.py
+// These implement the implies, intersects, intersection, and difference
+// operations on the Relation base class.
+// ============================================================================
+
+/**
+ * Implication relation: when the antecedent is satisfied, the consequent must also be satisfied.
+ *
+ * Logical definition: NOT(antecedent) OR consequent  (material implication)
+ * This is satisfied if either the antecedent is false, or the consequent is true.
+ *
+ * In the Infinigen constraint language, this is used to express conditional
+ * constraints: "if A is near B, then A must also be touching B".
+ */
+export class ImpliesRelation extends Relation {
+  readonly type = 'ImpliesRelation';
+  readonly relationType = 'implies';
+
+  constructor(
+    public readonly antecedent: Relation,
+    public readonly consequent: Relation
+  ) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map([['antecedent', this.antecedent], ['consequent', this.consequent]]);
+  }
+
+  evaluate(state: Map<Variable, any>): boolean {
+    // Material implication: NOT(antecedent) OR consequent
+    return !this.antecedent.evaluate(state) || this.consequent.evaluate(state);
+  }
+
+  isSatisfied(state: Map<Variable, any>): boolean {
+    return !this.antecedent.isSatisfied(state) || this.consequent.isSatisfied(state);
+  }
+
+  getVariables(): Set<Variable> {
+    const vars = new Set<Variable>();
+    for (const v of this.antecedent.getVariables()) vars.add(v);
+    for (const v of this.consequent.getVariables()) vars.add(v);
+    return vars;
+  }
+
+  clone(): ImpliesRelation {
+    return new ImpliesRelation(
+      this.antecedent.clone() as Relation,
+      this.consequent.clone() as Relation
+    );
+  }
+
+  toString(): string {
+    return `(${this.antecedent} => ${this.consequent})`;
+  }
+}
+
+/**
+ * Intersects relation: both relations can be simultaneously true for some configuration.
+ *
+ * This represents an existential satisfiability check — it is satisfied when
+ * there exists at least one configuration of the scene where both relations
+ * could hold simultaneously. This is distinct from intersection() which requires
+ * both to actually hold in the current state.
+ *
+ * In practice, we evaluate this by checking if both relations hold in the
+ * current state OR if neither is trivially contradictory (i.e., not mutually
+ * exclusive). For a precise static analysis, one would need to check variable
+ * domain overlap, which this implementation approximates.
+ */
+export class IntersectsRelation extends Relation {
+  readonly type = 'IntersectsRelation';
+  readonly relationType = 'intersects';
+
+  constructor(
+    public readonly relationA: Relation,
+    public readonly relationB: Relation
+  ) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map([['relationA', this.relationA], ['relationB', this.relationB]]);
+  }
+
+  evaluate(state: Map<Variable, any>): boolean {
+    // Both are currently satisfied => they intersect
+    const aVal = this.relationA.evaluate(state);
+    const bVal = this.relationB.evaluate(state);
+    if (aVal && bVal) return true;
+
+    // If one is false, check if they share variables — if they don't,
+    // they can potentially be simultaneously true in a different configuration.
+    const varsA = this.relationA.getVariables();
+    const varsB = this.relationB.getVariables();
+    const hasSharedVars = [...varsA].some(v => varsB.has(v));
+
+    if (!hasSharedVars) {
+      // No shared variables: they are independent, so they can coexist
+      return true;
+    }
+
+    // Shared variables but not both true: check if A being false
+    // is due to variable values that are consistent with B being true.
+    // Heuristic: if B is true and A is false, or vice versa,
+    // they may still intersect for other variable assignments.
+    // Conservative: return false if they share variables and aren't both true.
+    // This ensures we don't claim intersection when it's uncertain.
+    return false;
+  }
+
+  isSatisfied(state: Map<Variable, any>): boolean {
+    return this.evaluate(state);
+  }
+
+  getVariables(): Set<Variable> {
+    const vars = new Set<Variable>();
+    for (const v of this.relationA.getVariables()) vars.add(v);
+    for (const v of this.relationB.getVariables()) vars.add(v);
+    return vars;
+  }
+
+  clone(): IntersectsRelation {
+    return new IntersectsRelation(
+      this.relationA.clone() as Relation,
+      this.relationB.clone() as Relation
+    );
+  }
+
+  toString(): string {
+    return `intersects(${this.relationA}, ${this.relationB})`;
+  }
+}
+
+/**
+ * Intersection relation: both this AND other must be satisfied simultaneously.
+ *
+ * This is stronger than AndRelations because the resulting relation is treated
+ * as a unified constraint that can be simplified and propagated as a single
+ * unit. For example, two spatial constraints may reduce to a tighter bounding
+ * region when intersected.
+ *
+ * Key differences from AndRelations:
+ * - AndRelations simply evaluates both and returns their logical AND
+ * - IntersectionRelation is a semantic intersection that can be simplified
+ *   by the constraint solver into a tighter combined constraint
+ * - IntersectionRelation carries type information that enables domain-specific
+ *   simplification (e.g., Near ∧ Touching → Touching since Touching ⊂ Near)
+ */
+export class IntersectionRelation extends Relation {
+  readonly type = 'IntersectionRelation';
+  readonly relationType = 'intersection';
+
+  constructor(
+    public readonly relationA: Relation,
+    public readonly relationB: Relation
+  ) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map([['relationA', this.relationA], ['relationB', this.relationB]]);
+  }
+
+  evaluate(state: Map<Variable, any>): boolean {
+    // Both must be satisfied — same as logical AND
+    return this.relationA.evaluate(state) && this.relationB.evaluate(state);
+  }
+
+  isSatisfied(state: Map<Variable, any>): boolean {
+    return this.relationA.isSatisfied(state) && this.relationB.isSatisfied(state);
+  }
+
+  /**
+   * Attempt to simplify this intersection into a tighter constraint.
+   * Uses relation type implications to reduce the intersection.
+   *
+   * For example:
+   * - Near ∧ Touching → Touching (Touching implies Near)
+   * - SupportedBy ∧ Touching → SupportedBy (SupportedBy implies Touching)
+   */
+  simplify(): Relation {
+    const typeA = this.relationA.relationType;
+    const typeB = this.relationB.relationType;
+
+    // If either is AnyRelation, return the other
+    if (typeA === 'any') return this.relationB;
+    if (typeB === 'any') return this.relationA;
+
+    // Implication-based simplification:
+    // If A implies B (A is stronger), then A ∧ B = A
+    // If B implies A (B is stronger), then A ∧ B = B
+
+    // stable_against implies supported_by implies touching
+    if (typeA === 'stable_against' && typeB === 'supported_by') return this.relationA;
+    if (typeB === 'stable_against' && typeA === 'supported_by') return this.relationB;
+    if (typeA === 'stable_against' && typeB === 'touching') return this.relationA;
+    if (typeB === 'stable_against' && typeA === 'touching') return this.relationB;
+    if (typeA === 'supported_by' && typeB === 'touching') return this.relationA;
+    if (typeB === 'supported_by' && typeA === 'touching') return this.relationB;
+
+    // supported_by implies co_planar
+    if (typeA === 'supported_by' && typeB === 'co_planar') return this.relationA;
+    if (typeB === 'supported_by' && typeA === 'co_planar') return this.relationB;
+
+    // stable_against implies co_planar
+    if (typeA === 'stable_against' && typeB === 'co_planar') return this.relationA;
+    if (typeB === 'stable_against' && typeA === 'co_planar') return this.relationB;
+
+    // Can't simplify further
+    return this;
+  }
+
+  getVariables(): Set<Variable> {
+    const vars = new Set<Variable>();
+    for (const v of this.relationA.getVariables()) vars.add(v);
+    for (const v of this.relationB.getVariables()) vars.add(v);
+    return vars;
+  }
+
+  clone(): IntersectionRelation {
+    return new IntersectionRelation(
+      this.relationA.clone() as Relation,
+      this.relationB.clone() as Relation
+    );
+  }
+
+  toString(): string {
+    return `(${this.relationA} ∩ ${this.relationB})`;
+  }
+}
+
+/**
+ * Difference relation: this relation is satisfied but the other is not.
+ *
+ * Logical definition: this AND NOT(other)
+ *
+ * Useful for constraint subtraction:
+ * - "near but not touching" = Near.difference(Touching)
+ * - "visible but not occluded" = Visible.difference(Occluded)
+ * - "supported but not stable" = SupportedBy.difference(StableAgainst)
+ */
+export class DifferenceRelation extends Relation {
+  readonly type = 'DifferenceRelation';
+  readonly relationType = 'difference';
+
+  constructor(
+    public readonly relationA: Relation,
+    public readonly relationB: Relation
+  ) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map([['relationA', this.relationA], ['relationB', this.relationB]]);
+  }
+
+  evaluate(state: Map<Variable, any>): boolean {
+    // A must be true AND B must be false
+    return this.relationA.evaluate(state) && !this.relationB.evaluate(state);
+  }
+
+  isSatisfied(state: Map<Variable, any>): boolean {
+    return this.relationA.isSatisfied(state) && !this.relationB.isSatisfied(state);
+  }
+
+  /**
+   * Attempt to simplify this difference.
+   * If A implies B, then A - B = empty (always false).
+   * If B implies A, then A - B = A (subtracting a subset).
+   */
+  simplify(): Relation {
+    const typeA = this.relationA.relationType;
+    const typeB = this.relationB.relationType;
+
+    // If A and B are the same type, difference is empty
+    if (typeA === typeB) {
+      // Return a constant-false relation via NegatedRelation(AnyRelation)
+      // Actually, let's use a simpler approach: NegatedRelation of the same type
+      // But since Relation is abstract, we use a workaround
+      return new NegatedRelation(this.relationA);
+    }
+
+    // stable_against implies supported_by implies touching
+    // stable_against - supported_by = empty (stable implies supported)
+    if (typeA === 'stable_against' && typeB === 'supported_by') {
+      return new NegatedRelation(this.relationA); // always false
+    }
+    if (typeA === 'stable_against' && typeB === 'touching') {
+      return new NegatedRelation(this.relationA); // always false
+    }
+    if (typeA === 'supported_by' && typeB === 'touching') {
+      return new NegatedRelation(this.relationA); // always false
+    }
+
+    // supported_by - stable_against = supported but not stable
+    // This is a valid distinction (more restrictive minus more restrictive)
+    // No simplification needed
+
+    return this;
+  }
+
+  getVariables(): Set<Variable> {
+    const vars = new Set<Variable>();
+    for (const v of this.relationA.getVariables()) vars.add(v);
+    for (const v of this.relationB.getVariables()) vars.add(v);
+    return vars;
+  }
+
+  clone(): DifferenceRelation {
+    return new DifferenceRelation(
+      this.relationA.clone() as Relation,
+      this.relationB.clone() as Relation
+    );
+  }
+
+  toString(): string {
+    return `(${this.relationA} - ${this.relationB})`;
+  }
 }

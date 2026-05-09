@@ -109,6 +109,8 @@ export {
   CameraPoseSearchEngine,
   type CameraConstraint,
   type CameraPoseResult,
+  type TagCoverageConstraint,
+  type CameraSearchConfig,
 } from './CameraPoseSearchEngine';
 
 // Camera orchestrator — unified camera placement and composition (System A Phase B)
@@ -116,19 +118,33 @@ export {
   CameraOrchestrator,
   type CameraOrchestratorConfig,
   type CameraOrchestratorResult,
+  type TrajectoryValidationResult,
 } from './CameraOrchestrator';
 
 // Camera registry — strategy pattern for trajectory types (System A Phase B)
 export {
   CameraRegistry,
   type TrajectoryGenerator,
+  type TerrainHeightSampler,
   DollyTrajectory,
   CraneTrajectory,
   OrbitTrajectory,
   HandheldTrajectory,
   TrackingTrajectory,
   PanTiltTrajectory,
+  AltitudeWalkTrajectory,
 } from './CameraRegistry';
+
+// Camera rig system — stereo and multiview camera hierarchies
+export {
+  CameraRig as PlacementCameraRig,
+  type ChildCameraDescriptor,
+  type StereoRigConfig,
+  type MultiviewRigConfig,
+  type CameraRigResult,
+  DEFAULT_STEREO_RIG_CONFIG,
+  DEFAULT_MULTIVIEW_RIG_CONFIG,
+} from './CameraRig';
 
 // Trajectories (consolidated implementations)
 export {

@@ -18,6 +18,7 @@ import {
   getForward,
   directionTo,
   dot,
+  normalize,
   aabbOverlapAreaXZ,
   aabbDistance,
   aabbContainedIn,
@@ -1329,4 +1330,1130 @@ export class AngleAlignmentCost extends GeometryPredicate {
   toString(): string {
     return `AngleAlignmentCost(${this.objs}, ${this.others})`;
   }
+}
+
+// ============================================================================
+// Missing Geometry Cost Functions
+// Ported from infinigen/core/constraints/constraint_language/geometry.py
+// These implement the focusScore, angleAlignmentCost, freespace2D, minDist2D,
+// rotationalAsymmetry, reflectionalAsymmetry, and coplanarityCost functions.
+// ============================================================================
+
+/**
+ * Camera Focus Score — measures how centered/visible the object is in the camera view.
+ *
+ * Returns a value from 0 to 1 where:
+ * - 1.0 = object is perfectly centered in the camera view and close
+ * - 0.0 = object is outside the camera view or very far away
+ *
+ * This differs from the existing FocusScore class which measures how directly
+ * a viewer faces the object. CameraFocusScore measures camera-centric visibility:
+ * it considers the angular distance from the camera's view center, the object's
+ * distance from the camera, and whether the object is in front of the camera.
+ *
+ * The camera is obtained from the state via the '__camera' key, or defaults
+ * to a camera at origin looking down -Z.
+ */
+export class CameraFocusScore extends GeometryPredicate {
+  readonly type = 'CameraFocusScore';
+  readonly predicateType = 'CameraFocusScore';
+
+  constructor(public readonly obj: ObjectSetExpression) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length === 0) return 0;
+
+    // Get camera position and direction from state, or use defaults
+    const stateAny = state as Map<any, any>;
+    const camera = stateAny.get('__camera');
+    let camPos: [number, number, number] = [0, 1, 5];
+    let camFwd: [number, number, number] = [0, 0, -1];
+    let fov: number = Math.PI / 3; // 60 degrees default
+
+    if (camera) {
+      if (camera.position) camPos = toVec3(camera.position);
+      if (camera.forward) camFwd = normalize(toVec3(camera.forward));
+      if (typeof camera.fov === 'number') fov = camera.fov;
+    }
+
+    let maxScore = 0;
+    for (const obj of objects) {
+      const objPos = toVec3(obj.position);
+
+      // Vector from camera to object
+      const toObj: [number, number, number] = [
+        objPos[0] - camPos[0],
+        objPos[1] - camPos[1],
+        objPos[2] - camPos[2],
+      ];
+      const dist = Math.sqrt(toObj[0] * toObj[0] + toObj[1] * toObj[1] + toObj[2] * toObj[2]);
+
+      if (dist < 0.001) {
+        maxScore = Math.max(maxScore, 1.0);
+        continue;
+      }
+
+      // Normalize direction
+      const dir: [number, number, number] = [toObj[0] / dist, toObj[1] / dist, toObj[2] / dist];
+
+      // Angle from camera forward direction
+      const cosAngle = dot(dir, camFwd);
+      if (cosAngle <= 0) continue; // Behind camera
+
+      const angle = Math.acos(Math.min(1, cosAngle));
+      const halfFov = fov / 2;
+
+      // Angular score: 1.0 at center, 0.0 at edge of FOV
+      const angularScore = Math.max(0, 1 - angle / halfFov);
+      if (angularScore <= 0) continue; // Outside FOV
+
+      // Distance score: closer objects score higher (inverse distance, capped)
+      const distScore = Math.max(0, 1 - dist / 50); // 50m = max useful distance
+
+      // Combined score: angular is primary, distance is secondary
+      const score = angularScore * (0.7 + 0.3 * distScore);
+
+      maxScore = Math.max(maxScore, score);
+    }
+
+    return Math.min(1, Math.max(0, maxScore));
+  }
+
+  clone(): CameraFocusScore {
+    return new CameraFocusScore(this.obj.clone() as ObjectSetExpression);
+  }
+
+  toString(): string {
+    return `focusScore(${this.obj})`;
+  }
+}
+
+/**
+ * Rotation Alignment Cost — cost (0-1) of how much the object's rotation deviates
+ * from a target angle.
+ *
+ * This differs from the existing AngleAlignmentCost which compares forward
+ * directions between two object sets. This version compares a single object's
+ * rotation (around the Y axis) against a specified target angle.
+ *
+ * Returns:
+ * - 0.0 = object's rotation exactly matches the target angle
+ * - 1.0 = object's rotation is maximally misaligned (180° off)
+ */
+export class RotationAlignmentCost extends GeometryPredicate {
+  readonly type = 'RotationAlignmentCost';
+  readonly predicateType = 'RotationAlignmentCost';
+
+  constructor(
+    public readonly obj: ObjectSetExpression,
+    public readonly targetAngle: number
+  ) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length === 0) return 1;
+
+    let totalCost = 0;
+    for (const obj of objects) {
+      // Extract Y-axis rotation from the object's forward direction
+      const fwd = getForward(obj);
+
+      // Compute the angle of the forward direction projected onto the XZ plane
+      const fwdAngle = Math.atan2(fwd[2], fwd[0]);
+
+      // Angular difference between object's rotation and target
+      let angleDiff = fwdAngle - this.targetAngle;
+
+      // Normalize to [-PI, PI]
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+      // Cost is normalized: 0 at 0° deviation, 1 at 180° deviation
+      const cost = Math.abs(angleDiff) / Math.PI;
+      totalCost += cost;
+    }
+
+    return Math.min(1, totalCost / objects.length);
+  }
+
+  clone(): RotationAlignmentCost {
+    return new RotationAlignmentCost(
+      this.obj.clone() as ObjectSetExpression,
+      this.targetAngle
+    );
+  }
+
+  toString(): string {
+    return `angleAlignmentCost(${this.obj}, ${this.targetAngle})`;
+  }
+}
+
+/**
+ * Object Freespace 2D — amount of 2D free space around the object on the ground plane.
+ *
+ * Computes the area of unoccupied space within a search radius around each
+ * object on the XZ (ground) plane. Other objects in the scene are treated
+ * as obstacles.
+ *
+ * This differs from the existing FreeSpace2D which takes explicit "others" and
+ * "objs" sets. This version automatically scans all other objects in the state
+ * as obstacles.
+ */
+export class ObjectFreespace2D extends GeometryPredicate {
+  readonly type = 'ObjectFreespace2D';
+  readonly predicateType = 'ObjectFreespace2D';
+
+  /** Radius around each object to search for free space */
+  public readonly searchRadius: number;
+
+  constructor(
+    public readonly obj: ObjectSetExpression,
+    searchRadius: number = 5.0
+  ) {
+    super();
+    this.searchRadius = searchRadius;
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length === 0) return 0;
+
+    // Collect all other spatial objects from the state as obstacles
+    const obstacleAABBs: Array<{ x0: number; z0: number; x1: number; z1: number }> = [];
+    for (const [key, value] of state.entries()) {
+      const keyStr = String(key);
+      if (keyStr.startsWith('__spatial_')) {
+        const otherId = keyStr.replace('__spatial_', '');
+        if (ids.has(otherId)) continue; // Skip our own objects
+        const other = value as SpatialObject;
+        const aabb = getAABB(other);
+        obstacleAABBs.push({
+          x0: aabb.min[0],
+          z0: aabb.min[2],
+          x1: aabb.max[0],
+          z1: aabb.max[2],
+        });
+      }
+    }
+
+    let totalFreespace = 0;
+    const searchArea = Math.PI * this.searchRadius * this.searchRadius;
+
+    for (const obj of objects) {
+      const pos = toVec3(obj.position);
+      let occupiedArea = 0;
+
+      for (const obs of obstacleAABBs) {
+        // Clip obstacle AABB to search circle (approximate as rectangle intersection)
+        const clipX0 = Math.max(pos[0] - this.searchRadius, obs.x0);
+        const clipZ0 = Math.max(pos[2] - this.searchRadius, obs.z0);
+        const clipX1 = Math.min(pos[0] + this.searchRadius, obs.x1);
+        const clipZ1 = Math.min(pos[2] + this.searchRadius, obs.z1);
+
+        if (clipX0 < clipX1 && clipZ0 < clipZ1) {
+          occupiedArea += (clipX1 - clipX0) * (clipZ1 - clipZ0);
+        }
+      }
+
+      totalFreespace += Math.max(0, searchArea - occupiedArea);
+    }
+
+    return totalFreespace / objects.length;
+  }
+
+  clone(): ObjectFreespace2D {
+    return new ObjectFreespace2D(
+      this.obj.clone() as ObjectSetExpression,
+      this.searchRadius
+    );
+  }
+
+  toString(): string {
+    return `freespace2D(${this.obj}, ${this.searchRadius})`;
+  }
+}
+
+/**
+ * Object Min Distance 2D — minimum 2D distance on the ground plane to any other object.
+ *
+ * Computes the minimum XZ-plane distance from each object in the set to any
+ * other spatial object in the scene. This is useful for ensuring objects
+ * aren't too close together without requiring an explicit "others" set.
+ *
+ * This differs from the existing MinDistance2D which takes explicit "others"
+ * set. This version automatically scans all other objects in the state.
+ */
+export class ObjectMinDist2D extends GeometryPredicate {
+  readonly type = 'ObjectMinDist2D';
+  readonly predicateType = 'ObjectMinDist2D';
+
+  constructor(public readonly obj: ObjectSetExpression) {
+    super();
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length === 0) return Infinity;
+
+    // Collect positions of all other objects
+    const otherPositions: Array<[number, number, number]> = [];
+    for (const [key, value] of state.entries()) {
+      const keyStr = String(key);
+      if (keyStr.startsWith('__spatial_')) {
+        const otherId = keyStr.replace('__spatial_', '');
+        if (ids.has(otherId)) continue;
+        const other = value as SpatialObject;
+        otherPositions.push(toVec3(other.position));
+      }
+    }
+
+    if (otherPositions.length === 0) return Infinity;
+
+    let globalMinDist = Infinity;
+    for (const obj of objects) {
+      const pos = toVec3(obj.position);
+      let minDist = Infinity;
+
+      for (const otherPos of otherPositions) {
+        const dx = pos[0] - otherPos[0];
+        const dz = pos[2] - otherPos[2];
+        const dist2d = Math.sqrt(dx * dx + dz * dz);
+        if (dist2d < minDist) minDist = dist2d;
+      }
+
+      if (minDist < globalMinDist) globalMinDist = minDist;
+    }
+
+    return globalMinDist;
+  }
+
+  clone(): ObjectMinDist2D {
+    return new ObjectMinDist2D(this.obj.clone() as ObjectSetExpression);
+  }
+
+  toString(): string {
+    return `minDist2D(${this.obj})`;
+  }
+}
+
+/**
+ * Object Rotational Asymmetry — measures rotational asymmetry of the object (0=symmetric, 1=asymmetric).
+ *
+ * Computes how asymmetrically the objects in the set are arranged around their
+ * centroid on the XZ plane. A set of objects arranged in a regular polygon
+ * pattern (e.g., 4 objects at corners of a square) would score 0 (symmetric),
+ * while an irregular arrangement would score closer to 1.
+ *
+ * This is a single-object-set version that operates on the arrangement of
+ * objects within the set, measuring how their positions deviate from
+ * rotational symmetry around the set's centroid.
+ */
+export class ObjectRotationalAsymmetry extends GeometryPredicate {
+  readonly type = 'ObjectRotationalAsymmetry';
+  readonly predicateType = 'ObjectRotationalAsymmetry';
+
+  /** Number of symmetry axes to test (e.g., 4 for 4-fold symmetry) */
+  public readonly symmetryOrder: number;
+
+  constructor(
+    public readonly obj: ObjectSetExpression,
+    symmetryOrder: number = 4
+  ) {
+    super();
+    this.symmetryOrder = symmetryOrder;
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length <= 1) return 0; // Single object is trivially symmetric
+
+    // Compute centroid
+    let cx = 0, cz = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      cx += p[0];
+      cz += p[2];
+    }
+    cx /= objects.length;
+    cz /= objects.length;
+
+    // For each symmetry fold, compute how well the set maps onto itself
+    let totalAsymmetry = 0;
+    const n = this.symmetryOrder;
+
+    for (let k = 1; k < n; k++) {
+      const angle = (2 * Math.PI * k) / n;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      // Rotate each object around centroid and find nearest match
+      let foldAsymmetry = 0;
+
+      for (const obj of objects) {
+        const p = toVec3(obj.position);
+        const dx = p[0] - cx;
+        const dz = p[2] - cz;
+
+        // Rotate
+        const rx = cx + dx * cosA - dz * sinA;
+        const rz = cz + dx * sinA + dz * cosA;
+
+        // Find nearest original object to rotated position
+        let minDist = Infinity;
+        for (const other of objects) {
+          const op = toVec3(other.position);
+          const ddx = op[0] - rx;
+          const ddz = op[2] - rz;
+          const d = Math.sqrt(ddx * ddx + ddz * ddz);
+          if (d < minDist) minDist = d;
+        }
+
+        foldAsymmetry += minDist;
+      }
+
+      totalAsymmetry += foldAsymmetry;
+    }
+
+    // Normalize by the number of folds and objects, and by a characteristic length
+    // Use the average distance from centroid as the characteristic length
+    let avgRadius = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      const dx = p[0] - cx;
+      const dz = p[2] - cz;
+      avgRadius += Math.sqrt(dx * dx + dz * dz);
+    }
+    avgRadius /= objects.length;
+
+    if (avgRadius < 1e-10) return 0; // All at centroid = symmetric
+
+    const normalizedAsymmetry = totalAsymmetry / ((n - 1) * objects.length * avgRadius);
+    return Math.min(1, normalizedAsymmetry);
+  }
+
+  clone(): ObjectRotationalAsymmetry {
+    return new ObjectRotationalAsymmetry(
+      this.obj.clone() as ObjectSetExpression,
+      this.symmetryOrder
+    );
+  }
+
+  toString(): string {
+    return `rotationalAsymmetry(${this.obj}, ${this.symmetryOrder})`;
+  }
+}
+
+/**
+ * Object Reflectional Asymmetry — measures reflectional asymmetry about a plane.
+ *
+ * Computes how asymmetric the object arrangement is when reflected about a
+ * plane through the centroid. The reflection plane can be automatically
+ * determined (long or short axis) or specified.
+ *
+ * Returns 0 for perfectly reflectionally symmetric arrangements,
+ * and values approaching 1 for highly asymmetric ones.
+ *
+ * This differs from the existing ReflectionalAsymmetry which requires two
+ * object sets and compares them. This version measures asymmetry of a single
+ * set of objects.
+ */
+export class ObjectReflectionalAsymmetry extends GeometryPredicate {
+  readonly type = 'ObjectReflectionalAsymmetry';
+  readonly predicateType = 'ObjectReflectionalAsymmetry';
+
+  /** Whether to use the plane perpendicular to the longest spread direction */
+  public readonly useLongPlane: boolean;
+
+  /** Optional reflection axis: 'x' or 'z'. If unset, auto-determined. */
+  public readonly reflectionAxis?: 'x' | 'z';
+
+  constructor(
+    public readonly obj: ObjectSetExpression,
+    useLongPlane: boolean = true,
+    reflectionAxis?: 'x' | 'z'
+  ) {
+    super();
+    this.useLongPlane = useLongPlane;
+    this.reflectionAxis = reflectionAxis;
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length <= 1) return 0;
+
+    // Compute centroid
+    let cx = 0, cz = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      cx += p[0];
+      cz += p[2];
+    }
+    cx /= objects.length;
+    cz /= objects.length;
+
+    // Determine reflection axis
+    let reflectAlongX: boolean;
+    if (this.reflectionAxis) {
+      reflectAlongX = this.reflectionAxis === 'x';
+    } else {
+      // Auto-determine: reflect along the longer spread direction
+      let spreadX = 0, spreadZ = 0;
+      for (const obj of objects) {
+        const p = toVec3(obj.position);
+        spreadX += (p[0] - cx) ** 2;
+        spreadZ += (p[2] - cz) ** 2;
+      }
+      // Reflection plane is perpendicular to the longer spread
+      reflectAlongX = this.useLongPlane ? spreadX > spreadZ : spreadX <= spreadZ;
+    }
+
+    // Compute asymmetry: for each object, find nearest match to its reflection
+    let totalAsymmetry = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      // Reflected position
+      const rx = reflectAlongX ? 2 * cx - p[0] : p[0];
+      const rz = reflectAlongX ? p[2] : 2 * cz - p[2];
+
+      // Find closest object to reflected position
+      let minDist = Infinity;
+      for (const other of objects) {
+        const op = toVec3(other.position);
+        const ddx = op[0] - rx;
+        const ddz = op[2] - rz;
+        const d = Math.sqrt(ddx * ddx + ddz * ddz);
+        if (d < minDist) minDist = d;
+      }
+      totalAsymmetry += minDist;
+    }
+
+    // Normalize by average distance from centroid
+    let avgRadius = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      const dx = p[0] - cx;
+      const dz = p[2] - cz;
+      avgRadius += Math.sqrt(dx * dx + dz * dz);
+    }
+    avgRadius /= objects.length;
+
+    if (avgRadius < 1e-10) return 0;
+
+    return Math.min(1, totalAsymmetry / (objects.length * avgRadius));
+  }
+
+  clone(): ObjectReflectionalAsymmetry {
+    return new ObjectReflectionalAsymmetry(
+      this.obj.clone() as ObjectSetExpression,
+      this.useLongPlane,
+      this.reflectionAxis
+    );
+  }
+
+  toString(): string {
+    return `reflectionalAsymmetry(${this.obj})`;
+  }
+}
+
+/**
+ * Object Coplanarity Cost — cost of how much the object deviates from being
+ * coplanar with a reference surface.
+ *
+ * Computes the mean squared deviation of object positions from a reference plane.
+ * The reference plane can be:
+ * - The ground plane (Y=0) by default
+ * - A plane fitted through the object positions
+ * - A specified reference plane from the state
+ *
+ * Returns 0 if all objects lie perfectly on the reference plane,
+ * and increasing values for greater deviation.
+ *
+ * This differs from the existing CoplanarityCost which measures Y-position
+ * variance within a set. This version allows specifying an external reference
+ * surface and supports arbitrary plane orientations.
+ */
+export class ObjectCoplanarityCost extends GeometryPredicate {
+  readonly type = 'ObjectCoplanarityCost';
+  readonly predicateType = 'ObjectCoplanarityCost';
+
+  /** Reference plane mode: 'ground' (Y=0), 'fitted' (best-fit plane), or 'reference' (from state) */
+  public readonly planeMode: 'ground' | 'fitted' | 'reference';
+
+  constructor(
+    public readonly obj: ObjectSetExpression,
+    planeMode: 'ground' | 'fitted' | 'reference' = 'ground'
+  ) {
+    super();
+    this.planeMode = planeMode;
+  }
+
+  children(): Map<string, Node> {
+    return new Map<string, Node>([['obj', this.obj]]);
+  }
+
+  evaluate(state: Map<Variable, any>): number {
+    const ids = this.obj.evaluate(state);
+    const objects = retrieveSpatialObjects(state, ids);
+    if (objects.length === 0) return 0;
+    if (objects.length === 1) {
+      // Single object: cost is distance from reference plane
+      const p = toVec3(objects[0].position);
+      if (this.planeMode === 'ground') return p[1] * p[1]; // Distance from Y=0
+      return 0;
+    }
+
+    let planeNormal: [number, number, number];
+    let planePoint: [number, number, number];
+
+    if (this.planeMode === 'ground') {
+      planeNormal = [0, 1, 0];
+      planePoint = [0, 0, 0];
+    } else if (this.planeMode === 'reference') {
+      // Try to get reference plane from state
+      const stateAny = state as Map<any, any>;
+      const refPlane = stateAny.get('__referencePlane');
+      if (refPlane) {
+        planeNormal = normalize(toVec3(refPlane.normal ?? [0, 1, 0]));
+        planePoint = toVec3(refPlane.point ?? [0, 0, 0]);
+      } else {
+        // Fallback to ground
+        planeNormal = [0, 1, 0];
+        planePoint = [0, 0, 0];
+      }
+    } else {
+      // 'fitted': compute best-fit plane through the points using PCA
+      // Compute centroid
+      let cx = 0, cy = 0, cz = 0;
+      for (const obj of objects) {
+        const p = toVec3(obj.position);
+        cx += p[0]; cy += p[1]; cz += p[2];
+      }
+      cx /= objects.length;
+      cy /= objects.length;
+      cz /= objects.length;
+      planePoint = [cx, cy, cz];
+
+      // Compute covariance matrix (simplified: only the normal direction)
+      // For a proper PCA, we'd need eigendecomposition. Here we use a simpler
+      // approach: find the direction of least variance.
+      let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+      for (const obj of objects) {
+        const p = toVec3(obj.position);
+        const dx = p[0] - cx, dy = p[1] - cy, dz = p[2] - cz;
+        xx += dx * dx; xy += dx * dy; xz += dx * dz;
+        yy += dy * dy; yz += dy * dz; zz += dz * dz;
+      }
+
+      // The normal of the best-fit plane is the eigenvector corresponding
+      // to the smallest eigenvalue of the covariance matrix.
+      // Simplified: use the cross product of the two principal directions.
+      // For simplicity, compute the normal as the direction with minimum spread.
+      const spreadX = xx, spreadY = yy, spreadZ = zz;
+
+      if (spreadX <= spreadY && spreadX <= spreadZ) {
+        planeNormal = [1, 0, 0];
+      } else if (spreadY <= spreadX && spreadY <= spreadZ) {
+        planeNormal = [0, 1, 0];
+      } else {
+        planeNormal = [0, 0, 1];
+      }
+    }
+
+    // Compute sum of squared distances from the reference plane
+    let totalSqDist = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      // Signed distance = dot(P - planePoint, planeNormal)
+      const dx = p[0] - planePoint[0];
+      const dy = p[1] - planePoint[1];
+      const dz = p[2] - planePoint[2];
+      const dist = dx * planeNormal[0] + dy * planeNormal[1] + dz * planeNormal[2];
+      totalSqDist += dist * dist;
+    }
+
+    // Return mean squared deviation
+    return totalSqDist / objects.length;
+  }
+
+  clone(): ObjectCoplanarityCost {
+    return new ObjectCoplanarityCost(
+      this.obj.clone() as ObjectSetExpression,
+      this.planeMode
+    );
+  }
+
+  toString(): string {
+    return `coplanarityCost(${this.obj}, ${this.planeMode})`;
+  }
+}
+
+// ============================================================================
+// Standalone Geometry Cost Functions
+// Ported from infinigen/core/constraints/constraint_language/geometry.py
+//
+// These are direct-evaluation functions that take a GeometryContext and return
+// a numeric cost/score. They mirror the Python API where functions like
+// focusScore(context), angleAlignmentCost(context, targetAngle), etc. are
+// called directly rather than constructing predicate class instances.
+// ============================================================================
+
+/**
+ * GeometryContext — evaluation context for standalone geometry cost functions.
+ *
+ * Provides all the spatial data needed by the geometry functions: the object(s)
+ * being evaluated, other objects in the scene, camera information, and the
+ * variable state map for resolving ObjectSetExpressions.
+ */
+export interface GeometryContext {
+  /** The primary object(s) being evaluated — resolved SpatialObject instances */
+  objects: SpatialObject[];
+
+  /** All other spatial objects in the scene (obstacles, neighbours, etc.) */
+  others: SpatialObject[];
+
+  /** Camera position (defaults to [0, 1, 5] if not provided) */
+  cameraPosition?: [number, number, number];
+
+  /** Camera forward direction (defaults to [0, 0, -1] if not provided) */
+  cameraForward?: [number, number, number];
+
+  /** Camera field-of-view in radians (defaults to π/3) */
+  cameraFov?: number;
+
+  /** Optional reference plane for coplanarity: { normal: [x,y,z], point: [x,y,z] } */
+  referencePlane?: { normal: [number, number, number]; point: [number, number, number] };
+
+  /** Optional variable state map for resolving ObjectSetExpressions */
+  state?: Map<Variable, any>;
+}
+
+/**
+ * focusScore — measures how centered/visible the object is in the camera view.
+ *
+ * Returns a value from 0 to 1 where:
+ * - 1.0 = object is perfectly centered in the camera view and close
+ * - 0.0 = object is outside the camera view or very far away
+ *
+ * Ported from: focusScore(context) in constraint_language/geometry.py
+ */
+export function focusScore(context: GeometryContext): number {
+  const { objects } = context;
+  if (objects.length === 0) return 0;
+
+  const camPos: [number, number, number] = context.cameraPosition ?? [0, 1, 5];
+  const camFwd: [number, number, number] = context.cameraForward
+    ? normalize(context.cameraForward)
+    : [0, 0, -1];
+  const fov = context.cameraFov ?? Math.PI / 3;
+
+  let maxScore = 0;
+  for (const obj of objects) {
+    const objPos = toVec3(obj.position);
+
+    // Vector from camera to object
+    const toObj: [number, number, number] = [
+      objPos[0] - camPos[0],
+      objPos[1] - camPos[1],
+      objPos[2] - camPos[2],
+    ];
+    const dist = Math.sqrt(toObj[0] * toObj[0] + toObj[1] * toObj[1] + toObj[2] * toObj[2]);
+
+    if (dist < 0.001) {
+      maxScore = Math.max(maxScore, 1.0);
+      continue;
+    }
+
+    // Normalize direction
+    const dir: [number, number, number] = [toObj[0] / dist, toObj[1] / dist, toObj[2] / dist];
+
+    // Angle from camera forward direction
+    const cosAngle = dot(dir, camFwd);
+    if (cosAngle <= 0) continue; // Behind camera
+
+    const angle = Math.acos(Math.min(1, cosAngle));
+    const halfFov = fov / 2;
+
+    // Angular score: 1.0 at center, 0.0 at edge of FOV
+    const angularScore = Math.max(0, 1 - angle / halfFov);
+    if (angularScore <= 0) continue; // Outside FOV
+
+    // Distance score: closer objects score higher
+    const distScore = Math.max(0, 1 - dist / 50);
+
+    // Combined score
+    const score = angularScore * (0.7 + 0.3 * distScore);
+    maxScore = Math.max(maxScore, score);
+  }
+
+  return Math.min(1, Math.max(0, maxScore));
+}
+
+/**
+ * angleAlignmentCost — cost (0-1) of rotation deviation from a target angle.
+ *
+ * Returns 0.0 when the object's Y-axis rotation exactly matches the target,
+ * and 1.0 when it is maximally misaligned (180° off).
+ *
+ * Ported from: angleAlignmentCost(context, targetAngle) in constraint_language/geometry.py
+ */
+export function angleAlignmentCost(context: GeometryContext, targetAngle: number): number {
+  const { objects } = context;
+  if (objects.length === 0) return 1;
+
+  let totalCost = 0;
+  for (const obj of objects) {
+    const fwd = getForward(obj);
+
+    // Compute the angle of the forward direction projected onto the XZ plane
+    const fwdAngle = Math.atan2(fwd[2], fwd[0]);
+
+    // Angular difference between object's rotation and target
+    let angleDiff = fwdAngle - targetAngle;
+
+    // Normalize to [-PI, PI]
+    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+    // Cost is normalized: 0 at 0° deviation, 1 at 180° deviation
+    const cost = Math.abs(angleDiff) / Math.PI;
+    totalCost += cost;
+  }
+
+  return Math.min(1, totalCost / objects.length);
+}
+
+/**
+ * freespace2D — amount of 2D free space around the object on the ground plane.
+ *
+ * Computes the area of unoccupied space within a search radius around each
+ * object on the XZ (ground) plane. Other objects in the context are treated
+ * as obstacles.
+ *
+ * Ported from: freespace2D(context) in constraint_language/geometry.py
+ */
+export function freespace2D(context: GeometryContext): number {
+  const { objects, others } = context;
+  if (objects.length === 0) return 0;
+
+  const searchRadius = 5.0;
+  const searchArea = Math.PI * searchRadius * searchRadius;
+
+  // Collect obstacle AABBs from context.others
+  const obstacleAABBs: Array<{ x0: number; z0: number; x1: number; z1: number }> = [];
+  for (const other of others) {
+    const aabb = getAABB(other);
+    obstacleAABBs.push({
+      x0: aabb.min[0],
+      z0: aabb.min[2],
+      x1: aabb.max[0],
+      z1: aabb.max[2],
+    });
+  }
+
+  let totalFreespace = 0;
+  for (const obj of objects) {
+    const pos = toVec3(obj.position);
+    let occupiedArea = 0;
+
+    for (const obs of obstacleAABBs) {
+      const clipX0 = Math.max(pos[0] - searchRadius, obs.x0);
+      const clipZ0 = Math.max(pos[2] - searchRadius, obs.z0);
+      const clipX1 = Math.min(pos[0] + searchRadius, obs.x1);
+      const clipZ1 = Math.min(pos[2] + searchRadius, obs.z1);
+
+      if (clipX0 < clipX1 && clipZ0 < clipZ1) {
+        occupiedArea += (clipX1 - clipX0) * (clipZ1 - clipZ0);
+      }
+    }
+
+    totalFreespace += Math.max(0, searchArea - occupiedArea);
+  }
+
+  return totalFreespace / objects.length;
+}
+
+/**
+ * minDist2D — minimum 2D distance to any other object.
+ *
+ * Computes the minimum XZ-plane distance from each object in the set to any
+ * other spatial object in the context.
+ *
+ * Ported from: minDist2D(context) in constraint_language/geometry.py
+ */
+export function minDist2D(context: GeometryContext): number {
+  const { objects, others } = context;
+  if (objects.length === 0 || others.length === 0) return Infinity;
+
+  let globalMinDist = Infinity;
+  for (const obj of objects) {
+    const pos = toVec3(obj.position);
+    let minDist = Infinity;
+
+    for (const other of others) {
+      const otherPos = toVec3(other.position);
+      const dx = pos[0] - otherPos[0];
+      const dz = pos[2] - otherPos[2];
+      const dist2d = Math.sqrt(dx * dx + dz * dz);
+      if (dist2d < minDist) minDist = dist2d;
+    }
+
+    if (minDist < globalMinDist) globalMinDist = minDist;
+  }
+
+  return globalMinDist;
+}
+
+/**
+ * rotationalAsymmetry — measures rotational asymmetry (0=symmetric, 1=asymmetric).
+ *
+ * Computes how asymmetrically the objects are arranged around their centroid
+ * on the XZ plane. A regular polygon arrangement scores 0; irregular arrangements
+ * approach 1.
+ *
+ * Ported from: rotationalAsymmetry(context) in constraint_language/geometry.py
+ */
+export function rotationalAsymmetry(context: GeometryContext): number {
+  const { objects } = context;
+  if (objects.length <= 1) return 0;
+
+  // Compute centroid
+  let cx = 0, cz = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    cx += p[0]; cz += p[2];
+  }
+  cx /= objects.length;
+  cz /= objects.length;
+
+  // For each symmetry fold, compute how well the set maps onto itself
+  const symmetryOrder = Math.max(2, Math.min(objects.length, 8));
+  let totalAsymmetry = 0;
+
+  for (let k = 1; k < symmetryOrder; k++) {
+    const angle = (2 * Math.PI * k) / symmetryOrder;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    let foldAsymmetry = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      const dx = p[0] - cx;
+      const dz = p[2] - cz;
+
+      // Rotate
+      const rx = cx + dx * cosA - dz * sinA;
+      const rz = cz + dx * sinA + dz * cosA;
+
+      // Find nearest original object to rotated position
+      let minDist = Infinity;
+      for (const other of objects) {
+        const op = toVec3(other.position);
+        const ddx = op[0] - rx;
+        const ddz = op[2] - rz;
+        const d = Math.sqrt(ddx * ddx + ddz * ddz);
+        if (d < minDist) minDist = d;
+      }
+      foldAsymmetry += minDist;
+    }
+    totalAsymmetry += foldAsymmetry;
+  }
+
+  // Normalize by characteristic length
+  let avgRadius = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    const dx = p[0] - cx;
+    const dz = p[2] - cz;
+    avgRadius += Math.sqrt(dx * dx + dz * dz);
+  }
+  avgRadius /= objects.length;
+
+  if (avgRadius < 1e-10) return 0;
+
+  const normalizedAsymmetry = totalAsymmetry / ((symmetryOrder - 1) * objects.length * avgRadius);
+  return Math.min(1, normalizedAsymmetry);
+}
+
+/**
+ * reflectionalAsymmetry — measures reflectional asymmetry about a plane.
+ *
+ * Computes how asymmetric the object arrangement is when reflected about a
+ * plane through the centroid. Returns 0 for perfectly reflectionally symmetric
+ * arrangements, and values approaching 1 for highly asymmetric ones.
+ *
+ * Ported from: reflectionalAsymmetry(context) in constraint_language/geometry.py
+ */
+export function reflectionalAsymmetry(context: GeometryContext): number {
+  const { objects } = context;
+  if (objects.length <= 1) return 0;
+
+  // Compute centroid
+  let cx = 0, cz = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    cx += p[0]; cz += p[2];
+  }
+  cx /= objects.length;
+  cz /= objects.length;
+
+  // Auto-determine reflection axis: reflect along the longer spread direction
+  let spreadX = 0, spreadZ = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    spreadX += (p[0] - cx) ** 2;
+    spreadZ += (p[2] - cz) ** 2;
+  }
+  const reflectAlongX = spreadX > spreadZ;
+
+  // Compute asymmetry: for each object, find nearest match to its reflection
+  let totalAsymmetry = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    // Reflected position
+    const rx = reflectAlongX ? 2 * cx - p[0] : p[0];
+    const rz = reflectAlongX ? p[2] : 2 * cz - p[2];
+
+    // Find closest object to reflected position
+    let minDist = Infinity;
+    for (const other of objects) {
+      const op = toVec3(other.position);
+      const ddx = op[0] - rx;
+      const ddz = op[2] - rz;
+      const d = Math.sqrt(ddx * ddx + ddz * ddz);
+      if (d < minDist) minDist = d;
+    }
+    totalAsymmetry += minDist;
+  }
+
+  // Normalize by average distance from centroid
+  let avgRadius = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    const dx = p[0] - cx;
+    const dz = p[2] - cz;
+    avgRadius += Math.sqrt(dx * dx + dz * dz);
+  }
+  avgRadius /= objects.length;
+
+  if (avgRadius < 1e-10) return 0;
+
+  return Math.min(1, totalAsymmetry / (objects.length * avgRadius));
+}
+
+/**
+ * coplanarityCost — cost of deviation from coplanarity with reference surface.
+ *
+ * Computes the mean squared deviation of object positions from a reference plane.
+ * The reference plane defaults to the ground plane (Y=0) but can be:
+ * - 'ground': Y=0 plane
+ * - 'fitted': best-fit plane through the object positions
+ * - 'reference': a plane specified in the context
+ *
+ * Returns 0 if all objects lie perfectly on the reference plane.
+ *
+ * Ported from: coplanarityCost(context) in constraint_language/geometry.py
+ */
+export function coplanarityCost(
+  context: GeometryContext,
+  planeMode: 'ground' | 'fitted' | 'reference' = 'ground'
+): number {
+  const { objects } = context;
+  if (objects.length === 0) return 0;
+  if (objects.length === 1) {
+    const p = toVec3(objects[0].position);
+    if (planeMode === 'ground') return p[1] * p[1];
+    return 0;
+  }
+
+  let planeNormal: [number, number, number];
+  let planePoint: [number, number, number];
+
+  if (planeMode === 'ground') {
+    planeNormal = [0, 1, 0];
+    planePoint = [0, 0, 0];
+  } else if (planeMode === 'reference') {
+    if (context.referencePlane) {
+      planeNormal = normalize(context.referencePlane.normal);
+      planePoint = context.referencePlane.point;
+    } else {
+      // Fallback to ground
+      planeNormal = [0, 1, 0];
+      planePoint = [0, 0, 0];
+    }
+  } else {
+    // 'fitted': compute best-fit plane through the points
+    let cx = 0, cy = 0, cz = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      cx += p[0]; cy += p[1]; cz += p[2];
+    }
+    cx /= objects.length;
+    cy /= objects.length;
+    cz /= objects.length;
+    planePoint = [cx, cy, cz];
+
+    // Find direction of minimum spread (simplified PCA)
+    let xx = 0, yy = 0, zz = 0;
+    for (const obj of objects) {
+      const p = toVec3(obj.position);
+      const dx = p[0] - cx, dy = p[1] - cy, dz = p[2] - cz;
+      xx += dx * dx; yy += dy * dy; zz += dz * dz;
+    }
+
+    if (xx <= yy && xx <= zz) {
+      planeNormal = [1, 0, 0];
+    } else if (yy <= xx && yy <= zz) {
+      planeNormal = [0, 1, 0];
+    } else {
+      planeNormal = [0, 0, 1];
+    }
+  }
+
+  // Compute sum of squared distances from the reference plane
+  let totalSqDist = 0;
+  for (const obj of objects) {
+    const p = toVec3(obj.position);
+    const dx = p[0] - planePoint[0];
+    const dy = p[1] - planePoint[1];
+    const dz = p[2] - planePoint[2];
+    const dist = dx * planeNormal[0] + dy * planeNormal[1] + dz * planeNormal[2];
+    totalSqDist += dist * dist;
+  }
+
+  return totalSqDist / objects.length;
 }

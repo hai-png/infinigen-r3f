@@ -7,6 +7,8 @@
  * - LightingOrchestrator — high-level preset-based lighting setup
  * - LightingRegistry — strategy pattern registry for lighting presets
  * - NodeLightBridge — connects node executor lights to the orchestrator
+ * - CascadedShadowMaps — CSM for large outdoor scenes
+ * - HDRISystem — Enhanced HDRI loading with EXR support, rotation, preview
  * - SkyLightingSystem — Nishita-integrated, physically-based sky
  * - LightingSystem — General lighting system
  * - ThreePointLightingSystem — Studio lighting
@@ -61,6 +63,14 @@ export type {
   NodeLightResult,
 } from './NodeLightBridge';
 
+// ── Cascaded Shadow Maps ────────────────────────────────────────────────────
+export { CascadedShadowMaps, createCSM } from './CascadedShadowMaps';
+export type { CSMConfig, CascadeData } from './CascadedShadowMaps';
+
+// ── HDRI System (EXR + HDR loading, rotation, preview) ──────────────────────
+export { HDRISystem, createHDRISystem } from './HDRISystem';
+export type { HDRIConfig } from './HDRISystem';
+
 // ── Nishita-integrated sky lighting (primary sky solution) ──────────────────
 export { SkyLightingSystem, createSkyLighting } from './SkyLightingSystem';
 export type { SkyLightingSystemConfig } from './SkyLightingSystem';
@@ -72,3 +82,16 @@ export type { LightingConfig, LightPreset } from './LightingSystem';
 // ── Three-point studio lighting ─────────────────────────────────────────────
 export { ThreePointLightingSystem } from './ThreePointLighting';
 export type { ThreePointLightingConfig } from './ThreePointLighting';
+
+// ── Blackbody Temperature Shader ────────────────────────────────────────────
+export {
+  blackbodyToRGB,
+  blackbodyToHex,
+  createBlackbodyLight,
+  createBlackbodySpotLight,
+  createBlackbodyDirectionalLight,
+  updateLightTemperature,
+  getLuminousEfficacy,
+  BlackbodyLightPresets,
+  COLOR_TEMPERATURES,
+} from './BlackbodyShader';

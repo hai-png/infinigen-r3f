@@ -71,7 +71,12 @@ export {
   RoomNeighbour as ConstraintRoomNeighbour,
   CutFrom as ConstraintCutFrom,
   SharedEdge as ConstraintSharedEdge,
-  Traverse as ConstraintTraverse
+  Traverse as ConstraintTraverse,
+  // Logical Reasoning Relations
+  ImpliesRelation,
+  IntersectsRelation,
+  IntersectionRelation,
+  DifferenceRelation
 } from './relations';
 
 // Set Reasoning
@@ -127,7 +132,15 @@ export {
   ReflectionalAsymmetry,
   CoplanarityCost,
   CenterStableSurfaceDist,
-  AngleAlignmentCost
+  AngleAlignmentCost,
+  // Missing Geometry Cost Functions (ported from constraint_language/geometry.py)
+  CameraFocusScore,
+  RotationAlignmentCost,
+  ObjectFreespace2D,
+  ObjectMinDist2D,
+  ObjectRotationalAsymmetry,
+  ObjectReflectionalAsymmetry,
+  ObjectCoplanarityCost
 } from './geometry';
 
 // Constants and Problem Definition

@@ -161,6 +161,8 @@ export class LightingOrchestrator {
   private usingRegistryPreset = false;
   /** Last result from the registry (for cleanup) */
   private lastRegistryResult: LightingPresetResult | null = null;
+  /** Camera-based SpotLight (follows camera position and forward direction) */
+  private cameraLight: THREE.SpotLight | null = null;
 
   constructor(registry?: LightingRegistry) {
     this.pipeline = new AtmospherePipeline();
@@ -296,10 +298,104 @@ export class LightingOrchestrator {
     return this.pipeline;
   }
 
+  // ===========================================================================
+  // Camera-Based Lighting
+  // ===========================================================================
+
+  /**
+   * Add a SpotLight at the camera position pointing in the camera's forward
+   * direction. This is useful for filling in shadows or providing additional
+   * illumination from the viewer's perspective.
+   *
+   * The light can be updated each frame via `updateCameraLight()`.
+   *
+   * @param camera - The THREE.Camera to attach the light to
+   * @param intensity - Light intensity (default: 0.5)
+   * @returns The created SpotLight
+   *
+   * @example
+   * ```ts
+   * const orchestrator = new LightingOrchestrator();
+   * orchestrator.setup(scene, camera, renderer);
+   *
+   * // Add a camera-following light
+   * const camLight = orchestrator.addCameraBasedLight(camera, 0.5);
+   *
+   * // In animation loop:
+   * orchestrator.updateCameraLight(camera);
+   * ```
+   */
+  addCameraBasedLight(camera: THREE.Camera, intensity: number = 0.5): THREE.SpotLight {
+    // Remove existing camera light if any
+    this.removeCameraBasedLight();
+
+    // Get camera world position and direction
+    const position = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    camera.getWorldPosition(position);
+    camera.getWorldDirection(direction);
+
+    // Create SpotLight at camera position, pointing in camera's forward direction
+    this.cameraLight = new THREE.SpotLight(0xffffff, intensity, 100, Math.PI / 6, 0.3, 1);
+    this.cameraLight.position.copy(position);
+    this.cameraLight.name = 'CameraBasedLight';
+    this.cameraLight.castShadow = true;
+
+    // Create a target object at a point along the camera's forward direction
+    const targetPosition = position.clone().add(direction.multiplyScalar(10));
+    this.cameraLight.target.position.copy(targetPosition);
+
+    if (this.scene) {
+      this.scene.add(this.cameraLight);
+      this.scene.add(this.cameraLight.target);
+    }
+
+    return this.cameraLight;
+  }
+
+  /**
+   * Remove the camera-based SpotLight if one exists.
+   */
+  removeCameraBasedLight(): void {
+    if (this.cameraLight) {
+      this.scene?.remove(this.cameraLight);
+      this.scene?.remove(this.cameraLight.target);
+      this.cameraLight.dispose();
+      this.cameraLight = null;
+    }
+  }
+
+  /**
+   * Update the camera-based light's position and direction to match
+   * the current camera state. Call this once per frame in the
+   * animation loop.
+   *
+   * @param camera - The camera to follow
+   */
+  updateCameraLight(camera: THREE.Camera): void {
+    if (!this.cameraLight) return;
+
+    const position = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    camera.getWorldPosition(position);
+    camera.getWorldDirection(direction);
+
+    this.cameraLight.position.copy(position);
+    this.cameraLight.target.position.copy(position.clone().add(direction.multiplyScalar(10)));
+  }
+
+  /**
+   * Get the current camera-based light, or null if none has been added.
+   */
+  getCameraBasedLight(): THREE.SpotLight | null {
+    return this.cameraLight;
+  }
+
   /**
    * Dispose all resources.
    */
   dispose(): void {
+    this.removeCameraBasedLight();
     this.removeExtraLights();
     this.cleanupRegistryResult();
     this.pipeline.dispose();

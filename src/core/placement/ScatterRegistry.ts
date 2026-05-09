@@ -108,6 +108,16 @@ export interface GPUScatterConfig extends ScatterConfigBase {
   densityMaskTexture?: THREE.DataTexture;
 }
 
+export interface NearCameraScatterConfig extends ScatterConfigBase {
+  type: 'near_camera';
+  /** Camera position for distance-based density falloff */
+  cameraPosition: THREE.Vector3;
+  /** Maximum distance from camera for placement (default 50) */
+  maxDistance: number;
+  /** Distance falloff curve (default 'quadratic') */
+  falloff?: 'linear' | 'quadratic' | 'exponential' | 'smoothstep';
+}
+
 /** Union of all strategy configs */
 export type ScatterStrategyConfig =
   | PoissonDiskConfig
@@ -115,7 +125,8 @@ export type ScatterStrategyConfig =
   | DensityMaskConfig
   | VolumeConfig
   | TaperConfig
-  | GPUScatterConfig;
+  | GPUScatterConfig
+  | NearCameraScatterConfig;
 
 // ============================================================================
 // ScatterStrategy Interface
@@ -607,6 +618,130 @@ export class GPUScatterStrategy implements ScatterStrategy<GPUScatterConfig> {
   }
 }
 
+/**
+ * Near-camera scatter — generates positions concentrated near the camera,
+ * with density falling off with distance.
+ *
+ * Objects are preferentially placed close to the camera position,
+ * making this ideal for detail scattering where the viewer is located
+ * (e.g. ground cover, small debris, particles near the player).
+ *
+ * The density falloff is controlled by the `falloff` parameter:
+ *   - 'linear':      density = 1 - (dist / maxDistance)
+ *   - 'quadratic':   density = (1 - t)²  (most detail near camera)
+ *   - 'exponential': density = e^(-3t)
+ *   - 'smoothstep':  density = 1 - t²(3 - 2t)  (smooth transition)
+ *
+ * where t = (dist / maxDistance).
+ */
+export class NearCameraScatterStrategy implements ScatterStrategy<NearCameraScatterConfig> {
+  readonly name = 'near_camera';
+
+  scatter(config: NearCameraScatterConfig): ScatterOutput {
+    const {
+      seed, count, bounds, minSpacing,
+      cameraPosition, maxDistance,
+      falloff = 'quadratic',
+      terrainData,
+    } = config;
+
+    const rng = this.createRNG(seed);
+    const positions: THREE.Vector3[] = [];
+    const rotations: THREE.Euler[] = [];
+    const maxAttempts = count * 10;
+    let attempts = 0;
+
+    const sizeX = bounds.max.x - bounds.min.x;
+    const sizeZ = bounds.max.y - bounds.min.y;
+
+    while (positions.length < count && attempts < maxAttempts) {
+      attempts++;
+
+      // Generate a candidate position within bounds
+      const x = bounds.min.x + rng() * sizeX;
+      const z = bounds.min.y + rng() * sizeZ;
+
+      // Compute distance from camera
+      const dx = x - cameraPosition.x;
+      const dz = z - cameraPosition.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+
+      // Compute density falloff
+      const t = Math.min(1.0, dist / Math.max(0.001, maxDistance));
+      let density: number;
+
+      switch (falloff) {
+        case 'linear':
+          density = 1.0 - t;
+          break;
+        case 'quadratic':
+          density = (1.0 - t) * (1.0 - t);
+          break;
+        case 'exponential':
+          density = Math.exp(-3.0 * t);
+          break;
+        case 'smoothstep':
+          density = 1.0 - t * t * (3.0 - 2.0 * t);
+          break;
+        default:
+          density = (1.0 - t) * (1.0 - t);
+      }
+
+      // Accept/reject based on density
+      if (rng() < density) {
+        // Spacing check
+        let accept = true;
+        if (minSpacing > 0) {
+          for (const existing of positions) {
+            const ex = x - existing.x;
+            const ez = z - existing.z;
+            if (ex * ex + ez * ez < minSpacing * minSpacing) {
+              accept = false;
+              break;
+            }
+          }
+        }
+
+        if (accept) {
+          const y = terrainData
+            ? this.sampleTerrainHeight(x, z, terrainData)
+            : 0;
+          positions.push(new THREE.Vector3(x, y, z));
+          rotations.push(new THREE.Euler(0, rng() * Math.PI * 2, 0));
+        }
+      }
+    }
+
+    return {
+      positions,
+      rotations,
+      count: positions.length,
+      metadata: {
+        strategy: 'near_camera',
+        cameraPosition: cameraPosition.clone(),
+        maxDistance,
+        falloff,
+      },
+    };
+  }
+
+  private createRNG(seed: number): () => number {
+    let s = seed;
+    return () => {
+      const x = Math.sin(s++) * 10000;
+      return x - Math.floor(x);
+    };
+  }
+
+  private sampleTerrainHeight(x: number, z: number, td: TerrainData): number {
+    const u = (x / td.worldSize + 0.5) * td.width;
+    const v = (z / td.worldSize + 0.5) * td.height;
+    const ix = Math.min(Math.max(Math.floor(u), 0), td.width - 1);
+    const iz = Math.min(Math.max(Math.floor(v), 0), td.height - 1);
+    return (td.heightData[iz * td.width + ix] ?? 0) * td.heightScale;
+  }
+}
+
 // ============================================================================
 // ScatterRegistry
 // ============================================================================
@@ -702,6 +837,7 @@ export class ScatterRegistry {
     registry.register('volume', new VolumeScatterStrategy());
     registry.register('taper', new TaperScatterStrategy());
     registry.register('gpu', new GPUScatterStrategy());
+    registry.register('near_camera', new NearCameraScatterStrategy());
 
     return registry;
   }

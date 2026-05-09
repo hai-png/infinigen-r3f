@@ -39,6 +39,7 @@ export {
   VolumeScatterStrategy,
   TaperScatterStrategy,
   GPUScatterStrategy,
+  NearCameraScatterStrategy,
 } from './ScatterRegistry';
 
 export type {
@@ -52,6 +53,7 @@ export type {
   VolumeConfig,
   TaperConfig,
   GPUScatterConfig,
+  NearCameraScatterConfig,
 } from './ScatterRegistry';
 
 // Placement Registry (superset of ScatterRegistry)

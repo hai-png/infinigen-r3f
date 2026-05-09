@@ -236,6 +236,28 @@ export {
   type BarkRingParams,
 } from './trees/DeformedTreeGenerator';
 
+// Individual Deformed Tree Type Generators
+export {
+  HollowTreeGenerator,
+  createHollowTree,
+  DEFAULT_HOLLOW_TREE_CONFIG,
+  type HollowTreeConfig,
+} from './trees/HollowTreeGenerator';
+
+export {
+  RottenTreeGenerator,
+  createRottenTree,
+  DEFAULT_ROTTEN_TREE_CONFIG,
+  type RottenTreeConfig,
+} from './trees/RottenTreeGenerator';
+
+export {
+  TruncatedTreeGenerator,
+  createTruncatedTree,
+  DEFAULT_TRUNCATED_TREE_CONFIG,
+  type TruncatedTreeConfig,
+} from './trees/TruncatedTreeGenerator';
+
 // Root System Generator (canonical 1006-line version)
 export {
   RootSystemGenerator,

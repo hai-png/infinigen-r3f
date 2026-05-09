@@ -57,6 +57,15 @@ import {
 // Types
 // ============================================================================
 
+/** Result of trajectory validation */
+export interface TrajectoryValidationResult {
+  /** Whether all segments are obstacle-free */
+  valid: boolean;
+  /** Indices of segments (between consecutive point pairs) where
+   *  the ray hit an obstacle. Segment i connects points[i] → points[i+1]. */
+  invalidSegments: number[];
+}
+
 export interface CameraOrchestratorConfig {
   /** Search method: 'search' for iterative search, 'propose' for candidate generation */
   method: 'search' | 'propose';
@@ -114,11 +123,15 @@ export class CameraOrchestrator {
   private proposer: CameraPoseProposer;
   private registry: CameraRegistry;
   private scene: THREE.Scene | null = null;
+  private raycaster: THREE.Raycaster;
 
   constructor() {
     this.searchEngine = new CameraPoseSearchEngine();
     this.proposer = new CameraPoseProposer();
     this.registry = new CameraRegistry();
+    this.raycaster = new THREE.Raycaster();
+    this.raycaster.near = 0.1;
+    this.raycaster.far = 1000;
   }
 
   /**
@@ -288,6 +301,73 @@ export class CameraOrchestrator {
    */
   getProposer(): CameraPoseProposer {
     return this.proposer;
+  }
+
+  // ==========================================================================
+  // Trajectory Validation
+  // ==========================================================================
+
+  /**
+   * Validate a trajectory by raycasting between consecutive point pairs.
+   *
+   * Ports the original Infinigen freespace ray-check validation between
+   * keyframes. For each consecutive pair of points, a ray is cast from
+   * point[i] toward point[i+1]. If the ray hits an obstacle before
+   * reaching the next point, that segment is marked as invalid.
+   *
+   * @param points Array of trajectory points (at least 2)
+   * @param scene  The scene to raycast against (uses this.scene if not provided)
+   * @returns Validation result with list of invalid segment indices
+   */
+  validateTrajectory(
+    points: THREE.Vector3[],
+    scene?: THREE.Scene,
+  ): TrajectoryValidationResult {
+    const targetScene = scene ?? this.scene;
+    if (!targetScene) {
+      throw new Error(
+        '[CameraOrchestrator] No scene available for validation. ' +
+          'Call setScene() first or pass a scene argument.',
+      );
+    }
+
+    if (points.length < 2) {
+      // A single point or empty trajectory is trivially valid
+      return { valid: true, invalidSegments: [] };
+    }
+
+    const invalidSegments: number[] = [];
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const start = points[i];
+      const end = points[i + 1];
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const distance = direction.length();
+
+      if (distance < 1e-6) {
+        // Coincident points — skip (not a real segment)
+        continue;
+      }
+
+      direction.normalize();
+
+      // Cast a ray from start toward end
+      this.raycaster.set(start, direction);
+      this.raycaster.near = 0.1; // avoid self-intersection
+      this.raycaster.far = distance; // only check up to the next point
+
+      const hits = this.raycaster.intersectObjects(targetScene.children, true);
+
+      if (hits.length > 0) {
+        // An obstacle was hit between these two points
+        invalidSegments.push(i);
+      }
+    }
+
+    return {
+      valid: invalidSegments.length === 0,
+      invalidSegments,
+    };
   }
 
   /**

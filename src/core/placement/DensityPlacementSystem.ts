@@ -577,6 +577,49 @@ export class DensityPlacementSystem {
 
     return this.populatePlaceholders(placeholders, factory, seed);
   }
+
+  /**
+   * Adjust placeholder Y positions to float at the water level.
+   *
+   * Objects whose Y position is near or below the specified water level
+   * get their Y adjusted to sit at waterLevel + a small random bobbing
+   * offset. This simulates floating objects on water surfaces.
+   *
+   * The bobbing offset is a small random displacement in the range
+   * [-bobAmplitude, +bobAmplitude], seeded per-placeholder for
+   * reproducibility.
+   *
+   * @param placeholders  Array of PlaceholderInstance to adjust
+   * @param waterLevel    The Y coordinate of the water surface
+   * @param proximityThreshold  How close (in world units) a placeholder
+   *                            must be to waterLevel to be considered
+   *                            "near water" (default 2.0)
+   * @param bobAmplitude  Maximum random bobbing offset (default 0.15)
+   * @returns The same array with modified positions (mutated in place
+   *          for efficiency, but also returned for chaining)
+   */
+  makePlaceholdersFloat(
+    placeholders: PlaceholderInstance[],
+    waterLevel: number,
+    proximityThreshold: number = 2.0,
+    bobAmplitude: number = 0.15,
+  ): PlaceholderInstance[] {
+    for (const ph of placeholders) {
+      const distToWater = Math.abs(ph.position.y - waterLevel);
+
+      // Only adjust objects near the water level
+      if (distToWater <= proximityThreshold) {
+        // Use the placeholder's seed for a deterministic bobbing offset
+        const rng = new SeededRandom(ph.seed);
+        const bobOffset = (rng.next() - 0.5) * 2.0 * bobAmplitude;
+
+        // Set Y to water level + bobbing offset
+        ph.position.y = waterLevel + bobOffset;
+      }
+    }
+
+    return placeholders;
+  }
 }
 
 // ============================================================================

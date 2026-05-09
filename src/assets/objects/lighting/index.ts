@@ -4,3 +4,21 @@ export type { FloorLamps, FloorLampParams } from './FloorLamps';
 export type { TableLamps, TableLampParams } from './TableLamps';
 export type { OutdoorLightGenerator, OutdoorLightParams, OutdoorLightResult } from './OutdoorLightGenerator';
 export type { ChandelierGenerator, ChandelierParams, ChandelierStyle, ChandelierMaterial, BulbType } from './ChandelierGenerator';
+
+// ── Procedural Lamp Factories (Blackbody Shader) ───────────────────────────
+export {
+  CeilingLampFactory,
+  TableLampFactory,
+  FloorLampFactory,
+  createCeilingLamp,
+  createTableLamp,
+  createFloorLamp,
+  DEFAULT_LAMP_CONFIG,
+} from './ProceduralLamps';
+export type {
+  ProceduralLampConfig,
+  LampFactoryResult,
+  CeilingLampConfig,
+  TableLampConfig,
+  FloorLampConfig,
+} from './ProceduralLamps';
