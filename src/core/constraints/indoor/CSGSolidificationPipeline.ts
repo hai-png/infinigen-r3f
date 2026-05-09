@@ -28,6 +28,7 @@
  */
 
 import * as THREE from 'three';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Constants
@@ -1869,54 +1870,12 @@ export class CSGSolidificationPipeline {
       return new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), material);
     }
 
-    // Manual merge
-    const mergedPositions: number[] = [];
-    const mergedNormals: number[] = [];
-    const mergedUVs: number[] = [];
-    const mergedIndices: number[] = [];
-    let vertexOffset = 0;
-
-    for (const geom of geometries) {
-      const posAttr = geom.getAttribute('position') as THREE.BufferAttribute;
-      const normalAttr = geom.getAttribute('normal') as THREE.BufferAttribute | null;
-      const uvAttr = geom.getAttribute('uv') as THREE.BufferAttribute | null;
-      const indexAttr = geom.getIndex();
-
-      for (let i = 0; i < posAttr.count; i++) {
-        mergedPositions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-        if (normalAttr) {
-          mergedNormals.push(normalAttr.getX(i), normalAttr.getY(i), normalAttr.getZ(i));
-        } else {
-          mergedNormals.push(0, 1, 0);
-        }
-        if (uvAttr) {
-          mergedUVs.push(uvAttr.getX(i), uvAttr.getY(i));
-        } else {
-          mergedUVs.push(0, 0);
-        }
-      }
-
-      if (indexAttr) {
-        const indexArray = indexAttr.array as Uint16Array | Uint32Array;
-        for (let i = 0; i < indexAttr.count; i++) {
-          mergedIndices.push(indexArray[i] + vertexOffset);
-        }
-      } else {
-        for (let i = 0; i < posAttr.count; i++) {
-          mergedIndices.push(i + vertexOffset);
-        }
-      }
-
-      vertexOffset += posAttr.count;
-      geom.dispose();
+    // Delegate to the canonical GeometryPipeline.mergeGeometries
+    if (geometries.length === 1) {
+      return new THREE.Mesh(geometries[0], material);
     }
 
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.Float32BufferAttribute(mergedPositions, 3));
-    merged.setAttribute('normal', new THREE.Float32BufferAttribute(mergedNormals, 3));
-    merged.setAttribute('uv', new THREE.Float32BufferAttribute(mergedUVs, 2));
-    merged.setIndex(mergedIndices);
-    merged.computeVertexNormals();
+    const merged = GeometryPipeline.mergeGeometries(geometries);
 
     return new THREE.Mesh(merged, material);
   }

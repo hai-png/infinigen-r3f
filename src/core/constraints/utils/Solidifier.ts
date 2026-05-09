@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { Room, RoomType, Door, Window } from '../room/RoomTypes';
 import { Direction } from '../room/FloorPlanMoves';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 /**
  * Configuration for solidifier output
@@ -311,7 +312,7 @@ export class Solidifier {
   }
 
   /**
-   * Merge multiple geometries into one
+   * Merge multiple geometries into one, delegating to GeometryPipeline.
    */
   private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
     if (geometries.length === 0) {
@@ -322,7 +323,7 @@ export class Solidifier {
       return geometries[0];
     }
 
-    return (THREE as any).BufferGeometryUtils.mergeGeometries(geometries, true);
+    return GeometryPipeline.mergeGeometries(geometries);
   }
 
   /**

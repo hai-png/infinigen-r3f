@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import type { Object3D, Material, BufferGeometry, Mesh } from 'three';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 export interface DrawCallStats {
   /** Total number of draw calls */
@@ -216,7 +217,7 @@ export class DrawCallOptimizer {
   }
   
   /**
-   * Merge multiple geometries into one
+   * Merge multiple geometries into one, delegating to GeometryPipeline.
    */
   private mergeGeometries(
     geometries: (BufferGeometry | null)[],
@@ -227,75 +228,22 @@ export class DrawCallOptimizer {
     
     if (validGeometries.length === 0) return null;
     
-    if (preserveTransforms) {
-      // Apply transforms to geometries before merging
-      const transformedGeometries = validGeometries.map((geom, idx) => {
-        const cloned = geom.clone();
-        const obj = objects[idx];
-        if (obj) {
-          cloned.applyMatrix4(obj.matrixWorld);
-        }
-        return cloned;
-      });
-      
-      return this.mergeBufferGeometries(transformedGeometries);
-    } else {
-      return this.mergeBufferGeometries(validGeometries);
-    }
-  }
-  
-  /**
-   * Merge array of buffer geometries
-   */
-  private mergeBufferGeometries(geometries: BufferGeometry[]): BufferGeometry | null {
-    if (geometries.length === 0) return null;
-    if (geometries.length === 1) return geometries[0].clone();
-    
     try {
-      // Use Three.js built-in merge if available
-      const merged = new THREE.BufferGeometry();
-      const positions: number[] = [];
-      const normals: number[] = [];
-      const uvs: number[] = [];
-      const indices: number[] = [];
-      
-      let indexOffset = 0;
-      
-      geometries.forEach(geom => {
-        const pos = geom.attributes.position?.array as Float32Array;
-        const norm = geom.attributes.normal?.array as Float32Array;
-        const uv = geom.attributes.uv?.array as Float32Array;
-        const idx = geom.index?.array as Uint16Array | Uint32Array;
-        
-        if (pos) positions.push(...Array.from(pos));
-        if (norm) normals.push(...Array.from(norm));
-        if (uv) uvs.push(...Array.from(uv));
-        
-        if (idx) {
-          for (let i = 0; i < idx.length; i++) {
-            indices.push(idx[i] + indexOffset);
+      if (preserveTransforms) {
+        // Apply transforms to geometries before merging
+        const transformedGeometries = validGeometries.map((geom, idx) => {
+          const cloned = geom.clone();
+          const obj = objects[idx];
+          if (obj) {
+            cloned.applyMatrix4(obj.matrixWorld);
           }
-        } else {
-          // No index, create one
-          const vertexCount = pos ? pos.length / 3 : 0;
-          for (let i = 0; i < vertexCount; i++) {
-            indices.push(i + indexOffset);
-          }
-        }
+          return cloned;
+        });
         
-        indexOffset += pos ? pos.length / 3 : 0;
-      });
-      
-      merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      if (normals.length > 0) {
-        merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        return GeometryPipeline.mergeGeometries(transformedGeometries);
+      } else {
+        return GeometryPipeline.mergeGeometries(validGeometries);
       }
-      if (uvs.length > 0) {
-        merged.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-      }
-      merged.setIndex(indices);
-      
-      return merged;
     } catch (error) {
       console.warn('Failed to merge geometries:', error);
       return null;

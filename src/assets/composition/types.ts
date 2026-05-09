@@ -5,33 +5,18 @@
  * All public interfaces, enums, and value types used across composition modules
  * are defined here.
  *
+ * SceneGraphNode has been promoted to @/core/types so that core placement,
+ * constraints, and composition modules can reference it without circular deps.
+ *
  * @module composition/types
  */
 
 import { Vector3, Quaternion, Box3, Sphere } from 'three';
 import type { Object3D } from 'three';
 
-// ============================================================================
-// Scene Graph
-// ============================================================================
-
-/**
- * Scene graph node — previously in ../nodes/types (deleted).
- * Central type for the composition system's object representation.
- */
-export interface SceneGraphNode {
-  id: string;
-  type: string;
-  name: string;
-  children?: SceneGraphNode[];
-  parent?: SceneGraphNode;
-  transform: {
-    position: Vector3;
-    rotation: import('three').Euler | Quaternion;
-    scale: Vector3;
-  };
-  data?: unknown; // eslint-disable-line @typescript-eslint/no-explicit-any
-}
+// Import SceneGraphNode from its canonical location and re-export
+import type { SceneGraphNode } from '@/core/types';
+export type { SceneGraphNode } from '@/core/types';
 
 // ============================================================================
 // Enums

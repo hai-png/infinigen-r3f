@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
 import { SeededNoiseGenerator } from '@/core/util/math/noise';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Types & Interfaces
@@ -1512,30 +1513,23 @@ export class CoralGrowthGenerator {
     geometry.attributes.color.needsUpdate = true;
   }
 
-  /** Merge two BufferGeometry objects */
+  /** Merge two BufferGeometry objects, preserving color attributes.
+   *  Delegates core merge to GeometryPipeline, then adds color attribute
+   *  (which GeometryPipeline doesn't handle) with per-geometry defaults. */
   private mergeGeometries(a: THREE.BufferGeometry, b: THREE.BufferGeometry): THREE.BufferGeometry {
     const posA = a.attributes.position;
     const posB = b.attributes.position;
 
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
+    // Delegate core merge to GeometryPipeline
+    const merged = GeometryPipeline.mergeGeometries([a, b]);
 
-    // Add geometry A
-    const hasNormalsA = !!a.attributes.normal;
+    // Build color attribute (GeometryPipeline doesn't handle colors)
     const hasColorsA = !!a.attributes.color;
-    const hasIndexA = !!a.index;
+    const hasColorsB = !!b.attributes.color;
+    const colors: number[] = [];
 
-    let vertexOffset = 0;
-
+    // Geometry A colors
     for (let i = 0; i < posA.count; i++) {
-      positions.push(posA.getX(i), posA.getY(i), posA.getZ(i));
-      if (hasNormalsA) {
-        normals.push(a.attributes.normal.getX(i), a.attributes.normal.getY(i), a.attributes.normal.getZ(i));
-      } else {
-        normals.push(0, 1, 0);
-      }
       if (hasColorsA) {
         colors.push(a.attributes.color.getX(i), a.attributes.color.getY(i), a.attributes.color.getZ(i));
       } else {
@@ -1543,30 +1537,8 @@ export class CoralGrowthGenerator {
       }
     }
 
-    if (hasIndexA) {
-      for (let i = 0; i < a.index!.count; i++) {
-        indices.push(a.index!.getX(i));
-      }
-    } else {
-      for (let i = 0; i < posA.count; i++) {
-        indices.push(i);
-      }
-    }
-
-    vertexOffset = posA.count;
-
-    // Add geometry B
-    const hasNormalsB = !!b.attributes.normal;
-    const hasColorsB = !!b.attributes.color;
-    const hasIndexB = !!b.index;
-
+    // Geometry B colors
     for (let i = 0; i < posB.count; i++) {
-      positions.push(posB.getX(i), posB.getY(i), posB.getZ(i));
-      if (hasNormalsB) {
-        normals.push(b.attributes.normal.getX(i), b.attributes.normal.getY(i), b.attributes.normal.getZ(i));
-      } else {
-        normals.push(0, 1, 0);
-      }
       if (hasColorsB) {
         colors.push(b.attributes.color.getX(i), b.attributes.color.getY(i), b.attributes.color.getZ(i));
       } else {
@@ -1574,23 +1546,7 @@ export class CoralGrowthGenerator {
       }
     }
 
-    if (hasIndexB) {
-      for (let i = 0; i < b.index!.count; i++) {
-        indices.push(b.index!.getX(i) + vertexOffset);
-      }
-    } else {
-      for (let i = 0; i < posB.count; i++) {
-        indices.push(i + vertexOffset);
-      }
-    }
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     merged.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    merged.setIndex(indices);
-    merged.computeVertexNormals();
-
     return merged;
   }
 }

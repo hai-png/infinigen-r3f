@@ -9,11 +9,11 @@ This codebase is an R3F (React Three Fiber) port of Princeton's Infinigen proced
 - ✅ **System 2: Terrain & Landscape System** — (done in prior sessions)
 - ✅ **System 3: Constraint & Solver System** — (done in prior sessions)
 - ✅ **System 4: Material & Shader System** — (done in prior sessions)
+- ✅ **System A: Placement, Camera & Scene Composition** — (done in this session)
+- ✅ **System B: Vegetation & Plant System** — (done in this session)
+- ✅ **System C: Lighting & Atmosphere System** — (done in this session)
 
-**Current Overhaul Targets:**
-1. Placement, Camera & Scene Composition
-2. Vegetation & Plant System
-3. Lighting & Atmosphere System
+**All overhaul targets are COMPLETE.**
 
 ---
 

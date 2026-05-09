@@ -392,6 +392,7 @@ export class RuntimeMaterialBuilder {
     this.errors = [];
     this.varCounter = 0;
     this.nodeOutputs = new Map();
+    this.nodeOutputVars = new Map();
 
     // Merge config
     const cfg = config ? { ...this.config, ...config } : this.config;
@@ -481,9 +482,84 @@ export class RuntimeMaterialBuilder {
   // Node Compilation (Node Type → GLSL)
   // ==========================================================================
 
+  /** Map of nodeId → GLSL output variable references for connection resolution */
+  private nodeOutputVars: Map<string, Map<string, string>> = new Map();
+
+  /** Register an output variable for a compiled node so downstream nodes can reference it */
+  private registerNodeOutput(nodeId: string, socketName: string, glslVarRef: string): void {
+    if (!this.nodeOutputVars.has(nodeId)) {
+      this.nodeOutputVars.set(nodeId, new Map());
+    }
+    this.nodeOutputVars.get(nodeId)!.set(socketName, glslVarRef);
+  }
+
+  /** Resolve a node input: if connected, return the upstream output variable; otherwise return the default */
+  private resolveInput(nodeId: string, inputName: string, graph: NodeGraph, defaultGLSL: string): string {
+    // Find a connection to this input
+    for (const link of graph.links) {
+      if (link.toNode === nodeId && link.toSocket === inputName) {
+        // Found a connection — look up the upstream node's output variable
+        const sourceOutputs = this.nodeOutputVars.get(link.fromNode);
+        if (sourceOutputs) {
+          const sourceVar = sourceOutputs.get(link.fromSocket);
+          if (sourceVar) {
+            return sourceVar;
+          }
+          // If the specific socket isn't registered, try the default output
+          const defaultOutput = sourceOutputs.get('default');
+          if (defaultOutput) {
+            return defaultOutput;
+          }
+        }
+        // Upstream node compiled but didn't register this output — use default with warning
+        this.warnings.push(
+          `Connection from ${link.fromNode}.${link.fromSocket} to ${nodeId}.${inputName} ` +
+          `has no registered GLSL output variable, using default`
+        );
+      }
+    }
+    return defaultGLSL;
+  }
+
+  /** Get a socket-specific output variable name for a node */
+  private getOutputVarName(nodeVarName: string, socketName: string, outputType: 'float' | 'vec2' | 'vec3' | 'vec4'): string {
+    // Map common socket names to the GLSL variables declared by each node type
+    switch (socketName) {
+      // Texture node outputs
+      case 'Fac': case 'fac': case 'Value': case 'value':
+        return `${nodeVarName}_fac`;
+      case 'Color': case 'color':
+        return outputType === 'float' ? `${nodeVarName}_fac` : `${nodeVarName}_color`;
+      // Vector outputs
+      case 'Vector': case 'vector':
+        return `${nodeVarName}_vector`;
+      // Normal outputs
+      case 'Normal': case 'normal':
+        return `${nodeVarName}_normal`;
+      // Math outputs
+      case 'Result': case 'result':
+        return outputType === 'float' ? `${nodeVarName}_value` : `${nodeVarName}_vector`;
+      // BSDF/Shader outputs
+      case 'BSDF': case 'bsdf': case 'Shader': case 'shader':
+        return nodeVarName; // Shader outputs are referenced by the whole node var
+      // Emission
+      case 'Emission': case 'emission':
+        return `${nodeVarName}_emissionColor`;
+      // Texture coordinate outputs
+      case 'Generated': case 'generated': return `${nodeVarName}_generated`;
+      case 'Object': case 'object': return `${nodeVarName}_object`;
+      case 'World': case 'world': return `${nodeVarName}_world`;
+      case 'UV': case 'uv': return `${nodeVarName}_uv`;
+      // Value/RGB outputs
+      case 'Val': case 'val': return `${nodeVarName}_val`;
+      default:
+        return `${nodeVarName}_fac`;
+    }
+  }
+
   private compileNode(
     node: NodeInstance,
-    _graph: NodeGraph,
+    graph: NodeGraph,
     _cfg: NodeGraph3DConfig
   ): CompiledNode | null {
     const nodeType = this.normalizeNodeType(node.type);
@@ -492,11 +568,11 @@ export class RuntimeMaterialBuilder {
     switch (nodeType) {
       // ── Texture Nodes ──
       case 'noise_texture':
-        return this.compileNoiseTexture(node, varName);
+        return this.compileNoiseTexture(node, varName, graph);
       case 'voronoi_texture':
-        return this.compileVoronoiTexture(node, varName);
+        return this.compileVoronoiTexture(node, varName, graph);
       case 'musgrave_texture':
-        return this.compileMusgraveTexture(node, varName);
+        return this.compileMusgraveTexture(node, varName, graph);
       case 'gradient_texture':
         return this.compileGradientTexture(node, varName);
       case 'brick_texture':
@@ -510,51 +586,51 @@ export class RuntimeMaterialBuilder {
 
       // ── Color Nodes ──
       case 'mix_rgb':
-        return this.compileMixRGB(node, varName);
+        return this.compileMixRGB(node, varName, graph);
       case 'color_ramp':
-        return this.compileColorRamp(node, varName);
+        return this.compileColorRamp(node, varName, graph);
       case 'hue_saturation':
-        return this.compileHueSaturation(node, varName);
+        return this.compileHueSaturation(node, varName, graph);
       case 'invert':
-        return this.compileInvert(node, varName);
+        return this.compileInvert(node, varName, graph);
       case 'bright_contrast':
-        return this.compileBrightContrast(node, varName);
+        return this.compileBrightContrast(node, varName, graph);
 
       // ── Math Nodes ──
       case 'math':
-        return this.compileMath(node, varName);
+        return this.compileMath(node, varName, graph);
       case 'vector_math':
-        return this.compileVectorMath(node, varName);
+        return this.compileVectorMath(node, varName, graph);
 
       // ── Vector Nodes ──
       case 'mapping':
-        return this.compileMapping(node, varName);
+        return this.compileMapping(node, varName, graph);
       case 'combine_xyz':
-        return this.compileCombineXYZ(node, varName);
+        return this.compileCombineXYZ(node, varName, graph);
       case 'separate_xyz':
-        return this.compileSeparateXYZ(node, varName);
+        return this.compileSeparateXYZ(node, varName, graph);
       case 'bump':
-        return this.compileBump(node, varName);
+        return this.compileBump(node, varName, graph);
       case 'normal_map':
-        return this.compileNormalMap(node, varName);
+        return this.compileNormalMap(node, varName, graph);
 
       // ── Shader Nodes ──
       case 'principled_bsdf':
-        return this.compilePrincipledBSDF(node, varName);
+        return this.compilePrincipledBSDF(node, varName, graph);
       case 'emission':
-        return this.compileEmission(node, varName);
+        return this.compileEmission(node, varName, graph);
       case 'mix_shader':
-        return this.compileMixShader(node, varName);
+        return this.compileMixShader(node, varName, graph);
       case 'add_shader':
-        return this.compileAddShader(node, varName);
+        return this.compileAddShader(node, varName, graph);
 
       // ── Input Nodes ──
       case 'texture_coordinate':
-        return this.compileTextureCoordinate(node, varName);
+        return this.compileTextureCoordinate(node, varName, graph);
       case 'value':
-        return this.compileValue(node, varName);
+        return this.compileValue(node, varName, graph);
       case 'rgb':
-        return this.compileRGB(node, varName);
+        return this.compileRGB(node, varName, graph);
 
       // ── Output Nodes ──
       case 'material_output':
@@ -568,7 +644,7 @@ export class RuntimeMaterialBuilder {
 
   // ── Texture Node Compilers ──
 
-  private compileNoiseTexture(node: NodeInstance, varName: string): CompiledNode {
+  private compileNoiseTexture(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const scale = this.getNodeSetting(node, 'scale', 5.0);
     const detail = this.getNodeSetting(node, 'detail', 2);
     const roughness = this.getNodeSetting(node, 'roughness', 0.5);
@@ -577,13 +653,28 @@ export class RuntimeMaterialBuilder {
     this.addUniform(`${varName}_scale`, 'float', scale);
     this.addUniform(`${varName}_detail`, 'int', detail);
 
+    // Resolve vector input for custom coordinate mapping
+    const vectorInput = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'pos3D')
+      : 'pos3D';
+
     const glslCode = `
   // Noise Texture: ${node.id}
-  float ${varName}_base = fbm3D(pos3D * ${varName}_scale, ${varName}_detail, 2.0, ${roughness.toFixed(2)});
-  ${distortion > 0 ? `float ${varName}_dist = fbm3D((pos3D + ${varName}_base * ${distortion.toFixed(2)}) * ${varName}_scale, ${varName}_detail, 2.0, ${roughness.toFixed(2)});` : ''}
+  vec3 ${varName}_inputVec = ${vectorInput};
+  float ${varName}_base = fbm3D(${varName}_inputVec * ${varName}_scale, ${varName}_detail, 2.0, ${roughness.toFixed(2)});
+  ${distortion > 0 ? `float ${varName}_dist = fbm3D((${varName}_inputVec + ${varName}_base * ${distortion.toFixed(2)}) * ${varName}_scale, ${varName}_detail, 2.0, ${roughness.toFixed(2)});` : ''}
   float ${varName}_fac = ${distortion > 0 ? `${varName}_dist` : `${varName}_base`};
   vec3 ${varName}_color = vec3(${varName}_fac * 0.5 + 0.5);
 `;
+
+    // Register outputs for downstream connection resolution
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_fac`);
+    }
 
     return {
       glslCode,
@@ -594,16 +685,31 @@ export class RuntimeMaterialBuilder {
     };
   }
 
-  private compileVoronoiTexture(node: NodeInstance, varName: string): CompiledNode {
+  private compileVoronoiTexture(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const scale = this.getNodeSetting(node, 'scale', 5.0);
 
     this.addUniform(`${varName}_scale`, 'float', scale);
 
+    // Resolve vector input for custom coordinate mapping
+    const vectorInput = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'pos3D')
+      : 'pos3D';
+
     const glslCode = `
   // Voronoi Texture: ${node.id}
-  float ${varName}_fac = voronoi3D(pos3D * ${varName}_scale);
+  vec3 ${varName}_inputVec = ${vectorInput};
+  float ${varName}_fac = voronoi3D(${varName}_inputVec * ${varName}_scale);
   vec3 ${varName}_color = vec3(${varName}_fac);
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_fac`);
+    }
 
     return {
       glslCode,
@@ -614,7 +720,7 @@ export class RuntimeMaterialBuilder {
     };
   }
 
-  private compileMusgraveTexture(node: NodeInstance, varName: string): CompiledNode {
+  private compileMusgraveTexture(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const scale = this.getNodeSetting(node, 'scale', 5.0);
     const detail = this.getNodeSetting(node, 'detail', 2);
     const dimension = this.getNodeSetting(node, 'dimension', 2.0);
@@ -626,22 +732,37 @@ export class RuntimeMaterialBuilder {
     this.addUniform(`${varName}_dimension`, 'float', dimension);
     this.addUniform(`${varName}_lacunarity`, 'float', lacunarity);
 
+    // Resolve vector input
+    const vectorInput = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'pos3D')
+      : 'pos3D';
+
     let noiseCall: string;
     switch (musgraveType) {
       case 'ridged':
-        noiseCall = `musgraveRidged(pos3D * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, 1.0, 0.5)`;
+        noiseCall = `musgraveRidged(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, 1.0, 0.5)`;
         break;
       case 'hetero':
-        noiseCall = `musgraveHetero(pos3D * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, 1.0)`;
+        noiseCall = `musgraveHetero(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, 1.0)`;
         break;
       default: // 'fbm'
-        noiseCall = `musgraveFBM(pos3D * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail)`;
+        noiseCall = `musgraveFBM(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail)`;
     }
 
     const glslCode = `
   // Musgrave Texture: ${node.id}
+  vec3 ${varName}_inputVec = ${vectorInput};
   float ${varName}_fac = ${noiseCall};
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'Color', `vec3(${varName}_fac)`);
+      this.registerNodeOutput(node.id, 'color', `vec3(${varName}_fac)`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_fac`);
+    }
 
     return {
       glslCode,
@@ -791,36 +912,56 @@ export class RuntimeMaterialBuilder {
 
   // ── Color Node Compilers ──
 
-  private compileMixRGB(node: NodeInstance, varName: string): CompiledNode {
+  private compileMixRGB(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const factor = this.getNodeSetting(node, 'factor', 0.5);
     const blendType = this.getNodeSetting(node, 'blendType', 'mix');
 
     this.addUniform(`${varName}_factor`, 'float', factor);
 
+    // Resolve connected inputs — use upstream node outputs if connected
+    const c1 = graph
+      ? this.resolveInput(node.id, 'Color1', graph, 'vec3(0.5)')
+      : 'vec3(0.5)';
+    const c2 = graph
+      ? this.resolveInput(node.id, 'Color2', graph, 'vec3(0.5)')
+      : 'vec3(0.5)';
+    const facInput = graph
+      ? this.resolveInput(node.id, 'Fac', graph, `${varName}_factor`)
+      : `${varName}_factor`;
+
     let blendExpr: string;
     switch (blendType) {
       case 'add':
-        blendExpr = `${varName}_c1 + ${varName}_c2`;
+        blendExpr = `${c1} + ${c2}`;
         break;
       case 'multiply':
-        blendExpr = `${varName}_c1 * ${varName}_c2`;
+        blendExpr = `${c1} * ${c2}`;
         break;
       case 'screen':
-        blendExpr = `1.0 - (1.0 - ${varName}_c1) * (1.0 - ${varName}_c2)`;
+        blendExpr = `1.0 - (1.0 - ${c1}) * (1.0 - ${c2})`;
         break;
       case 'subtract':
-        blendExpr = `${varName}_c1 - ${varName}_c2`;
+        blendExpr = `${c1} - ${c2}`;
         break;
       default: // 'mix'
-        blendExpr = `mix(${varName}_c1, ${varName}_c2, ${varName}_factor)`;
+        blendExpr = `mix(${c1}, ${c2}, ${facInput})`;
     }
 
     const glslCode = `
   // Mix RGB: ${node.id}
-  vec3 ${varName}_c1 = vec3(0.5); // Default, will be overridden by connections
-  vec3 ${varName}_c2 = vec3(0.5);
+  float ${varName}_fac_input = ${facInput};
+  vec3 ${varName}_c1 = ${c1};
+  vec3 ${varName}_c2 = ${c2};
   vec3 ${varName}_color = ${blendExpr};
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'Result', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_color`);
+    }
 
     return {
       glslCode,
@@ -831,7 +972,7 @@ export class RuntimeMaterialBuilder {
     };
   }
 
-  private compileColorRamp(node: NodeInstance, varName: string): CompiledNode {
+  private compileColorRamp(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const stops = this.getNodeSetting(node, 'stops', [
       { position: 0, color: { r: 0, g: 0, b: 0 } },
       { position: 1, color: { r: 1, g: 1, b: 1 } },
@@ -853,6 +994,11 @@ export class RuntimeMaterialBuilder {
 
     const lastStopPos = rampStops[rampStops.length - 1]?.position?.toFixed(2) ?? '1.00';
 
+    // Resolve Fac input connection
+    const facInput = graph
+      ? this.resolveInput(node.id, 'Fac', graph, '0.5')
+      : '0.5';
+
     const glslCode = `
   // Color Ramp: ${node.id}
   vec3 ${varName}_ramp(float fac) {
@@ -860,9 +1006,17 @@ export class RuntimeMaterialBuilder {
 ${rampCode}
     return ${varName}_stop_${lastStopPos};
   }
-  float ${varName}_fac_in = 0.5; // Default, overridden by connection
+  float ${varName}_fac_in = ${facInput};
   vec3 ${varName}_color = ${varName}_ramp(${varName}_fac_in);
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'Alpha', `${varName}_fac_in`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_color`);
+    }
 
     return {
       glslCode,
@@ -873,7 +1027,7 @@ ${rampCode}
     };
   }
 
-  private compileHueSaturation(node: NodeInstance, varName: string): CompiledNode {
+  private compileHueSaturation(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const hue = this.getNodeSetting(node, 'hue', 0.5);
     const saturation = this.getNodeSetting(node, 'saturation', 1.0);
     const value = this.getNodeSetting(node, 'value', 1.0);
@@ -882,15 +1036,27 @@ ${rampCode}
     const satShift = (saturation - 1).toFixed(3);
     const valShift = (value - 1).toFixed(3);
 
+    // Resolve Color input connection
+    const colorInput = graph
+      ? this.resolveInput(node.id, 'Color', graph, 'vec3(0.5)')
+      : 'vec3(0.5)';
+
     const glslCode = `
   // Hue/Saturation: ${node.id}
-  vec3 ${varName}_input = vec3(0.5); // Default, overridden by connection
+  vec3 ${varName}_input = ${colorInput};
   // Approximate HSV adjustment in GLSL
   vec3 ${varName}_hsv = ${varName}_input;
   ${varName}_hsv = clamp(${varName}_hsv + vec3(${hueShift}, ${satShift}, ${valShift}), 0.0, 1.0);
   vec3 ${varName}_color = ${varName}_hsv;
 `;
 
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_color`);
+    }
+
     return {
       glslCode,
       outputVar: varName,
@@ -900,14 +1066,26 @@ ${rampCode}
     };
   }
 
-  private compileInvert(node: NodeInstance, varName: string): CompiledNode {
+  private compileInvert(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const factor = this.getNodeSetting(node, 'factor', 1.0);
+
+    // Resolve Color input connection
+    const colorInput = graph
+      ? this.resolveInput(node.id, 'Color', graph, 'vec3(0.5)')
+      : 'vec3(0.5)';
 
     const glslCode = `
   // Invert: ${node.id}
-  vec3 ${varName}_input = vec3(0.5);
+  vec3 ${varName}_input = ${colorInput};
   vec3 ${varName}_color = mix(${varName}_input, 1.0 - ${varName}_input, ${factor.toFixed(3)});
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_color`);
+    }
 
     return {
       glslCode,
@@ -918,15 +1096,27 @@ ${rampCode}
     };
   }
 
-  private compileBrightContrast(node: NodeInstance, varName: string): CompiledNode {
+  private compileBrightContrast(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const bright = this.getNodeSetting(node, 'bright', 0.0);
     const contrast = this.getNodeSetting(node, 'contrast', 0.0);
 
+    // Resolve Color input connection
+    const colorInput = graph
+      ? this.resolveInput(node.id, 'Color', graph, 'vec3(0.5)')
+      : 'vec3(0.5)';
+
     const glslCode = `
   // Bright/Contrast: ${node.id}
-  vec3 ${varName}_input = vec3(0.5);
+  vec3 ${varName}_input = ${colorInput};
   vec3 ${varName}_color = (${varName}_input + ${(bright.toFixed(3))}) * ${(1 + contrast).toFixed(3)};
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_color`);
+    }
 
     return {
       glslCode,
@@ -939,37 +1129,53 @@ ${rampCode}
 
   // ── Math Node Compilers ──
 
-  private compileMath(node: NodeInstance, varName: string): CompiledNode {
+  private compileMath(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const operation = this.getNodeSetting(node, 'operation', 'add');
+
+    // Resolve connected inputs
+    const v1 = graph
+      ? this.resolveInput(node.id, 'Value', graph, '0.0')
+      : '0.0';
+    const v2 = graph
+      ? this.resolveInput(node.id, 'Value_001', graph, '0.0')
+      : '0.0';
 
     let expr: string;
     switch (operation) {
-      case 'add': expr = 'v1 + v2'; break;
-      case 'subtract': expr = 'v1 - v2'; break;
-      case 'multiply': expr = 'v1 * v2'; break;
-      case 'divide': expr = 'v2 != 0.0 ? v1 / v2 : 0.0'; break;
-      case 'power': expr = 'pow(v1, v2)'; break;
-      case 'sqrt': expr = 'sqrt(max(0.0, v1))'; break;
-      case 'abs': expr = 'abs(v1)'; break;
-      case 'min': expr = 'min(v1, v2)'; break;
-      case 'max': expr = 'max(v1, v2)'; break;
-      case 'sin': expr = 'sin(v1)'; break;
-      case 'cos': expr = 'cos(v1)'; break;
-      case 'tan': expr = 'tan(v1)'; break;
-      case 'modulo': expr = 'v2 != 0.0 ? mod(v1, v2) : 0.0'; break;
-      case 'floor': expr = 'floor(v1)'; break;
-      case 'ceil': expr = 'ceil(v1)'; break;
-      case 'round': expr = 'floor(v1 + 0.5)'; break;
-      case 'clamp': expr = 'clamp(v1, 0.0, 1.0)'; break;
-      default: expr = 'v1';
+      case 'add': expr = `${v1} + ${v2}`; break;
+      case 'subtract': expr = `${v1} - ${v2}`; break;
+      case 'multiply': expr = `${v1} * ${v2}`; break;
+      case 'divide': expr = `${v2} != 0.0 ? ${v1} / ${v2} : 0.0`; break;
+      case 'power': expr = `pow(${v1}, ${v2})`; break;
+      case 'sqrt': expr = `sqrt(max(0.0, ${v1}))`; break;
+      case 'abs': expr = `abs(${v1})`; break;
+      case 'min': expr = `min(${v1}, ${v2})`; break;
+      case 'max': expr = `max(${v1}, ${v2})`; break;
+      case 'sin': expr = `sin(${v1})`; break;
+      case 'cos': expr = `cos(${v1})`; break;
+      case 'tan': expr = `tan(${v1})`; break;
+      case 'modulo': expr = `${v2} != 0.0 ? mod(${v1}, ${v2}) : 0.0`; break;
+      case 'floor': expr = `floor(${v1})`; break;
+      case 'ceil': expr = `ceil(${v1})`; break;
+      case 'round': expr = `floor(${v1} + 0.5)`; break;
+      case 'clamp': expr = `clamp(${v1}, 0.0, 1.0)`; break;
+      default: expr = v1;
     }
 
     const glslCode = `
   // Math: ${node.id} (${operation})
-  float ${varName}_v1 = 0.0; // Default, overridden by connections
-  float ${varName}_v2 = 0.0;
+  float ${varName}_v1 = ${v1};
+  float ${varName}_v2 = ${v2};
   float ${varName}_value = ${expr};
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Value', `${varName}_value`);
+      this.registerNodeOutput(node.id, 'value', `${varName}_value`);
+      this.registerNodeOutput(node.id, 'Result', `${varName}_value`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_value`);
+    }
 
     return {
       glslCode,
@@ -980,29 +1186,47 @@ ${rampCode}
     };
   }
 
-  private compileVectorMath(node: NodeInstance, varName: string): CompiledNode {
+  private compileVectorMath(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const operation = this.getNodeSetting(node, 'operation', 'add');
+
+    // Resolve connected inputs
+    const v1 = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'vec3(0.0)')
+      : 'vec3(0.0)';
+    const v2 = graph
+      ? this.resolveInput(node.id, 'Vector_001', graph, 'vec3(0.0)')
+      : 'vec3(0.0)';
 
     let expr: string;
     switch (operation) {
-      case 'add': expr = 'v1 + v2'; break;
-      case 'subtract': expr = 'v1 - v2'; break;
-      case 'multiply': expr = 'v1 * v2'; break;
-      case 'divide': expr = 'v2 != vec3(0.0) ? v1 / v2 : vec3(0.0)'; break;
-      case 'cross': expr = 'cross(v1, v2)'; break;
-      case 'normalize': expr = 'normalize(v1)'; break;
-      case 'length': expr = 'vec3(length(v1))'; break;
-      case 'scale': expr = 'v1 * 1.0'; break;
-      default: expr = 'v1';
+      case 'add': expr = `${v1} + ${v2}`; break;
+      case 'subtract': expr = `${v1} - ${v2}`; break;
+      case 'multiply': expr = `${v1} * ${v2}`; break;
+      case 'divide': expr = `${v2} != vec3(0.0) ? ${v1} / ${v2} : vec3(0.0)`; break;
+      case 'cross': expr = `cross(${v1}, ${v2})`; break;
+      case 'normalize': expr = `normalize(${v1})`; break;
+      case 'length': expr = `vec3(length(${v1}))`; break;
+      case 'scale': expr = `${v1} * 1.0`; break;
+      default: expr = v1;
     }
 
     const glslCode = `
   // Vector Math: ${node.id} (${operation})
-  vec3 ${varName}_v1 = vec3(0.0);
-  vec3 ${varName}_v2 = vec3(0.0);
+  vec3 ${varName}_v1 = ${v1};
+  vec3 ${varName}_v2 = ${v2};
   vec3 ${varName}_vector = ${expr};
   float ${varName}_value = length(${varName}_vector);
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Vector', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'vector', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'Value', `${varName}_value`);
+      this.registerNodeOutput(node.id, 'value', `${varName}_value`);
+      this.registerNodeOutput(node.id, 'Result', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_vector`);
+    }
 
     return {
       glslCode,
@@ -1015,16 +1239,30 @@ ${rampCode}
 
   // ── Vector Node Compilers ──
 
-  private compileMapping(node: NodeInstance, varName: string): CompiledNode {
+  private compileMapping(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const translation = this.getNodeSetting(node, 'translation', { x: 0, y: 0, z: 0 });
     const scale = this.getNodeSetting(node, 'scale', { x: 1, y: 1, z: 1 });
 
+    // Resolve Vector input connection
+    const vectorInput = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'pos3D')
+      : 'pos3D';
+
     const glslCode = `
   // Mapping: ${node.id}
-  vec3 ${varName}_result = pos3D * vec3(${scale.x}, ${scale.y}, ${scale.z}) + vec3(${translation.x}, ${translation.y}, ${translation.z});
+  vec3 ${varName}_input = ${vectorInput};
+  vec3 ${varName}_result = ${varName}_input * vec3(${scale.x}, ${scale.y}, ${scale.z}) + vec3(${translation.x}, ${translation.y}, ${translation.z});
   vec3 ${varName}_vector = ${varName}_result;
 `;
 
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Vector', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'vector', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'Result', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_vector`);
+    }
+
     return {
       glslCode,
       outputVar: varName,
@@ -1034,15 +1272,34 @@ ${rampCode}
     };
   }
 
-  private compileCombineXYZ(node: NodeInstance, varName: string): CompiledNode {
+  private compileCombineXYZ(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
+    // Resolve X, Y, Z input connections
+    const xInput = graph
+      ? this.resolveInput(node.id, 'X', graph, '0.0')
+      : '0.0';
+    const yInput = graph
+      ? this.resolveInput(node.id, 'Y', graph, '0.0')
+      : '0.0';
+    const zInput = graph
+      ? this.resolveInput(node.id, 'Z', graph, '0.0')
+      : '0.0';
+
     const glslCode = `
   // Combine XYZ: ${node.id}
-  float ${varName}_x = 0.0;
-  float ${varName}_y = 0.0;
-  float ${varName}_z = 0.0;
+  float ${varName}_x = ${xInput};
+  float ${varName}_y = ${yInput};
+  float ${varName}_z = ${zInput};
   vec3 ${varName}_vector = vec3(${varName}_x, ${varName}_y, ${varName}_z);
 `;
 
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Vector', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'vector', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'Result', `${varName}_vector`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_vector`);
+    }
+
     return {
       glslCode,
       outputVar: varName,
@@ -1052,14 +1309,27 @@ ${rampCode}
     };
   }
 
-  private compileSeparateXYZ(node: NodeInstance, varName: string): CompiledNode {
+  private compileSeparateXYZ(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
+    // Resolve Vector input connection
+    const vectorInput = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'vec3(0.0)')
+      : 'vec3(0.0)';
+
     const glslCode = `
   // Separate XYZ: ${node.id}
-  vec3 ${varName}_input = vec3(0.0);
+  vec3 ${varName}_input = ${vectorInput};
   float ${varName}_x = ${varName}_input.x;
   float ${varName}_y = ${varName}_input.y;
   float ${varName}_z = ${varName}_input.z;
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'X', `${varName}_x`);
+      this.registerNodeOutput(node.id, 'Y', `${varName}_y`);
+      this.registerNodeOutput(node.id, 'Z', `${varName}_z`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_x`);
+    }
 
     return {
       glslCode,
@@ -1070,15 +1340,32 @@ ${rampCode}
     };
   }
 
-  private compileBump(node: NodeInstance, varName: string): CompiledNode {
+  private compileBump(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const strength = this.getNodeSetting(node, 'strength', 1.0);
+
+    // Resolve Height and Normal input connections
+    const heightInput = graph
+      ? this.resolveInput(node.id, 'Height', graph, '0.0')
+      : '0.0';
+    const normalInput = graph
+      ? this.resolveInput(node.id, 'Normal', graph, 'N')
+      : 'N';
 
     const glslCode = `
   // Bump: ${node.id}
-  float ${varName}_height = 0.0;
+  float ${varName}_height = ${heightInput};
   float ${varName}_strength = ${strength.toFixed(3)};
-  vec3 ${varName}_normal = perturbNormal(N, pos3D, ${varName}_height, ${varName}_strength);
+  vec3 ${varName}_baseNormal = ${normalInput};
+  vec3 ${varName}_normal = perturbNormal(${varName}_baseNormal, pos3D, ${varName}_height, ${varName}_strength);
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Normal', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'normal', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'Result', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_normal`);
+    }
 
     return {
       glslCode,
@@ -1089,14 +1376,28 @@ ${rampCode}
     };
   }
 
-  private compileNormalMap(node: NodeInstance, varName: string): CompiledNode {
+  private compileNormalMap(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const strength = this.getNodeSetting(node, 'strength', 1.0);
+
+    // Resolve Color input connection (normal map texture)
+    const colorInput = graph
+      ? this.resolveInput(node.id, 'Color', graph, 'vec3(0.5, 0.5, 1.0)')
+      : 'vec3(0.5, 0.5, 1.0)';
 
     const glslCode = `
   // Normal Map: ${node.id}
+  vec3 ${varName}_colorInput = ${colorInput};
   float ${varName}_strength = ${strength.toFixed(3)};
-  vec3 ${varName}_normal = N; // Will be overridden if texture is connected
+  vec3 ${varName}_tangentNormal = ${varName}_colorInput * 2.0 - 1.0;
+  vec3 ${varName}_normal = normalize(mix(N, ${varName}_tangentNormal, ${varName}_strength));
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Normal', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'normal', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_normal`);
+    }
 
     return {
       glslCode,
@@ -1109,7 +1410,7 @@ ${rampCode}
 
   // ── Shader Node Compilers ──
 
-  private compilePrincipledBSDF(node: NodeInstance, varName: string): CompiledNode {
+  private compilePrincipledBSDF(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const baseColor = this.getNodeSetting(node, 'baseColor', { r: 0.8, g: 0.8, b: 0.8 });
     const roughness = this.getNodeSetting(node, 'roughness', 0.5);
     const metallic = this.getNodeSetting(node, 'metallic', 0.0);
@@ -1134,20 +1435,46 @@ ${rampCode}
     this.addUniform(`${varName}_alpha`, 'float', alpha);
     this.addUniform(`${varName}_sheen`, 'float', sheen);
 
+    // Resolve connected inputs — these override the uniform defaults
+    const albedoInput = graph
+      ? this.resolveInput(node.id, 'Base Color', graph, `${varName}_baseColor`)
+      : `${varName}_baseColor`;
+    const roughInput = graph
+      ? this.resolveInput(node.id, 'Roughness', graph, `${varName}_roughness`)
+      : `${varName}_roughness`;
+    const metalInput = graph
+      ? this.resolveInput(node.id, 'Metallic', graph, `${varName}_metallic`)
+      : `${varName}_metallic`;
+    const normalInput = graph
+      ? this.resolveInput(node.id, 'Normal', graph, 'N')
+      : 'N';
+    const emissionInput = graph
+      ? this.resolveInput(node.id, 'Emission', graph, 'vec3(0.0)')
+      : 'vec3(0.0)';
+
     const glslCode = `
   // Principled BSDF: ${node.id}
-  vec3 ${varName}_albedo = ${varName}_baseColor;
-  float ${varName}_rough = max(0.04, ${varName}_roughness);
-  float ${varName}_metal = ${varName}_metallic;
+  vec3 ${varName}_albedo = ${albedoInput};
+  float ${varName}_rough = max(0.04, float(${roughInput}));
+  float ${varName}_metal = float(${metalInput});
   float ${varName}_spec = ${varName}_specular;
   float ${varName}_trans = ${varName}_transmission;
   float ${varName}_cc = ${varName}_clearcoat;
   float ${varName}_ccRough = max(0.04, ${varName}_clearcoatRoughness);
-  vec3 ${varName}_emissionColor = vec3(0.0);
+  vec3 ${varName}_emissionColor = ${emissionInput};
   float ${varName}_emStr = ${varName}_emissionStrength;
   float ${varName}_alphaVal = ${varName}_alpha;
   float ${varName}_sheenVal = ${varName}_sheen;
+  vec3 ${varName}_normal = ${normalInput};
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'BSDF', varName);
+      this.registerNodeOutput(node.id, 'bsdf', varName);
+      this.registerNodeOutput(node.id, 'Shader', varName);
+      this.registerNodeOutput(node.id, 'default', varName);
+    }
 
     return {
       glslCode,
@@ -1158,18 +1485,34 @@ ${rampCode}
     };
   }
 
-  private compileEmission(node: NodeInstance, varName: string): CompiledNode {
+  private compileEmission(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const color = this.getNodeSetting(node, 'color', { r: 1, g: 1, b: 1 });
     const strength = this.getNodeSetting(node, 'strength', 1.0);
 
     this.addUniform(`${varName}_color`, 'vec3', new THREE.Vector3(color.r, color.g, color.b));
     this.addUniform(`${varName}_strength`, 'float', strength);
 
+    // Resolve Color and Strength input connections
+    const colorInput = graph
+      ? this.resolveInput(node.id, 'Color', graph, `${varName}_color`)
+      : `${varName}_color`;
+    const strengthInput = graph
+      ? this.resolveInput(node.id, 'Strength', graph, `${varName}_strength`)
+      : `${varName}_strength`;
+
     const glslCode = `
   // Emission: ${node.id}
-  vec3 ${varName}_emissionColor = ${varName}_color;
-  float ${varName}_emissionStrength = ${varName}_strength;
+  vec3 ${varName}_emissionColor = ${colorInput};
+  float ${varName}_emissionStrength = ${strengthInput};
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Emission', `${varName}_emissionColor`);
+      this.registerNodeOutput(node.id, 'BSDF', varName);
+      this.registerNodeOutput(node.id, 'Shader', varName);
+      this.registerNodeOutput(node.id, 'default', varName);
+    }
 
     return {
       glslCode,
@@ -1180,16 +1523,36 @@ ${rampCode}
     };
   }
 
-  private compileMixShader(node: NodeInstance, varName: string): CompiledNode {
+  private compileMixShader(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const factor = this.getNodeSetting(node, 'factor', 0.5);
 
     this.addUniform(`${varName}_factor`, 'float', factor);
 
+    // Resolve Fac input connection
+    const facInput = graph
+      ? this.resolveInput(node.id, 'Fac', graph, `${varName}_factor`)
+      : `${varName}_factor`;
+
+    // Resolve connected shader inputs
+    const shader1 = graph
+      ? this.resolveInput(node.id, 'Shader', graph, 'null')
+      : 'null';
+    const shader2 = graph
+      ? this.resolveInput(node.id, 'Shader_001', graph, 'null')
+      : 'null';
+
     const glslCode = `
   // Mix Shader: ${node.id}
-  float ${varName}_fac = ${varName}_factor;
-  // Shader mixing happens during BSDF assembly
+  float ${varName}_fac = ${facInput};
+  // Shader mixing: ${shader1 !== 'null' ? `shader1=${shader1}` : 'no-shader1'} ${shader2 !== 'null' ? `shader2=${shader2}` : 'no-shader2'}
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Shader', varName);
+      this.registerNodeOutput(node.id, 'BSDF', varName);
+      this.registerNodeOutput(node.id, 'default', varName);
+    }
 
     return {
       glslCode,
@@ -1200,11 +1563,26 @@ ${rampCode}
     };
   }
 
-  private compileAddShader(node: NodeInstance, varName: string): CompiledNode {
+  private compileAddShader(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
+    // Resolve connected shader inputs
+    const shader1 = graph
+      ? this.resolveInput(node.id, 'Shader', graph, 'null')
+      : 'null';
+    const shader2 = graph
+      ? this.resolveInput(node.id, 'Shader_001', graph, 'null')
+      : 'null';
+
     const glslCode = `
   // Add Shader: ${node.id}
-  // Shader addition happens during BSDF assembly
+  // Shader addition: ${shader1 !== 'null' ? `shader1=${shader1}` : 'no-shader1'} ${shader2 !== 'null' ? `shader2=${shader2}` : 'no-shader2'}
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Shader', varName);
+      this.registerNodeOutput(node.id, 'BSDF', varName);
+      this.registerNodeOutput(node.id, 'default', varName);
+    }
 
     return {
       glslCode,
@@ -1217,7 +1595,7 @@ ${rampCode}
 
   // ── Input Node Compilers ──
 
-  private compileTextureCoordinate(node: NodeInstance, varName: string): CompiledNode {
+  private compileTextureCoordinate(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const glslCode = `
   // Texture Coordinate: ${node.id}
   vec3 ${varName}_generated = vObjectPosition;
@@ -1226,6 +1604,22 @@ ${rampCode}
   vec3 ${varName}_uv = vec3(vTexCoord, 0.0);
   vec3 ${varName}_normal = vWorldNormal;
 `;
+
+    // Register outputs for downstream connection resolution
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Generated', `${varName}_generated`);
+      this.registerNodeOutput(node.id, 'generated', `${varName}_generated`);
+      this.registerNodeOutput(node.id, 'Object', `${varName}_object`);
+      this.registerNodeOutput(node.id, 'object', `${varName}_object`);
+      this.registerNodeOutput(node.id, 'World', `${varName}_world`);
+      this.registerNodeOutput(node.id, 'world', `${varName}_world`);
+      this.registerNodeOutput(node.id, 'UV', `${varName}_uv`);
+      this.registerNodeOutput(node.id, 'uv', `${varName}_uv`);
+      this.registerNodeOutput(node.id, 'Normal', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'normal', `${varName}_normal`);
+      this.registerNodeOutput(node.id, 'Vector', `${varName}_generated`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_generated`);
+    }
 
     return {
       glslCode,
@@ -1236,7 +1630,7 @@ ${rampCode}
     };
   }
 
-  private compileValue(node: NodeInstance, varName: string): CompiledNode {
+  private compileValue(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const value = this.getNodeSetting(node, 'value', 0.0);
 
     this.addUniform(`${varName}_value`, 'float', value);
@@ -1245,6 +1639,13 @@ ${rampCode}
   // Value: ${node.id}
   float ${varName}_val = ${varName}_value;
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Value', `${varName}_val`);
+      this.registerNodeOutput(node.id, 'value', `${varName}_val`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_val`);
+    }
 
     return {
       glslCode,
@@ -1255,7 +1656,7 @@ ${rampCode}
     };
   }
 
-  private compileRGB(node: NodeInstance, varName: string): CompiledNode {
+  private compileRGB(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
     const color = this.getNodeSetting(node, 'color', [1, 1, 1, 1]);
     const c = Array.isArray(color) ? color : [1, 1, 1, 1];
 
@@ -1265,6 +1666,13 @@ ${rampCode}
   // RGB: ${node.id}
   vec3 ${varName}_color_val = ${varName}_color;
 `;
+
+    // Register outputs
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color_val`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color_val`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_color_val`);
+    }
 
     return {
       glslCode,
@@ -1297,12 +1705,33 @@ ${rampCode}
   // ==========================================================================
 
   private assembleBSDFOutput(
-    _outputNodeId: string,
-    _graph: NodeGraph,
+    outputNodeId: string,
+    graph: NodeGraph,
     cfg: NodeGraph3DConfig
   ): string {
     // Generate the BSDF evaluation code that reads from compiled node variables
-    // and produces the final PBR output
+    // and produces the final PBR output. Uses connection resolution to wire up
+    // the output node's input to the correct upstream BSDF shader.
+
+    // Find the BSDF connected to the output node's Surface input
+    let bsdfVarName: string | null = null;
+    for (const link of graph.links) {
+      if (link.toNode === outputNodeId && (link.toSocket === 'Surface' || link.toSocket === 'surface')) {
+        // Look up the registered output variable from the connected node
+        const sourceOutputs = this.nodeOutputVars.get(link.fromNode);
+        if (sourceOutputs) {
+          bsdfVarName = sourceOutputs.get(link.fromSocket) ?? sourceOutputs.get('default') ?? null;
+        }
+        // If no registered output, construct the variable name from the compiled node
+        if (!bsdfVarName) {
+          const sourceCompiled = this.nodeOutputs.get(link.fromNode);
+          if (sourceCompiled) {
+            bsdfVarName = sourceCompiled.outputVar;
+          }
+        }
+        break;
+      }
+    }
 
     const bsdfGLSL = `
   // ========================================================================
@@ -1322,9 +1751,10 @@ ${rampCode}
   float emissionStrength = 0.0;
   float sheen = 0.0;
   float ao = 1.0;
+  vec3 bsdfNormal = N;
 
-  // Find and apply the Principled BSDF node output (if compiled)
-  ${this.findAndApplyBSDFNode()}
+  // Apply BSDF from connected shader node${bsdfVarName ? `: ${bsdfVarName}` : ''}
+  ${bsdfVarName ? this.applyBSDFVar(bsdfVarName) : this.findAndApplyBSDFNode()}
 
   // Compute triplanar noise for base material properties
   float noiseVal;
@@ -1348,6 +1778,28 @@ ${rampCode}
 `;
 
     return bsdfGLSL;
+  }
+
+  /** Apply a specific BSDF variable to the output parameters */
+  private applyBSDFVar(v: string): string {
+    return `
+  // Apply connected BSDF: ${v}
+  if (${v}_albedo.x >= 0.0) albedo = ${v}_albedo;
+  if (${v}_rough >= 0.0) roughness = ${v}_rough;
+  if (${v}_metal >= 0.0) metallic = ${v}_metal;
+  if (${v}_spec >= 0.0) specular = ${v}_spec;
+  if (${v}_trans >= 0.0) transmission = ${v}_trans;
+  if (${v}_cc >= 0.0) clearcoat = ${v}_cc;
+  if (${v}_ccRough >= 0.0) clearcoatRoughness = ${v}_ccRough;
+  if (${v}_alphaVal >= 0.0) alpha = ${v}_alphaVal;
+  if (${v}_sheenVal >= 0.0) sheen = ${v}_sheenVal;
+  if (${v}_emStr > 0.0) {
+    emissionColor = ${v}_emissionColor;
+    emissionStrength = ${v}_emStr;
+  }
+  // Use the normal from BSDF if it was overridden
+  bsdfNormal = ${v}_normal;
+`;
   }
 
   private findAndApplyBSDFNode(): string {

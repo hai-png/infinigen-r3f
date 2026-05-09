@@ -18,6 +18,7 @@
 
 import * as THREE from 'three';
 import type { NodeInputs, NodeOutput, Vector3Like, ColorLike, GeometryLike } from './ExecutorTypes';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Seeded Random Utility (matches other executor modules)
@@ -72,60 +73,8 @@ export function executeJoinGeometry(inputs: NodeInputs): NodeOutput {
   if (valid.length === 0) return { Geometry: new THREE.BufferGeometry() };
   if (valid.length === 1) return { Geometry: valid[0].clone() };
 
-  // Use BufferGeometryUtils merge approach
-  let totalVerts = 0;
-  let totalIndices = 0;
-  for (const g of valid) {
-    const posAttr = g.getAttribute('position');
-    totalVerts += posAttr.count;
-    const idx = g.getIndex();
-    totalIndices += idx ? idx.count : posAttr.count;
-  }
-
-  const positions = new Float32Array(totalVerts * 3);
-  const normals = new Float32Array(totalVerts * 3);
-  const indices: number[] = [];
-
-  let vertOffset = 0;
-  let posOffset = 0;
-
-  for (const g of valid) {
-    const posAttr = g.getAttribute('position');
-    const normAttr = g.getAttribute('normal');
-    const idxAttr = g.getIndex();
-
-    for (let i = 0; i < posAttr.count; i++) {
-      positions[posOffset + i * 3] = posAttr.getX(i);
-      positions[posOffset + i * 3 + 1] = posAttr.getY(i);
-      positions[posOffset + i * 3 + 2] = posAttr.getZ(i);
-
-      if (normAttr) {
-        normals[posOffset + i * 3] = normAttr.getX(i);
-        normals[posOffset + i * 3 + 1] = normAttr.getY(i);
-        normals[posOffset + i * 3 + 2] = normAttr.getZ(i);
-      }
-    }
-
-    if (idxAttr) {
-      for (let i = 0; i < idxAttr.count; i++) {
-        indices.push(idxAttr.getX(i) + vertOffset);
-      }
-    } else {
-      for (let i = 0; i < posAttr.count; i++) {
-        indices.push(i + vertOffset);
-      }
-    }
-
-    vertOffset += posAttr.count;
-    posOffset += posAttr.count * 3;
-  }
-
-  const result = new THREE.BufferGeometry();
-  result.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  result.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-  if (indices.length > 0) result.setIndex(indices);
-
-  return { Geometry: result };
+  // Delegate to the canonical GeometryPipeline.mergeGeometries
+  return { Geometry: GeometryPipeline.mergeGeometries(valid) };
 }
 
 /**

@@ -16,6 +16,7 @@
 
 import * as THREE from 'three';
 import type { NodeInputs, NodeOutput, Vector3Like, ColorLike } from './ExecutorTypes';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Helper: normalize a vector-like input to {x, y, z}
@@ -375,49 +376,9 @@ export function executeBoolean(inputs: NodeInputs): NodeOutput {
   };
 }
 
-/** Helper: merge two geometries into one */
+/** Helper: merge two geometries into one — delegates to GeometryPipeline */
 function mergeGeometriesP2(a: THREE.BufferGeometry, b: THREE.BufferGeometry): THREE.BufferGeometry {
-  const posA = a.getAttribute('position');
-  const posB = b.getAttribute('position');
-  const normA = a.getAttribute('normal');
-  const normB = b.getAttribute('normal');
-  const idxA = a.getIndex();
-  const idxB = b.getIndex();
-
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const indices: number[] = [];
-  let vertOffset = 0;
-
-  // Geometry A
-  for (let i = 0; i < posA.count; i++) {
-    positions.push(posA.getX(i), posA.getY(i), posA.getZ(i));
-    if (normA) normals.push(normA.getX(i), normA.getY(i), normA.getZ(i));
-  }
-  if (idxA) {
-    for (let i = 0; i < idxA.count; i++) indices.push(idxA.getX(i));
-  } else {
-    for (let i = 0; i < posA.count; i++) indices.push(i);
-  }
-  vertOffset = posA.count;
-
-  // Geometry B
-  for (let i = 0; i < posB.count; i++) {
-    positions.push(posB.getX(i), posB.getY(i), posB.getZ(i));
-    if (normB) normals.push(normB.getX(i), normB.getY(i), normB.getZ(i));
-  }
-  if (idxB) {
-    for (let i = 0; i < idxB.count; i++) indices.push(idxB.getX(i) + vertOffset);
-  } else {
-    for (let i = 0; i < posB.count; i++) indices.push(i + vertOffset);
-  }
-
-  const result = new THREE.BufferGeometry();
-  result.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  if (normals.length > 0) result.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  result.setIndex(indices);
-  if (normals.length === 0) result.computeVertexNormals();
-  return result;
+  return GeometryPipeline.mergeGeometries([a, b]);
 }
 
 /**

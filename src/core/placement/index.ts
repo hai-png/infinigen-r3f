@@ -54,6 +54,54 @@ export type {
   GPUScatterConfig,
 } from './ScatterRegistry';
 
+// Placement Registry (superset of ScatterRegistry)
+export {
+  PlacementRegistry,
+  ConstraintPlacementStrategy,
+  FloorplanPlacementStrategy,
+  AdvancedPlacementStrategy,
+} from './PlacementRegistry';
+
+export type {
+  PlacementContext,
+  PlacementOutput,
+  PlacementStrategy,
+} from './PlacementRegistry';
+
+// Unified Scatter System
+export {
+  UnifiedScatterSystem,
+} from './UnifiedScatterSystem';
+
+export type {
+  UnifiedScatterConfig,
+} from './UnifiedScatterSystem';
+
+// Placement Mask System (moved from composition)
+export {
+  PlacementMaskSystem,
+} from './PlacementMaskSystem';
+
+export type {
+  MaskMode,
+  MaskCombinOp,
+  TerrainTag,
+  MaskNoiseParams,
+  MaskNormalParams,
+  MaskAltitudeParams,
+  MaskSlopeParams,
+  MaskTagParams,
+  MaskDistanceParams,
+  MaskParamsBase,
+  MaskPlacementMask,
+  MaskTerrainDataInput,
+} from './PlacementMaskSystem';
+
+// Geometry Merger
+export {
+  GeometryMerger,
+} from './GeometryMerger';
+
 // Camera subsystem
 export * from './camera/index';
 

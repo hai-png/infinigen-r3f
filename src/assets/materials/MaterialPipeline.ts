@@ -42,6 +42,8 @@ import { Material3DEvaluator, CoordinateSpace, type Material3DConfig, DEFAULT_3D
 import { RuntimeMaterialBuilder, type NodeGraph3DConfig } from './RuntimeMaterialBuilder';
 import { NodeGraph, NodeEvaluator, EvaluationMode } from '../../core/nodes/execution/';
 import { evaluateToMaterial, type EvaluateToMaterialOptions, type EvaluateToMaterialResult } from '../../core/nodes/execution/EvaluateToMaterial';
+import { TerrainMaterialBridge, type TerrainSurfaceParams } from './terrain/TerrainMaterialBridge';
+import { SurfaceMaterialPipeline } from './surface/SurfaceMaterialPipeline';
 
 // ============================================================================
 // Types
@@ -792,6 +794,112 @@ export class MaterialPipeline {
    */
   getTexturePipeline(): MaterialTexturePipeline {
     return this.texturePipeline;
+  }
+
+  // ==========================================================================
+  // TerrainMaterialBridge Integration
+  // ==========================================================================
+
+  /**
+   * Create a terrain material using the TerrainMaterialBridge.
+   *
+   * This uses the dedicated terrain pipeline with biome-specific blending
+   * (slope-based rock, altitude-based snow/sand), which is more accurate
+   * than the generic createTerrainMaterial() for natural terrain.
+   *
+   * @param params - Terrain surface parameters
+   * @returns MeshPhysicalMaterial with terrain-specific properties
+   */
+  async createTerrainBridgeMaterial(params: TerrainSurfaceParams): Promise<THREE.MeshPhysicalMaterial> {
+    return TerrainMaterialBridge.createTerrainMaterial(params);
+  }
+
+  /**
+   * Create a biome-specific material using the TerrainMaterialBridge.
+   *
+   * Applies slope-based and altitude-based blending rules for realistic
+   * natural terrain appearance.
+   *
+   * @param biome - Biome name (desert, tundra, forest, etc.)
+   * @param slope - Terrain slope (0-1, steep = more rock)
+   * @param altitude - Altitude (0-1, high = more snow)
+   * @returns MeshPhysicalMaterial with biome-appropriate properties
+   */
+  async createBiomeMaterial(
+    biome: string,
+    slope?: number,
+    altitude?: number,
+  ): Promise<THREE.MeshPhysicalMaterial> {
+    return TerrainMaterialBridge.createBiomeMaterial(biome, slope, altitude);
+  }
+
+  /**
+   * Get the terrain presets from the TerrainMaterialBridge.
+   */
+  getTerrainPresets() {
+    return TerrainMaterialBridge.getTerrainPresets();
+  }
+
+  // ==========================================================================
+  // SurfaceMaterialPipeline Integration
+  // ==========================================================================
+
+  /**
+   * Convert a shader function (NodeGraph) to a Three.js material.
+   *
+   * This is the equivalent of Infinigen's shader_func_to_material.
+   * Uses SurfaceMaterialPipeline for tag-based face selection support.
+   *
+   * @param shaderGraph - Node graph defining the shader
+   * @param params - Optional additional parameters
+   * @returns MeshPhysicalMaterial
+   */
+  createMaterialFromShaderFunc(
+    shaderGraph: NodeGraph,
+    params?: Record<string, any>,
+  ): THREE.MeshPhysicalMaterial {
+    return SurfaceMaterialPipeline.shaderFuncToMaterial(shaderGraph, params);
+  }
+
+  /**
+   * Add material to objects with optional tag-based face selection.
+   *
+   * When a `selection` tag is provided, only faces with that tag
+   * receive the material. This is the equivalent of Infinigen's
+   * add_material() with selection parameter.
+   *
+   * @param objects - Array of objects to apply the material to
+   * @param material - The material to apply
+   * @param selection - Optional tag name to restrict assignment
+   */
+  assignMaterialToSelection(
+    objects: THREE.Object3D[],
+    material: THREE.Material,
+    selection?: string,
+  ): void {
+    SurfaceMaterialPipeline.addMaterial(objects, material, selection);
+  }
+
+  /**
+   * Blend materials on tagged faces.
+   *
+   * Equivalent to Infinigen's MixShader approach — creates a blended
+   * material on faces identified by the tag mask.
+   *
+   * @param object - The object to blend materials on
+   * @param baseMat - Base material
+   * @param overlayMat - Overlay material to blend in
+   * @param tagMask - Tag identifying which faces to blend on
+   * @param blendWeight - Blend weight (0 = all base, 1 = all overlay)
+   */
+  blendMaterialOnTag(
+    object: THREE.Object3D,
+    baseMat: THREE.Material,
+    overlayMat: THREE.Material,
+    tagMask: string,
+    blendWeight: number = 0.5,
+  ): void {
+    SurfaceMaterialPipeline.blendMaterialOnFaces(object, baseMat, overlayMat, tagMask, blendWeight);
   }
 
   /**

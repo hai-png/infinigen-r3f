@@ -3,7 +3,7 @@
  * Stem + blade leaves. All geometries in Mesh(geometry, MeshStandardMaterial). Uses SeededRandom.
  */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 import { SeededRandom } from '../../../../core/util/math/index';
 
 export interface MonocotConfig {
@@ -153,7 +153,7 @@ export class MonocotGenerator {
 
     // Merge stem + all leaf geometries into a single BufferGeometry
     const mergedGeometry = geometries.length > 1
-      ? mergeGeometries(geometries)
+      ? GeometryPipeline.mergeGeometries(geometries)
       : geometries[0] ?? (stemGroup.children[0] as THREE.Mesh).geometry;
 
     const material = primaryMaterial ?? new THREE.MeshStandardMaterial({

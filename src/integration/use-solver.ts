@@ -1,12 +1,17 @@
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   SimulatedAnnealingSolver,
+  MoveOperatorFactory,
+  retryAttemptProposals,
+  type MoveProposal,
 } from '../index';
+import { violCount, evaluateProblem } from '../core/constraints/evaluator/evaluate';
 import type { ObjectState } from '../core/constraints/evaluator/state';
 import type { State as ConstraintState } from '../core/constraints/evaluator/state';
 import type { Relation as RelationType } from '../core/constraints/language/relations';
+import { SeededRandom } from '../core/constraints/../../util/MathUtils';
 
 // The integration layer uses its own extended SolverState that includes
 // SA iteration tracking on top of the base ConstraintState
@@ -94,6 +99,7 @@ export function useInfinigenSolver(
   const [error, setError] = useState<Error | null>(null);
 
   const solverRef = useRef<SimulatedAnnealingSolver | null>(null);
+  const moveFactoryRef = useRef<MoveOperatorFactory | null>(null);
   const animationFrameRef = useRef<number>();
 
   // Initialize solver
@@ -145,26 +151,87 @@ export function useInfinigenSolver(
 
         const step = () => {
           try {
-            // Perform one SA iteration using the canonical solver
-            const proposal = {
-              objectId: '',
-              variableId: '',
-              newValue: null,
-              newState: {} as any,
-              score: 0,
-              metadata: { type: 'continuous' as const },
-            };
+            // Generate a real move proposal using MoveOperatorFactory
+            let proposal = null;
+            try {
+              if (!moveFactoryRef.current) {
+                moveFactoryRef.current = new MoveOperatorFactory();
+              }
+              const rng = new SeededRandom(Date.now() + currentIteration);
+              const result = retryAttemptProposals(
+                10, // maxInvalid retries
+                moveFactoryRef.current,
+                state,
+                rng
+              );
+              if (result) {
+                proposal = {
+                  objectId: result.proposal.objectId ?? '',
+                  variableId: result.proposal.objectId ?? '',
+                  newValue: result.proposal,
+                  newState: {} as any,
+                  score: 0,
+                  metadata: {
+                    type: (result.proposal.type === 'TRANSLATE' || result.proposal.type === 'ROTATE'
+                      ? 'continuous'
+                      : result.proposal.type === 'ADDITION' || result.proposal.type === 'DELETION'
+                        ? 'discrete'
+                        : 'hybrid') as 'continuous' | 'discrete' | 'hybrid',
+                    moveType: result.proposal.type,
+                  },
+                };
+                // Apply the move to the state
+                if (result.operator.isValid(state, result.proposal)) {
+                  result.operator.apply(state, result.proposal);
+                }
+              }
+            } catch {
+              // MoveOperatorFactory may not work in all contexts
+            }
+
+            // Fallback: create a simple continuous proposal if move factory fails
+            if (!proposal) {
+              proposal = {
+                objectId: '',
+                variableId: '',
+                newValue: null,
+                newState: {} as any,
+                score: 0,
+                metadata: { type: 'continuous' as const },
+              };
+            }
+
             const nextState = solverRef.current!.step(state, proposal);
 
             currentIteration++;
             const newProgress = (currentIteration / maxIterations) * 100;
             setProgress(newProgress);
 
-            // Count violations
-            const violations = constraints.reduce((count, _constraint) => {
-              // Simplified violation counting
-              return count + (Math.random() > 0.9 ? 1 : 0);
-            }, 0);
+            // Count violations using the actual evaluator pipeline
+            let violations = 0;
+            try {
+              // Build a solver State from the current objects for the evaluator
+              const evalState: ConstraintState = new ConstraintState(
+                state.objects,
+                state.problem
+              );
+              // Build a problem from the constraints for evaluation
+              const evalProblem: any = {
+                constraints: constraints as any[],
+              };
+              const memo = new Map();
+              for (const constraint of constraints) {
+                try {
+                  const v = violCount(constraint as any, evalState, memo, null);
+                  if (v > 0) violations++;
+                } catch {
+                  // Constraint evaluation may fail in incomplete state
+                }
+              }
+            } catch {
+              // Evaluator not available — fall back to energy-based estimate
+              violations = nextState.energy > 0 ? Math.round(nextState.energy) : 0;
+            }
             setViolationCount(violations);
 
             // Merge the SA solver's result with our state

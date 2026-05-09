@@ -424,12 +424,22 @@ export class LSystemEngine {
 
 // ============================================================================
 // Preset L-System Configurations
+//
+// @deprecated These presets are maintained for backward compatibility.
+// New code should use SpeciesRegistry (from ../SpeciesRegistry) as the
+// single source of truth for species data. Use lsystemPresetFromRegistry()
+// to convert a SpeciesEntry into an LSystemPreset.
 // ============================================================================
+
+import { getSpeciesRegistry } from '../SpeciesRegistry';
 
 function deg(degrees: number): number {
   return degrees * (Math.PI / 180);
 }
 
+/**
+ * @deprecated Use SpeciesRegistry instead. This object is kept for backward compat.
+ */
 export const LSystemPresets: Record<string, LSystemPreset> = {
   /** Monopodial: single dominant trunk, branches at top */
   monopodial: {
@@ -560,6 +570,50 @@ export const LSystemPresets: Record<string, LSystemPreset> = {
     deterministic: true,
   },
 };
+
+/**
+ * Bridge function: convert a SpeciesRegistry entry to an LSystemPreset.
+ * This allows generators to query SpeciesRegistry and produce the format
+ * LSystemEngine expects, without duplicating preset data.
+ *
+ * @param speciesName - Name of the species in the registry
+ * @param overrides  - Optional overrides for the resulting preset
+ * @returns An LSystemPreset, or null if the species is not in the registry
+ */
+export function lsystemPresetFromRegistry(
+  speciesName: string,
+  overrides: Partial<LSystemPreset> = {}
+): LSystemPreset | null {
+  const registry = getSpeciesRegistry();
+  const entry = registry.get(speciesName);
+  if (!entry || !entry.lsystem) return null;
+
+  const ls = entry.lsystem;
+  const rules = (ls.rules as Array<{ predecessor: string; successor: string; probability: number }>) ?? [
+    { predecessor: 'F', successor: 'FF+[+F-F-F]-[-F+F+F]', probability: 1.0 },
+  ];
+
+  const preset: LSystemPreset = {
+    name: entry.name,
+    description: entry.displayName,
+    axiom: (ls.axiom as string) ?? 'F',
+    rules: rules.map(r => ({
+      predecessor: r.predecessor,
+      successor: r.successor,
+      probability: r.probability,
+    })),
+    iterations: (ls.iterations as number) ?? 4,
+    angle: (ls.angle as number) ?? 25 * (Math.PI / 180),
+    length: (ls.length as number) ?? 2.0,
+    lengthDecay: (ls.lengthDecay as number) ?? 0.7,
+    thickness: (ls.thickness as number) ?? 0.3,
+    thicknessDecay: (ls.thicknessDecay as number) ?? 0.65,
+    deterministic: rules.every(r => r.probability >= 1.0),
+    ...overrides,
+  };
+
+  return preset;
+}
 
 /**
  * Convenience: generate an L-system tree as a THREE.Group

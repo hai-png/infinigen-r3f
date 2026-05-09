@@ -477,6 +477,49 @@ export * from './groups';
 export * from './helpers';
 
 // ============================================================================
+// Python-Compatible API — full Python NodeWrangler API with auto-connecting
+// ============================================================================
+
+export {
+  PythonCompatibleNodeWrangler,
+  type PythonInputValue,
+  type CaptureResult,
+} from './api';
+
+// ============================================================================
+// Scene Transpiler — declarative scene configuration to node graph
+// ============================================================================
+
+export { SceneTranspiler } from './transpiler/SceneTranspiler';
+export type {
+  NodeConfig,
+  LinkConfig,
+  GroupConfig,
+  SocketInterfaceConfig,
+  BaseGraphConfig,
+  MaterialGraphConfig,
+  GeometryGraphConfig,
+  CompositorGraphConfig,
+  SceneGraphConfig,
+  TranspileResult as SceneTranspileResult,
+  SerializedGraph,
+} from './transpiler/SceneTranspiler';
+
+// ============================================================================
+// Node Info Constants — ported from infinigen/core/nodes/node_info.py
+// ============================================================================
+
+export {
+  NODE_ATTRS_AVAILABLE,
+  SINGLETON_NODES as SINGLETON_NODE_TYPES,
+  NODETYPE_TO_DATATYPE,
+  NODECLASS_TO_DATATYPE,
+  DATATYPE_TO_NODECLASS,
+  DATATYPE_DIMS,
+  DATATYPE_FIELDS,
+} from './core/node-types';
+
+// ============================================================================
 // Execution Layer — full re-export for consumers that need the deep pipeline
 // ============================================================================
 

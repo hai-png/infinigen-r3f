@@ -4,21 +4,10 @@
  * Defines tree species with custom attractor generation functions that produce
  * characteristic crown shapes when used with the SpaceColonization algorithm.
  *
- * Each species defines:
- * - Crown shape function for attractor generation
- * - Branch thickness parameters
- * - Leaf size and density
- * - Trunk characteristics
- * - Species-specific growth parameters
- *
- * Species included:
- * - Weeping Willow: drooping attractor points, long thin branches
- * - Baobab: thick trunk, sparse crown, bottle shape
- * - Sequoia: tall straight trunk, conical crown
- * - Acacia: flat-topped canopy, thorny branches
- *
- * These presets integrate with the existing SpaceColonizationTreeGenerator
- * by providing custom attractor functions and parameter overrides.
+ * @deprecated These presets are maintained for backward compatibility.
+ * New code should use SpeciesRegistry (from ../SpeciesRegistry) as the
+ * single source of truth for species data. Use speciesAttractorPresetFromRegistry()
+ * to convert a SpeciesEntry into a SpeciesAttractorPreset.
  *
  * Ported from: infinigen/terrain/objects/tree/space_colonization.py (species configs)
  */
@@ -26,6 +15,7 @@
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
 import type { SpaceColonizationConfig } from '../SpaceColonization';
+import { getSpeciesRegistry } from '../SpeciesRegistry';
 
 // ============================================================================
 // Types & Interfaces
@@ -432,6 +422,8 @@ function generateCherryBlossomAttractors(
  * Registry of all tree species presets with custom attractor functions.
  * These can be used with SpaceColonizationTreeGenerator by passing
  * the configOverrides and using the attractorFn for custom attractor generation.
+ *
+ * @deprecated Use SpeciesRegistry instead. This object is kept for backward compat.
  */
 export const TREE_SPECIES_ATTRACTOR_PRESETS: Record<string, SpeciesAttractorPreset> = {
   weeping_willow: weepingWillowPreset,
@@ -442,17 +434,88 @@ export const TREE_SPECIES_ATTRACTOR_PRESETS: Record<string, SpeciesAttractorPres
 };
 
 /**
+ * Bridge function: convert a SpeciesRegistry entry to a SpeciesAttractorPreset.
+ * This allows generators to query SpeciesRegistry and produce the format
+ * SpaceColonizationTreeGenerator expects, without duplicating preset data.
+ *
+ * If the species has an `attractor` field in the registry, it is used as
+ * the configOverrides for the attractor preset. Otherwise, returns null.
+ *
+ * @param speciesName - Name of the species in the registry
+ * @returns A SpeciesAttractorPreset, or null if the species is not in the registry
+ */
+export function speciesAttractorPresetFromRegistry(
+  speciesName: string
+): SpeciesAttractorPreset | null {
+  const registry = getSpeciesRegistry();
+  const entry = registry.get(speciesName);
+  if (!entry) return null;
+
+  // Use attractor data from registry if available
+  const attractor = entry.attractor;
+  const configOverrides: Partial<SpaceColonizationConfig> = attractor
+    ? (attractor as Partial<SpaceColonizationConfig>)
+    : {};
+
+  // Build a generic attractor preset from registry data
+  const preset: SpeciesAttractorPreset = {
+    name: entry.displayName,
+    description: `Attractor preset for ${entry.displayName}`,
+    category: entry.category === 'tree' ? 'broadleaf' : (entry.category as SpeciesAttractorPreset['category']),
+    attractorFn: (center, radius, height, count, rng) => {
+      // Default spherical attractor generation
+      const attractors: THREE.Vector3[] = [];
+      for (let i = 0; i < count; i++) {
+        const u = rng.next();
+        const v = rng.next();
+        const w = rng.next();
+        const theta = 2 * Math.PI * u;
+        const phi = Math.acos(2 * v - 1);
+        const r = radius * Math.cbrt(w);
+        attractors.push(new THREE.Vector3(
+          center.x + r * Math.sin(phi) * Math.cos(theta),
+          center.y + r * Math.sin(phi) * Math.sin(theta),
+          center.z + r * Math.cos(phi)
+        ));
+      }
+      return attractors;
+    },
+    configOverrides,
+    branchThickness: ((entry.genome as Record<string, unknown>)?.branchThickness as number) ?? 0.5,
+    thicknessDecay: ((entry.genome as Record<string, unknown>)?.thicknessDecay as number) ?? 0.65,
+    leafSize: ((entry.genome as Record<string, unknown>)?.leafSize as number) ?? 1.0,
+    leafDensity: ((entry.genome as Record<string, unknown>)?.leafDensity as number) ?? 0.7,
+    trunkHeightRatio: ((entry.genome as Record<string, unknown>)?.trunkHeightRatio as number) ?? 0.4,
+    barkHue: 0.07,
+    leafHue: 0.3,
+    maxGeneration: ((entry.genome as Record<string, unknown>)?.maxGeneration as number) ?? 5,
+    growthStep: ((entry.genome as Record<string, unknown>)?.growthStep as number) ?? 0.3,
+    drooping: false,
+  };
+
+  return preset;
+}
+
+/**
  * Get a species preset by name, or return null if not found.
  */
 export function getSpeciesPreset(name: string): SpeciesAttractorPreset | null {
-  return TREE_SPECIES_ATTRACTOR_PRESETS[name] ?? null;
+  // First try the local deprecated presets
+  const localPreset = TREE_SPECIES_ATTRACTOR_PRESETS[name];
+  if (localPreset) return localPreset;
+
+  // Then try the SpeciesRegistry via bridge
+  return speciesAttractorPresetFromRegistry(name);
 }
 
 /**
  * Get all available species names.
+ * Combines local deprecated presets with SpeciesRegistry names.
  */
 export function getAvailableSpecies(): string[] {
-  return Object.keys(TREE_SPECIES_ATTRACTOR_PRESETS);
+  const localNames = Object.keys(TREE_SPECIES_ATTRACTOR_PRESETS);
+  const registryNames = getSpeciesRegistry().getNames();
+  return [...new Set([...localNames, ...registryNames])].sort();
 }
 
 /**

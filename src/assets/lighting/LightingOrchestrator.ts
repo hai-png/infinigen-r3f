@@ -13,6 +13,9 @@
  *   - FogSystem
  *   - ExposureControl
  *
+ * The orchestrator now delegates preset management to a LightingRegistry,
+ * which uses the strategy pattern for pluggable lighting presets.
+ *
  * @module assets/lighting/LightingOrchestrator
  */
 
@@ -23,9 +26,14 @@ import {
   DEFAULT_ATMOSPHERE_CONFIG,
   type TimeOfDay,
 } from './AtmospherePipeline';
+import {
+  LightingRegistry,
+  type LightingPresetStrategy,
+  type LightingPresetResult,
+} from './LightingRegistry';
 
 // ============================================================================
-// Lighting Preset Types
+// Lighting Preset Types (kept for backward compatibility)
 // ============================================================================
 
 export type LightingPresetType = 'indoor' | 'outdoor' | 'studio' | 'dramatic' | 'natural';
@@ -38,9 +46,14 @@ export interface LightingPreset {
 }
 
 // ============================================================================
-// Built-in Presets
+// Built-in Presets (kept for backward compatibility — read from registry)
 // ============================================================================
 
+/**
+ * Static preset definitions for backward compatibility.
+ * These mirror the atmosphere overrides that the registry strategies produce.
+ * Prefer using LightingRegistry directly for full light creation.
+ */
 export const LIGHTING_PRESETS: Record<LightingPresetType, LightingPreset> = {
   indoor: {
     type: 'indoor',
@@ -127,19 +140,31 @@ export const LIGHTING_PRESETS: Record<LightingPresetType, LightingPreset> = {
  *
  * // Add scene-specific lights (from node executors)
  * orchestrator.addSceneLight(pointLight);
+ *
+ * // Access the registry for advanced control
+ * const registry = orchestrator.getRegistry();
+ * registry.register(myCustomPreset);
  * ```
  */
 export class LightingOrchestrator {
   private pipeline: AtmospherePipeline;
+  private registry: LightingRegistry;
   private sceneLights: THREE.Light[] = [];
   private scene: THREE.Scene | null = null;
+  private camera: THREE.Camera | null = null;
+  private renderer: THREE.WebGLRenderer | null = null;
   private currentPreset: LightingPresetType = 'outdoor';
   private keyLight: THREE.DirectionalLight | null = null;
   private fillLight: THREE.DirectionalLight | null = null;
   private rimLight: THREE.DirectionalLight | null = null;
+  /** Tracks whether the current preset was applied via the registry */
+  private usingRegistryPreset = false;
+  /** Last result from the registry (for cleanup) */
+  private lastRegistryResult: LightingPresetResult | null = null;
 
-  constructor() {
+  constructor(registry?: LightingRegistry) {
     this.pipeline = new AtmospherePipeline();
+    this.registry = registry ?? new LightingRegistry();
   }
 
   /**
@@ -160,11 +185,16 @@ export class LightingOrchestrator {
     } = {},
   ): void {
     this.scene = scene;
+    this.camera = camera ?? null;
+    this.renderer = renderer ?? null;
     const presetType = options.preset ?? 'outdoor';
     this.currentPreset = presetType;
-    const preset = LIGHTING_PRESETS[presetType];
 
-    // Merge preset atmosphere config with overrides
+    // Apply preset via the registry — this creates actual lights
+    this.applyPresetViaRegistry(presetType, scene, camera, renderer);
+
+    // Merge registry atmosphere config with overrides
+    const preset = LIGHTING_PRESETS[presetType];
     const atmosphereConfig: Partial<AtmospherePipelineConfig> = {
       ...preset.atmosphere,
       ...options.atmosphere,
@@ -172,35 +202,25 @@ export class LightingOrchestrator {
 
     // Attach atmosphere pipeline
     this.pipeline.attach(scene, camera, renderer, atmosphereConfig);
-
-    // For studio preset, add three-point lighting
-    if (presetType === 'studio') {
-      this.setupThreePointLighting(scene);
-    }
-
-    // For indoor preset, add interior point lights
-    if (presetType === 'indoor') {
-      this.setupIndoorLighting(scene);
-    }
   }
 
   /**
    * Apply a lighting preset at runtime.
+   *
+   * Uses the LightingRegistry to create the preset's lights and applies
+   * the associated atmosphere configuration.
    */
   applyPreset(presetType: LightingPresetType): void {
     this.currentPreset = presetType;
+
+    // Apply via registry if scene is available
+    if (this.scene) {
+      this.applyPresetViaRegistry(presetType, this.scene, this.camera ?? undefined, this.renderer ?? undefined);
+    }
+
+    // Update atmosphere pipeline
     const preset = LIGHTING_PRESETS[presetType];
     this.pipeline.update(preset.atmosphere);
-
-    // Remove existing studio/indoor lights
-    this.removeExtraLights();
-
-    if (presetType === 'studio') {
-      this.setupThreePointLighting(this.scene!);
-    }
-    if (presetType === 'indoor') {
-      this.setupIndoorLighting(this.scene!);
-    }
   }
 
   /**
@@ -262,18 +282,104 @@ export class LightingOrchestrator {
   }
 
   /**
+   * Get the LightingRegistry for advanced control.
+   * Allows registering custom presets, querying available presets, etc.
+   */
+  getRegistry(): LightingRegistry {
+    return this.registry;
+  }
+
+  /**
+   * Get the AtmospherePipeline instance.
+   */
+  getPipeline(): AtmospherePipeline {
+    return this.pipeline;
+  }
+
+  /**
    * Dispose all resources.
    */
   dispose(): void {
     this.removeExtraLights();
+    this.cleanupRegistryResult();
     this.pipeline.dispose();
     this.scene = null;
+    this.camera = null;
+    this.renderer = null;
   }
 
   // ===========================================================================
   // Private helpers
   // ===========================================================================
 
+  /**
+   * Apply a preset via the LightingRegistry.
+   * Cleans up previous registry-applied lights first.
+   */
+  private applyPresetViaRegistry(
+    presetType: LightingPresetType,
+    scene: THREE.Scene,
+    camera?: THREE.Camera,
+    renderer?: THREE.WebGLRenderer,
+  ): void {
+    // Clean up previous registry result
+    this.cleanupRegistryResult();
+
+    if (this.registry.has(presetType)) {
+      this.lastRegistryResult = this.registry.apply(presetType, scene, camera, renderer);
+      this.usingRegistryPreset = true;
+
+      // Add registry lights to our tracking
+      for (const light of this.lastRegistryResult.lights) {
+        // Don't double-add to scene (the strategy already did that)
+        // Just track for management
+        this.sceneLights.push(light);
+      }
+
+      // Add target object to scene if present
+      if (this.lastRegistryResult.target && !this.lastRegistryResult.target.parent) {
+        scene.add(this.lastRegistryResult.target);
+      }
+    } else {
+      // Fallback: use inline light setup for backward compat
+      this.usingRegistryPreset = false;
+      this.removeExtraLights();
+
+      if (presetType === 'studio') {
+        this.setupThreePointLighting(scene);
+      }
+      if (presetType === 'indoor') {
+        this.setupIndoorLighting(scene);
+      }
+    }
+  }
+
+  /**
+   * Clean up lights created by the registry.
+   */
+  private cleanupRegistryResult(): void {
+    if (!this.lastRegistryResult) return;
+
+    // Remove registry lights from our tracking
+    for (const light of this.lastRegistryResult.lights) {
+      const idx = this.sceneLights.indexOf(light);
+      if (idx >= 0) {
+        this.sceneLights.splice(idx, 1);
+      }
+    }
+
+    // Remove target object from scene
+    if (this.lastRegistryResult.target) {
+      this.lastRegistryResult.target.parent?.remove(this.lastRegistryResult.target);
+    }
+
+    this.lastRegistryResult = null;
+  }
+
+  /**
+   * @deprecated Use LightingRegistry with 'studio' preset instead.
+   * Kept for backward compatibility when registry is unavailable.
+   */
   private setupThreePointLighting(scene: THREE.Scene): void {
     // Key light — main directional light from upper right
     this.keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -295,6 +401,10 @@ export class LightingOrchestrator {
     this.sceneLights.push(this.rimLight);
   }
 
+  /**
+   * @deprecated Use LightingRegistry with 'indoor' preset instead.
+   * Kept for backward compatibility when registry is unavailable.
+   */
   private setupIndoorLighting(scene: THREE.Scene): void {
     // Ceiling light
     const ceilingLight = new THREE.PointLight(0xfff5e6, 0.8, 20);

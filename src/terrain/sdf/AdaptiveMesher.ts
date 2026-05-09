@@ -55,6 +55,7 @@ import {
   DEFAULT_GPU_SDF_EVALUATOR_CONFIG,
   buildCompositionFromRegistry,
 } from '../gpu/GPUSDFEvaluator';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Configuration Types
@@ -1007,7 +1008,8 @@ export class CameraAwareMesher {
 
   /**
    * Merge multiple geometries into a single BufferGeometry.
-   * Handles position, normal, and materialIndex attributes.
+   * Delegates to GeometryPipeline for position/normal/uv, then adds
+   * materialIndex attribute which GeometryPipeline doesn't handle.
    *
    * @param geometries - Array of geometries to merge
    * @returns Merged BufferGeometry
@@ -1023,42 +1025,25 @@ export class CameraAwareMesher {
       return geometries[0];
     }
 
-    const mergedPositions: number[] = [];
-    const mergedNormals: number[] = [];
-    const mergedMaterials: number[] = [];
+    // Delegate core merge to GeometryPipeline
+    const merged = GeometryPipeline.mergeGeometries(geometries);
 
+    // Add materialIndex attribute (GeometryPipeline doesn't handle this)
+    const mergedMaterials: number[] = [];
     for (const geom of geometries) {
       const posAttr = geom.attributes.position;
-      const normAttr = geom.attributes.normal;
-
       if (!posAttr) continue;
 
-      for (let i = 0; i < posAttr.count; i++) {
-        mergedPositions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-
-        if (normAttr) {
-          mergedNormals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
-        }
-
-        if (geom.attributes.materialIndex) {
-          const matAttr = geom.attributes.materialIndex as THREE.BufferAttribute;
+      if (geom.attributes.materialIndex) {
+        const matAttr = geom.attributes.materialIndex as THREE.BufferAttribute;
+        for (let i = 0; i < posAttr.count; i++) {
           mergedMaterials.push(matAttr.getX(i));
-        } else {
+        }
+      } else {
+        for (let i = 0; i < posAttr.count; i++) {
           mergedMaterials.push(0);
         }
       }
-    }
-
-    const merged = new THREE.BufferGeometry();
-    if (mergedPositions.length === 0) {
-      merged.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
-      return merged;
-    }
-
-    merged.setAttribute('position', new THREE.Float32BufferAttribute(mergedPositions, 3));
-
-    if (mergedNormals.length > 0) {
-      merged.setAttribute('normal', new THREE.Float32BufferAttribute(mergedNormals, 3));
     }
 
     if (mergedMaterials.length > 0) {

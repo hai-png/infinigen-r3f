@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '../../../../core/util/math/index';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // Types
@@ -546,47 +547,8 @@ export class FlowerGenerator {
     const headGeo = new THREE.SphereGeometry(config.petalLength, 8, 8);
     headGeo.translate(0, config.stemHeight, 0);
 
-    // Merge stem and head
-    const stemPos = stemGeo.attributes.position;
-    const headPos = headGeo.attributes.position;
-    const totalVerts = stemPos.count + headPos.count;
-
-    const mergedPositions = new Float32Array(totalVerts * 3);
-    const mergedNormals = new Float32Array(totalVerts * 3);
-
-    for (let i = 0; i < stemPos.count; i++) {
-      mergedPositions[i * 3] = stemPos.getX(i);
-      mergedPositions[i * 3 + 1] = stemPos.getY(i);
-      mergedPositions[i * 3 + 2] = stemPos.getZ(i);
-      mergedNormals[i * 3] = stemGeo.attributes.normal.getX(i);
-      mergedNormals[i * 3 + 1] = stemGeo.attributes.normal.getY(i);
-      mergedNormals[i * 3 + 2] = stemGeo.attributes.normal.getZ(i);
-    }
-
-    const offset = stemPos.count;
-    for (let i = 0; i < headPos.count; i++) {
-      mergedPositions[(offset + i) * 3] = headPos.getX(i);
-      mergedPositions[(offset + i) * 3 + 1] = headPos.getY(i);
-      mergedPositions[(offset + i) * 3 + 2] = headPos.getZ(i);
-      mergedNormals[(offset + i) * 3] = headGeo.attributes.normal.getX(i);
-      mergedNormals[(offset + i) * 3 + 1] = headGeo.attributes.normal.getY(i);
-      mergedNormals[(offset + i) * 3 + 2] = headGeo.attributes.normal.getZ(i);
-    }
-
-    const indices: number[] = [];
-    if (stemGeo.index) {
-      for (let i = 0; i < stemGeo.index.count; i++) indices.push(stemGeo.index.getX(i));
-    }
-    if (headGeo.index) {
-      for (let i = 0; i < headGeo.index.count; i++) indices.push(headGeo.index.getX(i) + offset);
-    }
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
-    merged.setAttribute('normal', new THREE.BufferAttribute(mergedNormals, 3));
-    if (indices.length > 0) merged.setIndex(indices);
-    merged.computeVertexNormals();
-    return merged;
+    // Merge stem and head using canonical GeometryPipeline
+    return GeometryPipeline.mergeGeometries([stemGeo, headGeo]);
   }
 
   private getFlowerMaterial(config: FlowerConfig): THREE.MeshStandardMaterial {

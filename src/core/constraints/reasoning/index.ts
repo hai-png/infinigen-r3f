@@ -81,3 +81,62 @@ export {
   exprEqualBool,
   type ExprEqualResult,
 } from './expression';
+
+// Constraint simplification
+export {
+  simplifyExpression,
+  simplifyScalarExpression,
+  simplifyConstraintMap,
+  simplifyDomainIntersection,
+  type SimplificationResult,
+} from './constraint-simplifier';
+
+// Constraint validation
+export {
+  validateGreedyStageCoverage,
+  validateContradictoryDomains,
+  validateUnfinalizedConstraints,
+  validateConstraintProblem,
+  type ValidationResult,
+  type ValidationError,
+  type ValidationWarning,
+  type ConstraintProblem,
+} from './constraint-validator';
+
+// Predefined relations
+export {
+  bottom,
+  top,
+  front,
+  back,
+  side,
+  supportSurface,
+  visible,
+  floorTags,
+  wallTags,
+  ceilingTags,
+  left,
+  right,
+  interior,
+  exterior,
+  tableSurface,
+  shelfSurface,
+  onFloor,
+  againstWall,
+  flushWall,
+  spacedWall,
+  hanging,
+  onTop,
+  on,
+  frontAgainst,
+  frontToFront,
+  backToBack,
+  onTable,
+  onShelf,
+  leftAgainst,
+  rightAgainst,
+  createStableAgainst,
+  createTouching,
+  createSupportedBy,
+  getPredefinedRelations,
+} from './predefined-relations';

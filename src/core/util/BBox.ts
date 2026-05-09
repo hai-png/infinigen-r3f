@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 export interface BBoxInterface {
   min: THREE.Vector3;
@@ -177,39 +178,12 @@ export function computeBBoxFromObject(object: THREE.Object3D, precise: boolean =
   return bbox.setFromObject(object, precise);
 }
 
+/**
+ * Merge multiple BufferGeometries into one.
+ * Delegates to the canonical GeometryPipeline.mergeGeometries().
+ */
 export function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  if (geometries.length === 0) return new THREE.BufferGeometry();
-  if (geometries.length === 1) return geometries[0].clone();
-
-  const mergedGeometry = new THREE.BufferGeometry();
-  const attributes: { [key: string]: THREE.BufferAttribute[] } = {};
-
-  for (const geom of geometries) {
-    for (const attributeName in geom.attributes) {
-      if (!attributes[attributeName]) {
-        attributes[attributeName] = [];
-      }
-      attributes[attributeName].push(geom.attributes[attributeName] as THREE.BufferAttribute);
-    }
-  }
-
-  for (const attributeName in attributes) {
-    const allValues: number[] = [];
-    for (const attr of attributes[attributeName]) {
-      const array = attr.array;
-      for (let i = 0; i < attr.count; i++) {
-        for (let c = 0; c < attr.itemSize; c++) {
-          allValues.push(array[i * attr.itemSize + c]);
-        }
-      }
-    }
-    mergedGeometry.setAttribute(
-      attributeName,
-      new THREE.Float32BufferAttribute(allValues, attributes[attributeName][0].itemSize)
-    );
-  }
-
-  return mergedGeometry;
+  return GeometryPipeline.mergeGeometries(geometries);
 }
 
 export function createBBoxFromMinMax(minX: number, minY: number, minZ: number, 

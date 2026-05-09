@@ -37,6 +37,7 @@
 
 import * as THREE from 'three';
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from 'three-bvh-csg';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -198,6 +199,7 @@ export function performCSGBoolean(
 /**
  * Merge two geometries by combining their vertex/index data.
  * Used as fallback when CSG fails.
+ * Delegates to the canonical GeometryPipeline.mergeGeometries().
  */
 export function mergeGeometries(
   a: THREE.BufferGeometry,
@@ -209,54 +211,7 @@ export function mergeGeometries(
   if (!posA) return b.clone();
   if (!posB) return a.clone();
 
-  const allPositions: number[] = [];
-  const allNormals: number[] = [];
-  const allUVs: number[] = [];
-  const allIndices: number[] = [];
-  let offset = 0;
-
-  const hasNormals = !!a.getAttribute('normal') && !!b.getAttribute('normal');
-  const hasUVs = !!a.getAttribute('uv') && !!b.getAttribute('uv');
-
-  for (const geo of [a, b]) {
-    const pos = geo.getAttribute('position');
-    const norm = geo.getAttribute('normal');
-    const uv = geo.getAttribute('uv');
-    const idx = geo.getIndex();
-
-    const posArr = pos.array as Float32Array;
-    for (let i = 0; i < posArr.length; i++) allPositions.push(posArr[i]);
-
-    if (hasNormals && norm) {
-      const nArr = norm.array as Float32Array;
-      for (let i = 0; i < nArr.length; i++) allNormals.push(nArr[i]);
-    }
-
-    if (hasUVs && uv) {
-      const uArr = uv.array as Float32Array;
-      for (let i = 0; i < uArr.length; i++) allUVs.push(uArr[i]);
-    }
-
-    if (idx) {
-      const iArr = idx.array as Uint32Array | Uint16Array;
-      for (let i = 0; i < iArr.length; i++) allIndices.push(iArr[i] + offset);
-    } else {
-      for (let i = 0; i < pos.count; i++) allIndices.push(i + offset);
-    }
-    offset += pos.count;
-  }
-
-  const result = new THREE.BufferGeometry();
-  result.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
-  if (allNormals.length > 0) {
-    result.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
-  }
-  if (allUVs.length > 0) {
-    result.setAttribute('uv', new THREE.Float32BufferAttribute(allUVs, 2));
-  }
-  result.setIndex(allIndices);
-  if (allNormals.length === 0) result.computeVertexNormals();
-  return result;
+  return GeometryPipeline.mergeGeometries([a, b]);
 }
 
 // ---------------------------------------------------------------------------

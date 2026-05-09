@@ -2,8 +2,11 @@
  * Lighting Module Exports
  *
  * Canonical exports:
+ * - UnifiedSkySystem — consolidated sky system (Nishita + AtmosphericScattering)
  * - AtmospherePipeline — unified sky → fog → exposure pipeline
  * - LightingOrchestrator — high-level preset-based lighting setup
+ * - LightingRegistry — strategy pattern registry for lighting presets
+ * - NodeLightBridge — connects node executor lights to the orchestrator
  * - SkyLightingSystem — Nishita-integrated, physically-based sky
  * - LightingSystem — General lighting system
  * - ThreePointLightingSystem — Studio lighting
@@ -12,6 +15,10 @@
  * - SkyLighting.ts (deprecated re-export of SkyLightingSystem)
  * - sky-lighting.ts (deprecated function-based utility)
  */
+
+// ── Unified Sky System (consolidated Nishita + Scattering) ──────────────────
+export { UnifiedSkySystem, createUnifiedSky } from './UnifiedSkySystem';
+export type { SkyMode, UnifiedSkyConfig, SkyResult } from './UnifiedSkySystem';
 
 // ── Unified Atmosphere Pipeline ─────────────────────────────────────────────
 export {
@@ -29,6 +36,30 @@ export {
   type LightingPresetType,
   type LightingPreset,
 } from './LightingOrchestrator';
+
+// ── Lighting Registry (Strategy Pattern) ────────────────────────────────────
+export {
+  LightingRegistry,
+  IndoorLightingStrategy,
+  OutdoorLightingStrategy,
+  StudioLightingStrategy,
+  DramaticLightingStrategy,
+  NaturalLightingStrategy,
+} from './LightingRegistry';
+export type {
+  LightingPresetStrategy,
+  LightingPresetResult,
+} from './LightingRegistry';
+
+// ── Node Light Bridge ───────────────────────────────────────────────────────
+export {
+  NodeLightBridge,
+  bridgeLightNode,
+} from './NodeLightBridge';
+export type {
+  NodeLightType,
+  NodeLightResult,
+} from './NodeLightBridge';
 
 // ── Nishita-integrated sky lighting (primary sky solution) ──────────────────
 export { SkyLightingSystem, createSkyLighting } from './SkyLightingSystem';

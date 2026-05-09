@@ -117,3 +117,36 @@ export {
   type PopulateResult,
   type PopulateConfig,
 } from './proposals/PopulateSystem';
+
+// Relation Assignment Finder (SAT-like assignment enumeration)
+export {
+  RelationAssignmentFinder,
+  type AssignmentCandidate,
+  type RelationAssignment,
+  type AssignmentFinderConfig,
+} from './relation-assignment-finder';
+
+// Enhanced DOF Solver (detailed DOF analysis)
+export {
+  DOFSolverEnhanced,
+  type DOFResult,
+  type DOFApplicationResult,
+} from './dof-solver';
+
+// Enhanced Plane Extractor (Planes class with area/face indices)
+export {
+  Planes,
+  type EnhancedPlane,
+} from './plane-extractor';
+
+// Enhanced Stability Checker (detailed stability results)
+export {
+  EnhancedStabilityChecker,
+  type StabilityResult as StabilityCheckResult,
+} from './stability-checker';
+
+// BVH Collision Detection
+export {
+  CollisionDetector,
+  type CollisionResult,
+} from './bvh-collision';

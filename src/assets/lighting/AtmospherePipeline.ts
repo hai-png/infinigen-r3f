@@ -3,7 +3,7 @@
  *
  * Previously, the atmosphere system was fragmented across 4 directories:
  *   - assets/lighting/ (SkyLightingSystem, LightingSystem)
- *   - assets/weather/atmosphere/ (AtmosphericScattering, AtmosphericSky, VolumetricClouds)
+ *   - assets/weather/atmosphere/ (AtmosphericScattering, VolumetricClouds)
  *   - assets/weather/ (NishitaSky, FogSystem)
  *   - core/rendering/lighting/ (ExposureControl, LightProbeSystem)
  *
@@ -11,10 +11,25 @@
  * subsystems into a coherent pipeline, matching how the original Infinigen
  * composes atmosphere in its scene generation.
  *
+ * Phase C additions:
+ *   - Optional volumetric fog via FogSystem (shader-based, height-dependent)
+ *   - Optional auto-exposure via ExposureControl
+ *   - Optional light probes via LightProbeSystem
+ *
  * @module assets/lighting/AtmospherePipeline
  */
 
 import * as THREE from 'three';
+import { FogSystem, type FogParams } from '@/assets/weather/FogSystem';
+import {
+  ExposureControl,
+  type ExposureConfig,
+  type ToneMappingPreset,
+} from '@/core/rendering/lighting/ExposureControl';
+import {
+  LightProbeSystem,
+  type LightProbeConfig,
+} from '@/core/rendering/lighting/LightProbeSystem';
 
 // ============================================================================
 // Types
@@ -45,6 +60,12 @@ export interface AtmospherePipelineConfig {
   toneMapping: 'linear' | 'reinhard' | 'aces' | 'agx' | 'uncharted2';
   /** Random seed for deterministic cloud/variation generation */
   seed: number;
+  /** Use volumetric shader-based fog (FogSystem) instead of basic FogExp2 */
+  useVolumetricFog: boolean;
+  /** Use auto-exposure (ExposureControl) instead of static tone mapping */
+  useAutoExposure: boolean;
+  /** Use light probe system for indirect lighting */
+  useLightProbes: boolean;
 }
 
 export const DEFAULT_ATMOSPHERE_CONFIG: AtmospherePipelineConfig = {
@@ -58,6 +79,9 @@ export const DEFAULT_ATMOSPHERE_CONFIG: AtmospherePipelineConfig = {
   exposureCompensation: 0,
   toneMapping: 'aces',
   seed: 42,
+  useVolumetricFog: false,
+  useAutoExposure: false,
+  useLightProbes: false,
 };
 
 // ============================================================================
@@ -97,7 +121,12 @@ const TIME_OF_DAY_COLORS: Record<TimeOfDay, { sky: number; fog: number; sun: num
  *   timeOfDay: 'dusk',
  *   fogDensity: 0.3,
  *   cloudCoverage: 0.5,
+ *   useVolumetricFog: true,
+ *   useAutoExposure: true,
  * });
+ *
+ * // In render loop:
+ * pipeline.update(deltaTime, averageLuminance);
  * ```
  */
 export class AtmospherePipeline {
@@ -108,6 +137,11 @@ export class AtmospherePipeline {
   private fog: THREE.FogExp2 | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
   private attached = false;
+
+  // Phase C: Integrated subsystems
+  private fogSystem: FogSystem | null = null;
+  private exposureControl: ExposureControl | null = null;
+  private lightProbeSystem: LightProbeSystem | null = null;
 
   constructor(config: Partial<AtmospherePipelineConfig> = {}) {
     this.config = { ...DEFAULT_ATMOSPHERE_CONFIG, ...config };
@@ -120,8 +154,9 @@ export class AtmospherePipeline {
    *   1. Directional sun light
    *   2. Hemisphere ambient light
    *   3. Sky dome or gradient sky
-   *   4. Exponential height fog
-   *   5. Exposure and tone mapping on the renderer
+   *   4. Fog (basic FogExp2 or volumetric FogSystem based on config)
+   *   5. Exposure and tone mapping (static or auto via ExposureControl)
+   *   6. Optional light probes for indirect lighting
    *
    * @param scene - The THREE.Scene to attach lights and sky to
    * @param camera - Optional camera for exposure calculation
@@ -165,15 +200,26 @@ export class AtmospherePipeline {
     this.skyMesh = this.createSkyDome(colors.sky, colors.fog);
     scene.add(this.skyMesh);
 
-    // 4. Fog
+    // 4. Fog — volumetric or basic
     if (this.config.fogDensity > 0) {
-      this.fog = new THREE.FogExp2(colors.fog, this.config.fogDensity * 0.01);
-      scene.fog = this.fog;
+      if (this.config.useVolumetricFog) {
+        this.setupVolumetricFog(scene, colors.fog);
+      } else {
+        this.fog = new THREE.FogExp2(colors.fog, this.config.fogDensity * 0.01);
+        scene.fog = this.fog;
+      }
     }
 
-    // 5. Renderer tone mapping
-    if (this.renderer) {
+    // 5. Exposure and tone mapping
+    if (this.config.useAutoExposure) {
+      this.setupAutoExposure(renderer);
+    } else if (this.renderer) {
       this.applyToneMapping(this.renderer);
+    }
+
+    // 6. Light probes (if enabled)
+    if (this.config.useLightProbes) {
+      this.setupLightProbes(scene, renderer);
     }
 
     return {
@@ -181,6 +227,7 @@ export class AtmospherePipeline {
       ambientLight: this.ambientLight,
       skyMesh: this.skyMesh,
       fog: this.fog,
+      fogSystem: this.fogSystem,
       sunPosition: this.sunLight.position.clone(),
       sunDirection: this.computeSunDirection(sunElevation, this.config.sunAzimuth),
     };
@@ -189,8 +236,16 @@ export class AtmospherePipeline {
   /**
    * Update the atmosphere for a new time of day or configuration.
    * Can be called every frame for smooth transitions.
+   *
+   * @param config - Configuration overrides
+   * @param deltaTime - Optional delta time for auto-exposure adaptation (seconds)
+   * @param averageLuminance - Optional average luminance for auto-exposure
    */
-  update(config: Partial<AtmospherePipelineConfig>): void {
+  update(
+    config: Partial<AtmospherePipelineConfig>,
+    deltaTime?: number,
+    averageLuminance?: number,
+  ): void {
     Object.assign(this.config, config);
     if (!this.attached) return;
 
@@ -207,6 +262,41 @@ export class AtmospherePipeline {
     if (this.ambientLight) {
       this.ambientLight.color.set(colors.sky);
       (this.ambientLight as any).groundColor?.set?.(colors.fog);
+    }
+
+    // Update volumetric fog if active
+    if (this.fogSystem) {
+      this.fogSystem.setColor(new THREE.Color(colors.fog));
+      this.fogSystem.setDensity(this.config.fogDensity);
+      if (deltaTime !== undefined) {
+        this.fogSystem.update(deltaTime);
+      }
+    }
+
+    // Update basic fog
+    if (this.fog) {
+      this.fog.color.set(colors.fog);
+      this.fog.density = this.config.fogDensity * 0.01;
+    }
+
+    // Update auto-exposure
+    if (this.exposureControl && this.renderer) {
+      if (deltaTime !== undefined && averageLuminance !== undefined) {
+        this.exposureControl.update(deltaTime, averageLuminance);
+      }
+      this.exposureControl.applyToRenderer(this.renderer);
+    }
+  }
+
+  /**
+   * Update the volumetric fog camera position.
+   * Call this from the render loop when using volumetric fog.
+   *
+   * @param cameraPosition - Current camera world position
+   */
+  updateFogCameraPosition(cameraPosition: THREE.Vector3): void {
+    if (this.fogSystem) {
+      this.fogSystem.setCameraPosition(cameraPosition);
     }
   }
 
@@ -226,6 +316,126 @@ export class AtmospherePipeline {
   }
 
   /**
+   * Get the FogSystem instance (if using volumetric fog).
+   */
+  getFogSystem(): FogSystem | null {
+    return this.fogSystem;
+  }
+
+  /**
+   * Get the ExposureControl instance (if using auto-exposure).
+   */
+  getExposureControl(): ExposureControl | null {
+    return this.exposureControl;
+  }
+
+  /**
+   * Get the LightProbeSystem instance (if enabled).
+   */
+  getLightProbeSystem(): LightProbeSystem | null {
+    return this.lightProbeSystem;
+  }
+
+  /**
+   * Set ExposureControl configuration at runtime.
+   * Creates ExposureControl if not already created.
+   */
+  setExposureConfig(partial: Partial<ExposureConfig>): void {
+    if (this.exposureControl) {
+      this.exposureControl.setConfig(partial);
+    } else {
+      this.exposureControl = new ExposureControl(partial);
+      this.config.useAutoExposure = true;
+    }
+  }
+
+  /**
+   * Set LightProbeSystem configuration at runtime.
+   * Creates a new LightProbeSystem if not already created.
+   */
+  setLightProbeConfig(partial: Partial<LightProbeConfig>): void {
+    if (this.lightProbeSystem) {
+      this.lightProbeSystem.setConfig(partial);
+    } else {
+      this.lightProbeSystem = new LightProbeSystem(partial);
+      this.config.useLightProbes = true;
+    }
+  }
+
+  /**
+   * Set FogSystem parameters at runtime.
+   */
+  setFogParams(partial: Partial<FogParams>): void {
+    if (this.fogSystem) {
+      if (partial.density !== undefined) this.fogSystem.setDensity(partial.density);
+      if (partial.color !== undefined) this.fogSystem.setColor(partial.color);
+      if (partial.height !== undefined) this.fogSystem.setHeight(partial.height);
+      if (partial.baseHeight !== undefined) this.fogSystem.setBaseHeight(partial.baseHeight);
+      if (partial.windSpeed !== undefined && partial.windDirection) {
+        this.fogSystem.setWind(partial.windSpeed, partial.windDirection);
+      }
+      if (partial.turbulence !== undefined) this.fogSystem.setTurbulence(partial.turbulence);
+      if (partial.skyColor !== undefined) this.fogSystem.setSkyColor(partial.skyColor);
+    }
+  }
+
+  /**
+   * Switch between basic and volumetric fog at runtime.
+   *
+   * @param useVolumetric - true to use FogSystem, false for basic FogExp2
+   * @param scene - The scene (required if not already attached)
+   */
+  setFogMode(useVolumetric: boolean, scene?: THREE.Scene): void {
+    const targetScene = scene ?? (this.fogSystem?.['scene'] as THREE.Scene | undefined) ?? null;
+    if (!targetScene) return;
+
+    const colors = TIME_OF_DAY_COLORS[this.config.timeOfDay];
+
+    // Remove existing fog
+    if (this.fogSystem) {
+      this.fogSystem.dispose();
+      this.fogSystem = null;
+    }
+    if (this.fog) {
+      targetScene.fog = null;
+      this.fog = null;
+    }
+
+    this.config.useVolumetricFog = useVolumetric;
+
+    if (this.config.fogDensity > 0) {
+      if (useVolumetric) {
+        this.setupVolumetricFog(targetScene, colors.fog);
+      } else {
+        this.fog = new THREE.FogExp2(colors.fog, this.config.fogDensity * 0.01);
+        targetScene.fog = this.fog;
+      }
+    }
+  }
+
+  /**
+   * Enable or disable auto-exposure at runtime.
+   *
+   * @param enabled - Whether to use auto-exposure
+   * @param renderer - The WebGL renderer (required if enabling)
+   */
+  setAutoExposure(enabled: boolean, renderer?: THREE.WebGLRenderer): void {
+    this.config.useAutoExposure = enabled;
+    if (renderer) {
+      this.renderer = renderer;
+    }
+
+    if (enabled && !this.exposureControl) {
+      this.setupAutoExposure(this.renderer ?? undefined);
+    } else if (!enabled && this.exposureControl) {
+      // Restore static tone mapping
+      if (this.renderer) {
+        this.applyToneMapping(this.renderer);
+      }
+    }
+  }
+
+  /**
    * Dispose of all GPU resources.
    */
   dispose(): void {
@@ -233,6 +443,22 @@ export class AtmospherePipeline {
     if (this.skyMesh?.material instanceof THREE.Material) {
       this.skyMesh.material.dispose();
     }
+
+    if (this.fogSystem) {
+      this.fogSystem.dispose();
+      this.fogSystem = null;
+    }
+
+    if (this.exposureControl) {
+      this.exposureControl.dispose();
+      this.exposureControl = null;
+    }
+
+    if (this.lightProbeSystem) {
+      this.lightProbeSystem.dispose();
+      this.lightProbeSystem = null;
+    }
+
     this.attached = false;
   }
 
@@ -307,6 +533,88 @@ export class AtmospherePipeline {
 
     renderer.toneMappingExposure = 1.0 + this.config.exposureCompensation;
   }
+
+  /**
+   * Set up volumetric fog using FogSystem.
+   * Replaces basic FogExp2 with a shader-based volumetric fog that supports
+   * height-dependent density, wind animation, and noise variation.
+   */
+  private setupVolumetricFog(scene: THREE.Scene, fogColor: number): void {
+    this.fogSystem = new FogSystem(scene, {
+      density: this.config.fogDensity,
+      color: new THREE.Color(fogColor),
+      height: 10,
+      falloff: this.config.fogHeightFalloff,
+      windSpeed: 2,
+      windDirection: new THREE.Vector3(1, 0, 0),
+      turbulence: 0.3,
+      noiseScale: 0.02,
+      baseHeight: 0,
+      matchSkyColor: true,
+      skyColor: new THREE.Color(fogColor),
+    }, this.config.seed);
+  }
+
+  /**
+   * Set up automatic exposure using ExposureControl.
+   * Replaces static tone mapping with auto-exposure that adapts to scene luminance.
+   */
+  private setupAutoExposure(renderer?: THREE.WebGLRenderer): void {
+    // Map our tone mapping preset to ExposureControl's ToneMappingPreset
+    const toneMappingMap: Record<string, ToneMappingPreset> = {
+      linear: 'linear',
+      reinhard: 'reinhard',
+      aces: 'aces',
+      agx: 'aces',       // Closest mapping
+      uncharted2: 'uncharted2',
+    };
+
+    this.exposureControl = new ExposureControl({
+      autoExposure: true,
+      manualExposure: 1.0 + this.config.exposureCompensation,
+      toneMapping: toneMappingMap[this.config.toneMapping] ?? 'aces',
+      minExposure: 0.1,
+      maxExposure: 10.0,
+      adaptationSpeedUp: 3.0,
+      adaptationSpeedDown: 1.0,
+    });
+
+    // Apply initial state to renderer
+    if (renderer) {
+      this.exposureControl.applyToRenderer(renderer);
+    }
+  }
+
+  /**
+   * Set up light probe system for indirect lighting.
+   * Captures irradiance from the scene at regular grid positions
+   * using spherical harmonics (L2, 9 coefficients per channel).
+   */
+  private setupLightProbes(scene: THREE.Scene, renderer?: THREE.WebGLRenderer): void {
+    this.lightProbeSystem = new LightProbeSystem({
+      gridResolution: [8, 4, 8],
+      boundsMin: new THREE.Vector3(-100, 0, -100),
+      boundsMax: new THREE.Vector3(100, 50, 100),
+      captureScene: true,
+      intensity: 1.0,
+      captureSamples: 32,
+      debug: false,
+    });
+
+    // Set ambient contribution as initial baseline
+    const colors = TIME_OF_DAY_COLORS[this.config.timeOfDay];
+    if (this.lightProbeSystem) {
+      this.lightProbeSystem.setAmbientContribution(
+        new THREE.Color(colors.sky),
+        new THREE.Color(colors.fog),
+      );
+    }
+
+    // If renderer is available, capture actual scene lighting
+    if (renderer && this.lightProbeSystem) {
+      this.lightProbeSystem.capture(renderer, scene);
+    }
+  }
 }
 
 // ============================================================================
@@ -318,6 +626,7 @@ export interface AtmospherePipelineResult {
   ambientLight: THREE.HemisphereLight;
   skyMesh: THREE.Mesh;
   fog: THREE.FogExp2 | null;
+  fogSystem: FogSystem | null;
   sunPosition: THREE.Vector3;
   sunDirection: THREE.Vector3;
 }

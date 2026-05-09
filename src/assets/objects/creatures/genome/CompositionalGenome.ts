@@ -19,6 +19,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
 // PartType — All body part types
@@ -1178,58 +1179,12 @@ export class CompositionalGenome {
     }
   }
 
+  /**
+   * Merge geometries, delegating to the canonical GeometryPipeline.
+   */
   private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
     if (geometries.length === 1) return geometries[0];
-
-    // Simple merge: combine all vertex data
-    let totalVertices = 0;
-    let totalIndices = 0;
-
-    for (const geo of geometries) {
-      totalVertices += geo.getAttribute('position').count;
-      if (geo.index) {
-        totalIndices += geo.index.count;
-      }
-    }
-
-    const positions = new Float32Array(totalVertices * 3);
-    const normals = new Float32Array(totalVertices * 3);
-    const indices: number[] = [];
-    let vertexOffset = 0;
-
-    for (const geo of geometries) {
-      const posAttr = geo.getAttribute('position');
-      const normAttr = geo.getAttribute('normal');
-
-      for (let i = 0; i < posAttr.count; i++) {
-        positions[(vertexOffset + i) * 3] = posAttr.getX(i);
-        positions[(vertexOffset + i) * 3 + 1] = posAttr.getY(i);
-        positions[(vertexOffset + i) * 3 + 2] = posAttr.getZ(i);
-
-        if (normAttr) {
-          normals[(vertexOffset + i) * 3] = normAttr.getX(i);
-          normals[(vertexOffset + i) * 3 + 1] = normAttr.getY(i);
-          normals[(vertexOffset + i) * 3 + 2] = normAttr.getZ(i);
-        }
-      }
-
-      if (geo.index) {
-        for (let i = 0; i < geo.index.count; i++) {
-          indices.push(geo.index.getX(i) + vertexOffset);
-        }
-      }
-
-      vertexOffset += posAttr.count;
-    }
-
-    const merged = new THREE.BufferGeometry();
-    merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    if (indices.length > 0) {
-      merged.setIndex(indices);
-    }
-
-    return merged;
+    return GeometryPipeline.mergeGeometries(geometries);
   }
 
   private cloneNode(node: PartNode): PartNode {

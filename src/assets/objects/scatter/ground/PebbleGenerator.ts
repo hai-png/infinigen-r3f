@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 import { NoiseUtils } from '@/core/util/math/noise';
 import { SeededRandom } from '../../../../core/util/MathUtils';
 

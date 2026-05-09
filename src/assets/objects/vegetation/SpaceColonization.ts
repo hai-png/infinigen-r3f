@@ -240,7 +240,9 @@ export class SpaceColonization {
         attractorGrid.insert(attractors[i], i);
       }
 
-      // For each attractor, find the nearest tip
+      // For each tip, query the spatial grid for nearby attractors
+      // This replaces the O(N×M) brute-force with O(M × K) where K ≪ N
+      // is the average number of attractors per grid neighborhood.
       const tipAttractors: Map<number, THREE.Vector3[]> = new Map();
       for (const tip of tips) {
         tipAttractors.set(tip.vertexIndex, []);
@@ -248,38 +250,39 @@ export class SpaceColonization {
 
       const attractorToRemove = new Set<number>();
 
-      for (let ai = 0; ai < attractors.length; ai++) {
-        const attractor = attractors[ai];
+      // Track the nearest tip for each attractor (by index)
+      const attractorNearestTip: Map<number, { tip: BranchTip; dist: number }> = new Map();
 
-        // Check if within kill radius of any tip
-        let killed = false;
-        for (const tip of tips) {
+      for (const tip of tips) {
+        // Use spatial grid to find attractors within influence radius
+        const nearbyIndices = attractorGrid.query(tip.position, cfg.influenceRadius);
+
+        for (const ai of nearbyIndices) {
+          if (attractorToRemove.has(ai)) continue;
+
+          const attractor = attractors[ai];
           const dist = attractor.distanceTo(tip.position);
+
+          // Check if within kill radius
           if (dist < cfg.killRadius) {
             attractorToRemove.add(ai);
-            killed = true;
-            break;
+            continue;
+          }
+
+          // Track the nearest tip for this attractor
+          const current = attractorNearestTip.get(ai);
+          if (!current || dist < current.dist) {
+            attractorNearestTip.set(ai, { tip, dist });
           }
         }
+      }
 
-        if (killed) continue;
-
-        // Find nearest tip within influence radius
-        let nearestTip: BranchTip | null = null;
-        let nearestDist = Infinity;
-
-        for (const tip of tips) {
-          const dist = attractor.distanceTo(tip.position);
-          if (dist < cfg.influenceRadius && dist < nearestDist) {
-            nearestDist = dist;
-            nearestTip = tip;
-          }
-        }
-
-        if (nearestTip !== null) {
-          const list = tipAttractors.get(nearestTip.vertexIndex);
+      // Build tipAttractors from the nearest-tip assignments
+      for (const [ai, nearest] of attractorNearestTip) {
+        if (!attractorToRemove.has(ai)) {
+          const list = tipAttractors.get(nearest.tip.vertexIndex);
           if (list) {
-            list.push(attractor.clone());
+            list.push(attractors[ai].clone());
           }
         }
       }
@@ -600,6 +603,49 @@ class SpatialGrid {
       this.cells.set(key, []);
     }
     this.cells.get(key)!.push({ point, index });
+  }
+
+  /**
+   * Query for all points within `radius` of `center`.
+   * Searches the cell containing `center` plus all neighboring cells
+   * that could contain points within the radius, then filters by
+   * actual Euclidean distance.
+   *
+   * @returns Array of indices of points within the radius
+   */
+  query(center: THREE.Vector3, radius: number): number[] {
+    const result: number[] = [];
+    const radiusSq = radius * radius;
+
+    // Determine the range of cells to check
+    const minCx = Math.floor((center.x - radius) / this.cellSize);
+    const maxCx = Math.floor((center.x + radius) / this.cellSize);
+    const minCy = Math.floor((center.y - radius) / this.cellSize);
+    const maxCy = Math.floor((center.y + radius) / this.cellSize);
+    const minCz = Math.floor((center.z - radius) / this.cellSize);
+    const maxCz = Math.floor((center.z + radius) / this.cellSize);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        for (let cz = minCz; cz <= maxCz; cz++) {
+          const key = `${cx},${cy},${cz}`;
+          const cell = this.cells.get(key);
+          if (!cell) continue;
+
+          for (const entry of cell) {
+            const dx = entry.point.x - center.x;
+            const dy = entry.point.y - center.y;
+            const dz = entry.point.z - center.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq <= radiusSq) {
+              result.push(entry.index);
+            }
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   private cellKey(p: THREE.Vector3): string {

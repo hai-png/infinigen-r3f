@@ -265,12 +265,22 @@ export class LSystemTreeGenerator extends BaseObjectGenerator<LSystemConfig> {
 
 // ============================================================================
 // Tree Species Presets
+//
+// @deprecated These presets are maintained for backward compatibility.
+// New code should use SpeciesRegistry (from ../SpeciesRegistry) as the
+// single source of truth for species data. Use lsystemTreePresetFromRegistry()
+// to convert a SpeciesEntry into an LSystemConfig.
 // ============================================================================
+
+import { getSpeciesRegistry, type SpeciesEntry } from '../SpeciesRegistry';
 
 function degToRad(deg: number): number {
   return deg * (Math.PI / 180);
 }
 
+/**
+ * @deprecated Use SpeciesRegistry instead. This object is kept for backward compat.
+ */
 export const LSystemTreePresets: Record<string, LSystemConfig> = {
   /** Oak: broad, spreading canopy with lobed oak leaves */
   oak: {
@@ -375,6 +385,47 @@ export function generateTreeFromPreset(
   }
 
   return generator.generate(config);
+}
+
+/**
+ * Bridge function: convert a SpeciesRegistry entry to an LSystemConfig.
+ * This allows generators to query SpeciesRegistry and produce the format
+ * LSystemTreeGenerator expects, without duplicating preset data.
+ *
+ * @param speciesName - Name of the species in the registry
+ * @param overrides  - Optional overrides for the resulting config
+ * @returns An LSystemConfig, or null if the species is not in the registry
+ */
+export function lsystemTreePresetFromRegistry(
+  speciesName: string,
+  overrides: Partial<LSystemConfig> = {}
+): LSystemConfig | null {
+  const registry = getSpeciesRegistry();
+  const entry = registry.get(speciesName);
+  if (!entry || !entry.lsystem) return null;
+
+  const ls = entry.lsystem;
+  const config: LSystemConfig = {
+    axiom: (ls.axiom as string) ?? 'F',
+    rules: ((ls.rules as Array<{ predecessor: string; successor: string; probability: number }>) ?? [
+      { predecessor: 'F', successor: 'FF+[+F-F-F]-[-F+F+F]', probability: 1.0 },
+    ]).map(r => ({
+      predecessor: r.predecessor,
+      successor: r.successor,
+      probability: r.probability,
+    })),
+    iterations: (ls.iterations as number) ?? 4,
+    angle: (ls.angle as number) ?? 25 * (Math.PI / 180),
+    length: (ls.length as number) ?? 2.0,
+    lengthDecay: (ls.lengthDecay as number) ?? 0.7,
+    thickness: (ls.thickness as number) ?? 0.3,
+    thicknessDecay: (ls.thicknessDecay as number) ?? 0.65,
+    seed: overrides.seed ?? 42,
+    leafType: (overrides.leafType ?? 'broad') as LeafType,
+    ...overrides,
+  };
+
+  return config;
 }
 
 /**

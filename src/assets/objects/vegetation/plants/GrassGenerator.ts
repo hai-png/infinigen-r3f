@@ -1,4 +1,19 @@
 /**
+ * @deprecated Use `GrassSystem` from `@/assets/objects/vegetation/GrassSystem` instead.
+ *
+ * This file is superseded by the consolidated GrassSystem which provides a
+ * unified API for grass generation, scattering, and wind animation.
+ * GrassGenerator remains for backward compatibility but will not receive
+ * further updates.
+ *
+ * Migration guide:
+ *   - `GrassGenerator.generateGrassField()`  → `GrassSystem.createGrassField()`
+ *   - `GrassGenerator.generateGrassClumps()` → `GrassSystem.createGrassClumps()`
+ *   - `GrassGenerator.generateTallGrass()`   → `GrassSystem.createTallGrass()`
+ *   - `GrassGenerator.updateWind()`           → `GrassSystem.updateWind()`
+ */
+
+/**
  * GrassGenerator - Procedural grass field generation with blade clusters
  * All geometries in Mesh(geometry, MeshStandardMaterial). Uses SeededRandom.
  * Wind parameters produce actual vertex shader displacement for animated grass sway.

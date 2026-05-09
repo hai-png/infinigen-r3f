@@ -139,3 +139,50 @@ export type {
   MaterialAssignment,
   MaterialAssignmentMap,
 } from './core/TwoPhaseTerrainPipeline';
+
+// Phase 4 — Scene Composition, Tag System, and Surface Registry
+export {
+  TerrainSceneComposer,
+  transferSceneInfo,
+  ElementNames,
+  DEFAULT_SCENE_CHANCES,
+} from './scene';
+
+export type {
+  SceneChances,
+  SceneInfos,
+  SceneComposition,
+  ElementParamsMap,
+  ElementName,
+} from './scene';
+
+export {
+  TerrainTagSystem,
+  TerrainTags,
+  ElementTag,
+  ElementTagMap,
+  DEFAULT_TAG_THRESHOLDS,
+} from './tags';
+
+export type {
+  TerrainTagName,
+  ElementTagValue,
+  TagThresholdConfig,
+  TagResult,
+} from './tags';
+
+export {
+  TerrainSurfaceRegistry,
+  SurfaceTemplate,
+  SurfaceType,
+  SurfaceAttributeTypes,
+  getEffectiveSurfaceType,
+  processSurfaceInput,
+} from './surface/SurfaceRegistry';
+
+export type {
+  SurfaceMaterialDescriptor,
+  SurfaceMaterialParams,
+  SurfaceDisplacementConfig,
+  SurfaceAttributeType,
+} from './surface/SurfaceRegistry';

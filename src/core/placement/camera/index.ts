@@ -111,6 +111,25 @@ export {
   type CameraPoseResult,
 } from './CameraPoseSearchEngine';
 
+// Camera orchestrator — unified camera placement and composition (System A Phase B)
+export {
+  CameraOrchestrator,
+  type CameraOrchestratorConfig,
+  type CameraOrchestratorResult,
+} from './CameraOrchestrator';
+
+// Camera registry — strategy pattern for trajectory types (System A Phase B)
+export {
+  CameraRegistry,
+  type TrajectoryGenerator,
+  DollyTrajectory,
+  CraneTrajectory,
+  OrbitTrajectory,
+  HandheldTrajectory,
+  TrackingTrajectory,
+  PanTiltTrajectory,
+} from './CameraRegistry';
+
 // Trajectories (consolidated implementations)
 export {
   OrbitShot,

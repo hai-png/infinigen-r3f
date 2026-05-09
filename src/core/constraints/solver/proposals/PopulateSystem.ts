@@ -27,6 +27,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '../../../util/MathUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 import {
   Tag,
   TagSet,
@@ -592,56 +593,10 @@ export class AssetSpawner {
   }
 
   /**
-   * Simple geometry merge (replaces BufferGeometryUtils.mergeGeometries).
+   * Merge geometries, delegating to the canonical GeometryPipeline.
    */
   private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
-    let vertexOffset = 0;
-
-    for (const geom of geometries) {
-      const posAttr = geom.getAttribute('position') as THREE.BufferAttribute;
-      const normAttr = geom.getAttribute('normal') as THREE.BufferAttribute | null;
-      const uvAttr = geom.getAttribute('uv') as THREE.BufferAttribute | null;
-
-      for (let i = 0; i < posAttr.count; i++) {
-        positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-        if (normAttr) {
-          normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
-        } else {
-          normals.push(0, 1, 0);
-        }
-        if (uvAttr) {
-          uvs.push(uvAttr.getX(i), uvAttr.getY(i));
-        } else {
-          uvs.push(0, 0);
-        }
-      }
-
-      const indexAttr = geom.getIndex();
-      if (indexAttr) {
-        for (let i = 0; i < indexAttr.count; i++) {
-          indices.push(indexAttr.getX(i) + vertexOffset);
-        }
-      } else {
-        for (let i = 0; i < posAttr.count; i++) {
-          indices.push(i + vertexOffset);
-        }
-      }
-
-      vertexOffset += posAttr.count;
-    }
-
-    const result = new THREE.BufferGeometry();
-    result.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    result.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    result.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    result.setIndex(indices);
-    result.computeVertexNormals();
-
-    return result;
+    return GeometryPipeline.mergeGeometries(geometries);
   }
 
   /**

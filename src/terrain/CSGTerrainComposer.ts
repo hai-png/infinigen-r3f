@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded CSG imports
@@ -419,7 +419,7 @@ export class CSGTerrainComposer {
       mergedGeometry = new THREE.BufferGeometry();
     } else {
       try {
-        mergedGeometry = mergeGeometries(geometries) ?? new THREE.BufferGeometry();
+        mergedGeometry = GeometryPipeline.mergeGeometries(geometries) ?? new THREE.BufferGeometry();
       } catch {
         // Fallback: if mergeGeometries fails (e.g. mismatched attributes),
         // manually merge position and index arrays

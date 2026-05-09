@@ -14,12 +14,13 @@ export { ConiferGenerator, type ConiferConfig } from './trees/ConiferGenerator';
 export { DeciduousGenerator, type DeciduousConfig } from './trees/DeciduousGenerator';
 export { PalmGenerator, type PalmConfig } from './trees/PalmGenerator';
 export { FruitTreeGenerator, type FruitTreeConfig } from './trees/FruitTreeGenerator';
-export { LSystemTreeGenerator, LSystemTreePresets, generateTreeFromPreset, type LSystemRule, type LSystemConfig } from './trees/LSystemTreeGenerator';
+export { LSystemTreeGenerator, LSystemTreePresets, generateTreeFromPreset, lsystemTreePresetFromRegistry, type LSystemRule, type LSystemConfig } from './trees/LSystemTreeGenerator';
 
 // L-System Engine (new)
 export {
   LSystemEngine,
   LSystemPresets,
+  lsystemPresetFromRegistry,
   generateLSystemTree,
   type LSystemPreset,
   type LSystemProductionRule,
@@ -77,6 +78,7 @@ export {
 } from './trees/SpaceColonizationTreeGenerator';
 
 // Plants (ground vegetation)
+/** @deprecated Use GrassSystem from this module instead */
 export { GrassGenerator, type GrassConfig } from './plants/GrassGenerator';
 export { FlowerGenerator, type FlowerConfig, type FlowerType, type PetalArrangement, FlowerSpeciesPresets } from './plants/FlowerGenerator';
 export { ShrubGenerator, ShrubSpeciesPresets, type ShrubSpeciesConfig } from './plants/ShrubGenerator';
@@ -187,6 +189,7 @@ export {
 // Tree Species with Specific Attractors (Phase 2)
 export {
   TREE_SPECIES_ATTRACTOR_PRESETS,
+  speciesAttractorPresetFromRegistry,
   getSpeciesPreset,
   getAvailableSpecies,
   generateSpeciesAttractors,

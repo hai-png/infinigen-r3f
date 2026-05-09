@@ -19,7 +19,7 @@ import { SeededRandom } from '@/core/util/MathUtils';
  */
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils';
+import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 import { NoiseUtils } from '@/core/util/math/noise';
 
 // ============================================================================
@@ -343,7 +343,7 @@ export class RockGenerator {
     
     if (geometries.length > 0) {
       try {
-        const mergedGeo = mergeGeometries(geometries);
+        const mergedGeo = GeometryPipeline.mergeGeometries(geometries);
         const mesh = new THREE.Mesh(mergedGeo, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;

@@ -40,8 +40,11 @@ export enum NodeTypes {
   CombineHSV = 'CombineHSVNode',
   SeparateRGB = 'SeparateRGBNode',
   SeparateColor = 'SeparateColorNode',
+  CompSeparateColor = 'CompositorNodeSeparateColor',
   CombineRGB = 'CombineRGBNode',
   CombineColor = 'CombineColorNode',
+  FunctionCombineColor = 'FunctionNodeCombineColor',
+  CompCombineColor = 'CompositorNodeCombineColor',
 
   // Curve
   CurveToMesh = 'CurveToMeshNode',
@@ -53,11 +56,15 @@ export enum NodeTypes {
   CurveLength = 'CurveLengthNode',
   CurveSplineType = 'CurveSplineTypeNode',
   SetHandlePositions = 'SetHandlePositionsNode',
+  SetHandleType = 'GeometryNodeCurveSetHandles',
+  CurveTangent = 'GeometryNodeInputTangent',
   SplineParameter = 'SplineParameterNode',
+  SplineType = 'GeometryNodeCurveSplineType',
   SubdivideCurve = 'SubdivideCurveNode',
   ResampleCurve = 'ResampleCurveNode',
   TrimCurve = 'TrimCurveNode',
   ReverseCurve = 'ReverseCurveNode',
+  SplineLength = 'GeometryNodeSplineLength',
   FillCurve = 'FillCurveNode',
   FilletCurve = 'FilletCurveNode',
 
@@ -66,6 +73,7 @@ export enum NodeTypes {
   CurveCircle = 'CurveCircleNode',
   CurveLine = 'CurveLineNode',
   CurveBezierSegment = 'CurveBezierSegmentNode',
+  BezierSegment = 'GeometryNodeCurvePrimitiveBezierSegment',
 
   // Geometry
   SetPosition = 'SetPositionNode',
@@ -89,6 +97,7 @@ export enum NodeTypes {
   RandomValue = 'RandomValueNode',
   CollectionInfo = 'CollectionInfoNode',
   ObjectInfo = 'ObjectInfoNode',
+  ObjectInfo_Shader = 'ShaderNodeObjectInfo',
   Vector = 'VectorNode',
   InputID = 'InputIDNode',
   InputPosition = 'InputPositionNode',
@@ -101,6 +110,8 @@ export enum NodeTypes {
   Index = 'IndexNode',
   AmbientOcclusion = 'AmbientOcclusionNode',
   Integer = 'IntegerNode',
+  ShortestEdgePath = 'GeometryNodeInputShortestEdgePaths',
+  ShaderNodeNormalMap = 'ShaderNodeNormalMap',
   HueSaturationValue = 'HueSaturationNode',
   BlackBody = 'BlackBodyNode',
 
@@ -120,14 +131,21 @@ export enum NodeTypes {
   SubdivideMesh = 'SubdivideMeshNode',
   MeshToVolume = 'MeshToVolumeNode',
   MeshToPoints = 'MeshToPointsNode',
+  MeshBoolean = 'GeometryNodeMeshBoolean',
   SetMeshNormals = 'SetMeshNormalsNode',
   DualMesh = 'DualMeshNode',
+  ScaleElements = 'GeometryNodeScaleElements',
+  IcoSphere = 'GeometryNodeMeshIcoSphere',
   ExtrudeMesh = 'ExtrudeMeshNode',
   ExtrudeMeshAlongNormal = 'ExtrudeMeshAlongNormalNode',
   OffsetMesh = 'OffsetMeshNode',
   FlipFaces = 'FlipFacesNode',
   FaceArea = 'FaceAreaNode',
-  EdgeNeighbors = 'EdgeNeighborsNode',
+  FaceNeighbors = 'GeometryNodeInputMeshFaceNeighbors',
+  EdgePathToCurve = 'GeometryNodeEdgePathsToCurves',
+  DeleteGeom = 'GeometryNodeDeleteGeometry',
+  SplitEdges = 'GeometryNodeSplitEdges',
+  VertexNeighbors = 'GeometryNodeInputMeshVertexNeighbors',
   EdgesOfVertex = 'EdgesOfVertexNode',
   VerticesOfEdge = 'VerticesOfEdgeNode',
   VerticesOfFace = 'VerticesOfFaceNode',
@@ -155,6 +173,7 @@ export enum NodeTypes {
   PointsToCurves = 'PointsToCurvesNode',
   PointsToVolumes = 'PointsToVolumesNode',
   PointsToVertices = 'PointsToVerticesNode',
+  SetPointRadius = 'GeometryNodeSetPointRadius',
   Points = 'PointsNode',
   PointDomain = 'PointDomainNode',
   PointDomainSize = 'PointDomainSizeNode',
@@ -227,6 +246,10 @@ export enum NodeTypes {
   TextureWhiteNoise = 'TextureWhiteNoiseNode',
   TextureMusgrave = 'TextureMusgraveNode',
   TextureGabor = 'TextureGaborNode',
+  ImageTexture = 'GeometryNodeImageTexture',
+  GradientTexture = 'ShaderNodeTexGradient',
+  ShaderImageTexture = 'ShaderNodeTexImage',
+  EnvironmentTexture = 'ShaderNodeTexEnvironment',
 
   // Vector
   VectorMath = 'VectorMathNode',
@@ -241,7 +264,7 @@ export enum NodeTypes {
   ParticleInfo = 'ParticleInfoNode',
   Wireframe = 'WireframeNode',
   Wavelength = 'WavelengthNode',
-  LightPath = 'LightPathNode',
+  LightPath = 'ShaderNodeLightPath',
   ShaderObjectInfo = 'ShaderObjectInfoNode',
   ParticleInfo_Shader = 'ParticleInfoShaderNode',
   LayerWeight = 'LayerWeightNode',
@@ -272,8 +295,11 @@ export enum NodeTypes {
   // Output
   GroupOutput = 'GroupOutputNode',
   MaterialOutput = 'MaterialOutputNode',
+  LightOutput = 'ShaderNodeOutputLight',
+  WorldOutput = 'ShaderNodeOutputWorld',
   Viewer = 'ViewerNode',
   Composite = 'CompositeNode',
+  CompositorMixRGB = 'CompositorNodeMixRGB',
   ViewLevel = 'ViewLevelNode',
   SplitViewer = 'SplitViewerNode',
   DepthOutput = 'DepthOutputNode',
@@ -349,6 +375,12 @@ export enum NodeTypes {
   // Utility / Math
   Math = 'MathNode',
   MapRange = 'MapRangeNode',
+  BooleanMath = 'BooleanMathNode',
+  // Compare already defined in Extended Vector section
+  FloatToInt = 'FunctionNodeFloatToInt',
+  FieldAtIndex = 'GeometryNodeFieldAtIndex',
+  AccumulateField = 'GeometryNodeAccumulateField',
+  Clamp = 'ShaderNodeClamp',
   Switch = 'SwitchNode',
   FloatCurve = 'FloatCurveNode',
   SetShadeSmooth = 'SetShadeSmoothNode',
@@ -377,14 +409,57 @@ export enum NodeTypes {
   IdInput = InputID,
   IndexInput = Index,
 
-  // Shader aliases
+  // Shader nodes
+  MixShader = 'ShaderNodeMixShader',
+  DiffuseBSDF = 'ShaderNodeBsdfDiffuse',
   BSDF_PRINCIPLED = 'PrincipledBSDFNode',
   PrincipledBSDF = 'PrincipledBSDFNode',
+  TranslucentBSDF = 'ShaderNodeBsdfTranslucent',
+  TransparentBSDF = 'ShaderNodeBsdfTransparent',
+  PrincipledVolume = 'ShaderNodeVolumePrincipled',
+  PrincipledHairBSDF = 'ShaderNodeBsdfHairPrincipled',
+  Emission = 'ShaderNodeEmission',
+  Fresnel = 'ShaderNodeFresnel',
+  RefractionBSDF = 'ShaderNodeBsdfRefraction',
+  GlassBSDF = 'ShaderNodeBsdfGlass',
+  GlossyBSDF = 'ShaderNodeBsdfGlossy',
+  Invert = 'InvertNode',
+
+  // World / Compositor
+  SkyTexture = 'ShaderNodeTexSky',
+  Background = 'ShaderNodeBackground',
+  RenderLayers = 'CompositorNodeRLayers',
+  LensDistortion = 'CompositorNodeLensdist',
+  Glare = 'CompositorNodeGlare',
+
+  // Layout
+  Reroute = 'NodeReroute',
+
+  // bl3.5+ Geometry additions
+  SeparateComponents = 'GeometryNodeSeparateComponents',
+  SetID = 'GeometryNodeSetID',
+  InterpolateCurves = 'GeometryNodeInterpolateCurves',
+  SampleUVSurface = 'GeometryNodeSampleUVSurface',
+  MeshIsland = 'GeometryNodeInputMeshIsland',
+  IsViewport = 'GeometryNodeIsViewport',
+  ImageInfo = 'GeometryNodeImageInfo',
+  CurveofPoint = 'GeometryNodeCurveOfPoint',
+  CurvesInfo = 'ShaderNodeHairInfo',
+  Radius = 'GeometryNodeInputRadius',
+  EvaluateonDomain = 'GeometryNodeFieldOnDomain',
+  BlurAttribute = 'GeometryNodeBlurAttribute',
+  EndpointSelection = 'GeometryNodeCurveEndpointSelection',
+  SetSplineResolution = 'GeometryNodeSetSplineResolution',
+  OffsetPointinCurve = 'GeometryNodeOffsetPointInCurve',
+  SplineResolution = 'GeometryNodeInputSplineResolution',
+
+  // Shader aliases
   NoiseTexture = TextureNoise,
   VoronoiTexture = TextureVoronoi,
   MusgraveTexture = TextureMusgrave,
-  Invert = 'InvertNode',
-  BooleanMath = 'BooleanMathNode',
+
+  // Output file alias (Python compat)
+  OutputFile = 'CompositorNodeOutputFile',
 
   // Aliases - SCREAMING_SNAKE_CASE aliases for PascalCase members
   VECTOR_MATH = VectorMath,
@@ -411,6 +486,155 @@ export enum NodeTypes {
   AmbientOcclusionOutput = AmbientOcclusion,
   LineOutput = FileOutput,
 }
+
+/**
+ * NODE_ATTRS_AVAILABLE - documents what properties exist on each node type
+ * that might need to be set but are NOT in .inputs.
+ *
+ * Ported from infinigen/core/nodes/node_info.py
+ */
+export const NODE_ATTRS_AVAILABLE: Record<string, string[]> = {
+  'ShaderNodeMath': ['operation', 'use_clamp'],
+  'ShaderNodeVectorMath': ['operation'],
+  'FunctionNodeBooleanMath': ['operation'],
+  'FunctionNodeCompare': ['mode', 'data_type', 'operation'],
+  'ShaderNodeTexNoise': ['noise_dimensions'],
+  'ShaderNodeTexMusgrave': ['musgrave_dimensions', 'musgrave_type'],
+  'ShaderNodeTexVoronoi': ['voronoi_dimensions', 'feature', 'distance'],
+  'ShaderNodeTexGradient': ['gradient_type'],
+  'ShaderNodeRGB': ['color'],
+  'ShaderNodeAttribute': ['attribute_name', 'attribute_type'],
+  'GeometryNodeAttributeStatistic': ['domain', 'data_type'],
+  'GeometryNodeCaptureAttribute': ['domain', 'data_type'],
+  'ShaderNodeTexCoord': ['from_instancer'],
+  'ShaderNodeBsdfPrincipled': ['distribution', 'subsurface_method'],
+  'ShaderNodeMapping': ['vector_type'],
+  'ShaderNodeMapRange': ['data_type', 'interpolation_type', 'clamp'],
+  'ShaderNodeValToRGB': [],
+  'ShaderNodeMixRGB': ['blend_type'],
+  'ShaderNodeMix': ['data_type', 'blend_type', 'clamp_result', 'clamp_factor'],
+  'GeometryNodeAccumulateField': ['data_type'],
+  'ShaderNodeCombineColor': ['mode'],
+  'ShaderNodeSeparateColor': ['mode'],
+  'GeometryNodeDistributePointsOnFaces': ['distribute_method'],
+  'GeometryNodeCollectionInfo': ['transform_space'],
+  'FunctionNodeRandomValue': ['data_type'],
+  'GeometryNodeSwitch': ['input_type'],
+  'GeometryNodeAttributeTransfer': ['data_type', 'mapping'],
+  'GeometryNodeSeparateGeometry': ['domain'],
+  'GeometryNodeMergeByDistance': ['mode'],
+  'FunctionNodeInputInt': ['integer'],
+  'GeometryNodeMeshBoolean': ['operation'],
+  'GeometryNodeMeshCircle': ['fill_type'],
+  'GeometryNodeCurveSplineType': ['spline_type'],
+  'GeometryNodeSetCurveHandlePositions': ['mode'],
+  'GeometryNodeCurveSetHandles': ['handle_type', 'mode'],
+  'GeometryNodeInputNamedAttribute': ['data_type'],
+  'GeometryNodeStoreNamedAttribute': ['data_type', 'domain'],
+  'GeometryNodeCurveToPoints': ['mode'],
+  'GeometryNodeFillCurve': ['mode'],
+  'GeometryNodeResampleCurve': ['mode'],
+  'GeometryNodeTrimCurve': ['mode'],
+  'GeometryNodeMeshLine': ['mode'],
+  'GeometryNodeMeshToPoints': ['mode'],
+  'GeometryNodeDeleteGeometry': ['mode'],
+  'GeometryNodeProximity': ['target_element'],
+  'GeometryNodeCurvePrimitiveCircle': ['mode'],
+  'GeometryNodeSampleCurve': ['mode'],
+  'GeometryNodeCurvePrimitiveBezierSegment': ['mode'],
+  'GeometryNodeCurvePrimitiveLine': ['mode'],
+  'GeometryNodeExtrudeMesh': ['mode'],
+  'GeometryNodeRaycast': ['data_type', 'mapping'],
+  'FunctionNodeAlignEulerToVector': ['axis', 'pivot_axis'],
+  'ShaderNodeVectorRotate': ['invert', 'rotation_type'],
+  'FunctionNodeRotateEuler': ['space', 'type'],
+  'GeometryNodeDuplicateElements': ['domain'],
+  'ShaderNodeSeparateRGB': ['mode'],
+  'GeometryNodeAttributeDomainSize': ['component'],
+};
+
+/**
+ * SINGLETON_NODES - node types that should only have a single instance
+ * per node group.
+ *
+ * Ported from infinigen/core/nodes/node_info.py
+ */
+export const SINGLETON_NODES: string[] = [
+  'NodeGroupInput',
+  'NodeGroupOutput',
+  'ShaderNodeOutputMaterial',
+  'ShaderNodeOutputWorld',
+  'ShaderNodeOutputLight',
+  'CompositorNodeComposite',
+  'CompositorNodeViewer',
+  'CompositorNodeRLayers',
+];
+
+/**
+ * NODETYPE_TO_DATATYPE - maps Blender socket type identifiers to
+ * the data_type attribute values used by nodes like CaptureAttribute.
+ *
+ * Ported from infinigen/core/nodes/node_info.py
+ */
+export const NODETYPE_TO_DATATYPE: Record<string, string> = {
+  VALUE: 'FLOAT',
+  INT: 'INT',
+  VECTOR: 'FLOAT_VECTOR',
+  FLOAT_COLOR: 'RGBA',
+  BOOLEAN: 'BOOLEAN',
+};
+
+/**
+ * NODECLASS_TO_DATATYPE - maps Blender socket class names to data_type values.
+ *
+ * Ported from infinigen/core/nodes/node_info.py
+ */
+export const NODECLASS_TO_DATATYPE: Record<string, string> = {
+  NodeSocketFloat: 'FLOAT',
+  NodeSocketInt: 'INT',
+  NodeSocketVector: 'FLOAT_VECTOR',
+  NodeSocketColor: 'RGBA',
+  NodeSocketBool: 'BOOLEAN',
+};
+
+/**
+ * DATATYPE_TO_NODECLASS - reverse of NODECLASS_TO_DATATYPE.
+ */
+export const DATATYPE_TO_NODECLASS: Record<string, string> = {
+  FLOAT: 'NodeSocketFloat',
+  INT: 'NodeSocketInt',
+  FLOAT_VECTOR: 'NodeSocketVector',
+  RGBA: 'NodeSocketColor',
+  BOOLEAN: 'NodeSocketBool',
+};
+
+/**
+ * DATATYPE_DIMS - dimensionality of each data type.
+ *
+ * Ported from infinigen/core/nodes/node_info.py
+ */
+export const DATATYPE_DIMS: Record<string, number> = {
+  FLOAT: 1,
+  INT: 1,
+  FLOAT_VECTOR: 3,
+  FLOAT2: 2,
+  FLOAT_COLOR: 4,
+  BOOLEAN: 1,
+  INT32_2D: 2,
+};
+
+/**
+ * DATATYPE_FIELDS - the field name used for each data type in node sockets.
+ *
+ * Ported from infinigen/core/nodes/node_info.py
+ */
+export const DATATYPE_FIELDS: Record<string, string> = {
+  FLOAT: 'value',
+  INT: 'value',
+  FLOAT_VECTOR: 'vector',
+  FLOAT_COLOR: 'color',
+  BOOLEAN: 'value',
+};
 
 /**
  * Re-export resolveNodeType for convenience.
