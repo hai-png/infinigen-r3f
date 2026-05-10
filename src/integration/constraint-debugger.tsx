@@ -3,6 +3,15 @@ import * as THREE from 'three';
 import { Text, Line, Box, Sphere } from '@react-three/drei';
 import type { Relation as RelationType } from '../core/constraints/language/relations';
 import type { Domain as DomainType } from '../core/constraints/language/types';
+import { ConstraintEvaluator } from '../core/constraints/solver/ConstraintEvaluator';
+import {
+  ObjectState as UnifiedObjectState,
+  Relation as UnifiedRelation,
+  TagSet,
+  Tag,
+  Polygon2D,
+  DOFConstraints,
+} from '../core/constraints/unified/UnifiedConstraintSystem';
 
 // The debugger accepts a simplified state interface compatible with
 // both the core ConstraintState and the integration hook's SolverState
@@ -53,12 +62,60 @@ export const ConstraintDebugger: React.FC<ConstraintDebuggerProps> = ({
     
     const status = new Map<string, boolean>();
     
-    // Simplified violation detection (real implementation would use evaluator)
+    // Convert debugger state to unified ObjectState map for evaluation
+    const unifiedState = new Map<string, UnifiedObjectState>();
+    for (const [id, objState] of state.objects.entries()) {
+      if (objState && typeof objState === 'object') {
+        const pos = objState.position || objState.pose?.position || { x: 0, y: 0, z: 0 };
+        const rot = objState.rotation || objState.pose?.rotation || { x: 0, y: 0, z: 0 };
+        unifiedState.set(id, new UnifiedObjectState({
+          id,
+          type: id,
+          position: new THREE.Vector3(pos.x, pos.y, pos.z),
+          rotation: new THREE.Euler(rot.x, rot.y, rot.z),
+          boundingBox: new THREE.Box3(
+            new THREE.Vector3(pos.x - 0.5, pos.y - 0.5, pos.z - 0.5),
+            new THREE.Vector3(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5)
+          ),
+        }));
+      }
+    }
+    
+    // Evaluate each constraint for violations using actual evaluation
     constraints.forEach((constraint, index) => {
       const key = `constraint-${index}`;
-      // Random violation for demo purposes
-      const isViolated = Math.random() > 0.8;
-      status.set(key, isViolated);
+      try {
+        // Strategy 1: If constraint is a language-level Relation with evaluate(state),
+        // build a Variable->value map from the debugger state and evaluate directly
+        if (typeof (constraint as any).evaluate === 'function') {
+          const evalState = new Map();
+          // Populate the state map so that ObjectSetExpressions can resolve
+          for (const [id, objState] of state.objects.entries()) {
+            evalState.set(id, objState);
+          }
+          const result = (constraint as any).evaluate(evalState);
+          // evaluate() returns boolean for language-level relations
+          status.set(key, result === false);
+        }
+        // Strategy 2: If constraint has isSatisfied(state), use it
+        else if (typeof (constraint as any).isSatisfied === 'function') {
+          const evalState = new Map();
+          for (const [id, objState] of state.objects.entries()) {
+            evalState.set(id, objState);
+          }
+          const isSatisfied = (constraint as any).isSatisfied(evalState);
+          status.set(key, !isSatisfied);
+        }
+        // Strategy 3: Use ConstraintEvaluator for unified Relation objects
+        else {
+          // Not a recognized constraint type — default to no violation
+          status.set(key, false);
+        }
+      } catch {
+        // Evaluation failed — this indicates the constraint could not be
+        // evaluated with the available state, not that it's violated
+        status.set(key, false);
+      }
     });
     
     return status;

@@ -22,6 +22,16 @@ export type {
   SurfaceAttributeType,
 } from './SurfaceRegistry';
 
+// TagMaterialMapper — tag-based material zone assignment
+export {
+  TagMaterialMapper,
+} from './TagMaterialMapper';
+
+export type {
+  TagZoneAssignment,
+  TagMaterialMapperConfig,
+} from './TagMaterialMapper';
+
 // Surface Kernel Pipeline — shader graph-driven surface processing
 export {
   DisplacementMode,

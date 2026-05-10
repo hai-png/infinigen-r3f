@@ -46,3 +46,25 @@ export type {
   MolluskScatterConfig,
   JellyfishScatterConfig,
 } from './NewScatterTypes';
+
+// Scatter Selection Masks
+export {
+  scatterLower,
+  scatterUpward,
+  scatterBySlope,
+  scatterByAltitude,
+  scatterByNoise,
+  combineMasksAnd,
+  combineMasksOr,
+  invertMask,
+  filterPositionsByMask,
+} from './ScatterSelectionMasks';
+
+// Scatter Clustering
+export {
+  PoissonDiskSampler,
+  ClusteredDistribution,
+  NaturalDistribution,
+} from './ScatterClustering';
+
+export type { ClusterConfig } from './ScatterClustering';

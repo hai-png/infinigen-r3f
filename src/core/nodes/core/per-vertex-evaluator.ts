@@ -282,6 +282,9 @@ perVertexExecutors.set(String(NodeTypes.RandomValue), (inputs, props, _geometry,
 });
 
 // CaptureAttribute → evaluate Value input per-vertex and output as streams
+// Enhanced: properly re-evaluates the upstream subgraph per-vertex for
+// CaptureAttribute nodes by temporarily overriding Position/Normal/Index
+// and re-evaluating the upstream dependency chain.
 perVertexExecutors.set(String(NodeTypes.CaptureAttribute), (inputs, props, geometry, vertexCount) => {
   const outputs = new Map<string, AttributeStream>();
 
@@ -312,10 +315,12 @@ perVertexExecutors.set(String(NodeTypes.CaptureAttribute), (inputs, props, geome
 
   // Create the output Attribute stream from the Value input
   if (valueInput) {
-    // If the Value is already a per-element stream, pass it through as the Attribute output
+    // If the Value input is already a per-element stream (size matches elementCount),
+    // it means the upstream subgraph was already evaluated per-vertex by the
+    // topological traversal. Clone it with proper domain mapping.
     const outputName = 'Attribute';
     if (valueInput.size === elementCount) {
-      // Same size — clone and rename
+      // Same size — clone and rename with proper domain
       const attrStream = new AttributeStream(
         `captured_${domain}`, domain, valueInput.dataType, elementCount,
       );
@@ -324,6 +329,24 @@ perVertexExecutors.set(String(NodeTypes.CaptureAttribute), (inputs, props, geome
       const len = Math.min(srcData.length, dstData.length);
       for (let i = 0; i < len; i++) {
         dstData[i] = srcData[i];
+      }
+      outputs.set(outputName, attrStream);
+    } else if (valueInput.size === 1 && elementCount > 1) {
+      // The Value input is a constant (single-element stream).
+      // This means the upstream subgraph didn't depend on per-vertex
+      // Position/Normal/Index. Broadcast the constant value.
+      const attrStream = new AttributeStream(
+        `captured_${domain}`, domain, valueInput.dataType, elementCount,
+      );
+      const srcData = valueInput.getRawData();
+      const dstData = attrStream.getRawData();
+      const srcCC = valueInput.componentCount;
+      const dstCC = attrStream.componentCount;
+      const cc = Math.min(srcCC, dstCC);
+      for (let i = 0; i < elementCount; i++) {
+        for (let c = 0; c < cc; c++) {
+          dstData[i * dstCC + c] = srcData[c];
+        }
       }
       outputs.set(outputName, attrStream);
     } else {
@@ -385,12 +408,268 @@ export class PerVertexEvaluator {
       const node = group.nodes.get(nodeId);
       if (!node) continue;
 
-      const nodeOutputs = this.evaluateNode(nodeId, geometry, context);
-      context.results.set(nodeId, nodeOutputs);
+      // Special handling for CaptureAttribute: re-evaluate upstream subgraph
+      // per-vertex so that captured attributes are computed at each vertex.
+      const typeStr = String(node.type);
+      if (typeStr === String(NodeTypes.CaptureAttribute)) {
+        const capturedOutputs = this.evaluateCaptureAttributePerVertex(
+          nodeId, node, geometry, context, group,
+        );
+        context.results.set(nodeId, capturedOutputs);
+      } else {
+        const nodeOutputs = this.evaluateNode(nodeId, geometry, context);
+        context.results.set(nodeId, nodeOutputs);
+      }
     }
 
     // Apply results to a cloned geometry
     return this.applyResults(geometry, context);
+  }
+
+  /**
+   * Evaluate a CaptureAttribute node by re-evaluating its upstream subgraph
+   * per-vertex, producing a per-vertex AttributeStream for the captured value.
+   *
+   * This method:
+   * 1. Identifies the upstream subgraph from the CaptureAttribute's Value input
+   * 2. For each vertex, temporarily sets Position/Normal/Index values and re-evaluates
+   * 3. Stores the captured result as an AttributeStream with proper domain mapping
+   * 4. Supports nested CaptureAttribute chains (where a captured attribute is used
+   *    upstream of another CaptureAttribute)
+   */
+  private evaluateCaptureAttributePerVertex(
+    captureNodeId: string,
+    captureNode: NodeInstance,
+    geometry: GeometryContext,
+    context: EvaluationContext,
+    group: import('./node-wrangler').NodeGroup,
+  ): Map<string, AttributeStream> {
+    const domain: AttributeDomain = (captureNode.properties.domain as AttributeDomain) ?? 'point';
+    const dataTypeStr = (captureNode.properties.dataType as string) ?? 'FLOAT';
+    const dataType: AttributeDataType =
+      dataTypeStr === 'VECTOR' || dataTypeStr === 'FLOAT_VECTOR' || dataTypeStr === 'vec3' ? 'VECTOR'
+      : dataTypeStr === 'COLOR' || dataTypeStr === 'FLOAT_COLOR' ? 'COLOR'
+      : dataTypeStr === 'BOOLEAN' ? 'BOOLEAN'
+      : dataTypeStr === 'INT' || dataTypeStr === 'INTEGER' ? 'INT'
+      : 'FLOAT';
+
+    const elementCount = domain === 'point' ? geometry.vertexCount
+      : domain === 'face' ? geometry.faceCount
+      : domain === 'face_corner' ? geometry.vertexCount
+      : geometry.vertexCount;
+
+    // First, try the standard executor path — if the upstream subgraph already
+    // produced a per-vertex stream, use it directly.
+    const standardResult = this.evaluateNode(captureNodeId, geometry, context);
+
+    // Check if the Attribute output already has per-element data
+    const attrOutput = standardResult.get('Attribute');
+    if (attrOutput && attrOutput.size === elementCount) {
+      // Already per-vertex — return as-is
+      return standardResult;
+    }
+
+    // The upstream subgraph didn't produce per-vertex results.
+    // We need to re-evaluate it per-vertex by:
+    // 1. Finding all nodes upstream of the Value input
+    // 2. For each vertex, temporarily overriding Position/Normal/Index
+    // 3. Re-evaluating the upstream subgraph with the overridden values
+    // 4. Collecting the result into an AttributeStream
+
+    // Find the link to the Value input
+    let valueLink: import('./node-wrangler').NodeLink | undefined;
+    for (const link of group.links.values()) {
+      if (link.toNode === captureNodeId &&
+          (link.toSocket === 'Value' || link.toSocket === 'Attribute' || link.toSocket === 'value')) {
+        valueLink = link;
+        break;
+      }
+    }
+
+    const outputs = new Map<string, AttributeStream>();
+
+    // Pass geometry through
+    const geometryInput = standardResult.get('Geometry');
+    if (geometryInput) {
+      outputs.set('Geometry', geometryInput);
+    }
+
+    if (!valueLink) {
+      // No upstream connection — use the standard result
+      return standardResult;
+    }
+
+    // Create the output AttributeStream for captured values
+    const capturedStream = new AttributeStream(
+      `captured_${domain}`, domain, dataType, elementCount,
+    );
+
+    // Get position and normal streams for per-vertex override
+    const positionStream = geometry.getAttribute('position');
+    const normalStream = geometry.getAttribute('normal');
+
+    // Collect upstream node IDs (simple BFS from the source of the Value link)
+    const upstreamNodeIds = new Set<string>();
+    const queue = [valueLink.fromNode];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (upstreamNodeIds.has(currentId)) continue;
+      upstreamNodeIds.add(currentId);
+      // Find incoming links to this node
+      for (const link of group.links.values()) {
+        if (link.toNode === currentId && !upstreamNodeIds.has(link.fromNode)) {
+          queue.push(link.fromNode);
+        }
+      }
+    }
+
+    // For each vertex, re-evaluate the upstream subgraph with overridden Position/Normal
+    for (let v = 0; v < elementCount; v++) {
+      // Create a temporary context with overridden Position/Normal/Index
+      const tempContext: EvaluationContext = {
+        results: new Map(context.results), // Copy existing results
+        geometry,
+      };
+
+      // Override Position for input nodes in the upstream subgraph
+      if (positionStream) {
+        const pos = positionStream.getVector(v);
+        const overridePosStream = new AttributeStream('position_override', 'point', 'VECTOR', 1);
+        overridePosStream.setVector(0, pos);
+        // Find Position input nodes in upstream and override their outputs
+        for (const upId of upstreamNodeIds) {
+          const upNode = group.nodes.get(upId);
+          if (upNode && (String(upNode.type) === String(NodeTypes.InputPosition) ||
+                         String(upNode.type) === 'GeometryNodeInputPosition')) {
+            const posOutputs = new Map<string, AttributeStream>();
+            posOutputs.set('Position', overridePosStream);
+            tempContext.results.set(upId, posOutputs);
+          }
+        }
+      }
+
+      // Override Normal
+      if (normalStream) {
+        const nrm = normalStream.getVector(v);
+        const overrideNrmStream = new AttributeStream('normal_override', 'point', 'VECTOR', 1);
+        overrideNrmStream.setVector(0, nrm);
+        for (const upId of upstreamNodeIds) {
+          const upNode = group.nodes.get(upId);
+          if (upNode && (String(upNode.type) === String(NodeTypes.InputNormal) ||
+                         String(upNode.type) === 'GeometryNodeInputNormal')) {
+            const nrmOutputs = new Map<string, AttributeStream>();
+            nrmOutputs.set('Normal', overrideNrmStream);
+            tempContext.results.set(upId, nrmOutputs);
+          }
+        }
+      }
+
+      // Override Index
+      const overrideIdxStream = new AttributeStream('index_override', 'point', 'INT', 1);
+      overrideIdxStream.setInt(0, v);
+      for (const upId of upstreamNodeIds) {
+        const upNode = group.nodes.get(upId);
+        if (upNode && (String(upNode.type) === String(NodeTypes.Index) ||
+                       String(upNode.type) === 'GeometryNodeInputIndex')) {
+          const idxOutputs = new Map<string, AttributeStream>();
+          idxOutputs.set('Index', overrideIdxStream);
+          tempContext.results.set(upId, idxOutputs);
+        }
+      }
+
+      // Re-evaluate upstream nodes in topological order that haven't been
+      // pre-resolved by overrides
+      const topoOrder = this.wrangler.topologicalSort(group);
+      for (const nodeId of topoOrder) {
+        if (!upstreamNodeIds.has(nodeId)) continue;
+        // Skip if already overridden (Position, Normal, Index)
+        if (tempContext.results.has(nodeId)) continue;
+
+        const upNode = group.nodes.get(nodeId);
+        if (!upNode) continue;
+
+        // Evaluate this node with the temp context
+        const upOutputs = this.evaluateNodeWithContext(nodeId, geometry, tempContext, group);
+        tempContext.results.set(nodeId, upOutputs);
+      }
+
+      // Extract the Value from the source node in the temp context
+      const sourceResults = tempContext.results.get(valueLink.fromNode);
+      if (sourceResults) {
+        const valueStream = sourceResults.get(valueLink.fromSocket);
+        if (valueStream) {
+          // Write the value for this vertex into the captured stream
+          if (dataType === 'FLOAT' || dataType === 'INT' || dataType === 'BOOLEAN') {
+            capturedStream.setFloat(v, valueStream.getFloat(0));
+          } else if (dataType === 'VECTOR') {
+            const vec = valueStream.getVector(0);
+            capturedStream.setVector(v, vec);
+          } else if (dataType === 'COLOR') {
+            const col = valueStream.getColor(0);
+            capturedStream.setColor(v, col);
+          }
+        }
+      }
+    }
+
+    outputs.set('Attribute', capturedStream);
+    return outputs;
+  }
+
+  /**
+   * Evaluate a single node with a custom (potentially overridden) context.
+   * Similar to evaluateNode but uses the provided context instead of the
+   * evaluator's default context.
+   */
+  private evaluateNodeWithContext(
+    nodeId: string,
+    geometry: GeometryContext,
+    context: EvaluationContext,
+    group: import('./node-wrangler').NodeGroup,
+  ): Map<string, AttributeStream> {
+    const node = group.nodes.get(nodeId);
+    if (!node) return new Map();
+
+    // Resolve all input streams from the custom context
+    const inputStreams = new Map<string, AttributeStream>();
+    for (const [inputName] of node.inputs.entries()) {
+      // Find a link targeting this input
+      for (const link of group.links.values()) {
+        if (link.toNode === nodeId && link.toSocket === inputName) {
+          const sourceResults = context.results.get(link.fromNode);
+          if (sourceResults && sourceResults.has(link.fromSocket)) {
+            inputStreams.set(inputName, sourceResults.get(link.fromSocket)!);
+          }
+          break;
+        }
+      }
+
+      // If no connected value, use default
+      if (!inputStreams.has(inputName)) {
+        const socket = node.inputs.get(inputName);
+        if (socket) {
+          const value = socket.value ?? socket.defaultValue ?? socket.default;
+          inputStreams.set(inputName, this.createConstantStream(
+            value, geometry.vertexCount, 'point',
+          ));
+        }
+      }
+    }
+
+    // Look up the per-vertex executor
+    const typeStr = String(node.type);
+    const executor = perVertexExecutors.get(typeStr);
+
+    if (executor) {
+      try {
+        return executor(inputStreams, node.properties, geometry, geometry.vertexCount);
+      } catch (err) {
+        return new Map();
+      }
+    }
+
+    // Fallback: passthrough
+    return this.passthrough(inputStreams, node);
   }
 
   /**

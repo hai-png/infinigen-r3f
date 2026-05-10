@@ -6,6 +6,19 @@ import { SpaceColonization, type SpaceColonizationConfig, type TreeSkeleton } fr
 import { TreeSkeletonMeshBuilder, type SkeletonMeshConfig, DEFAULT_SKELETON_MESH_CONFIG } from '../TreeSkeletonMeshBuilder';
 import { TreeGenome, TREE_SPECIES_PRESETS, genomeToSpaceColonizationConfig, getBarkColor, getLeafColor } from '../TreeGenome';
 import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
+import {
+  FruitFactory,
+  FlowerFactory,
+  TreeChildPlacer,
+  DEFAULT_TREE_CHILDREN_CONFIG,
+  type TreeChildrenConfig,
+  type FruitParams,
+  type FlowerParams,
+  FruitType,
+  FlowerType,
+} from '../FruitFlowerSystem';
+import { TreeCollectionHierarchy, type TreePartType } from './TreeCollectionHierarchy';
+import type { Season } from '../types';
 
 /**
  * Tree species configuration with biological parameters
@@ -33,6 +46,10 @@ export interface TreeSpeciesConfig {
   leafType?: LeafType;
   /** Number of individual leaves per cluster (default varies by species) */
   leafCount?: number;
+  /** Optional fruit configuration for this species */
+  fruitConfig?: Partial<TreeChildrenConfig>;
+  /** Optional flower configuration for this species */
+  flowerConfig?: Partial<TreeChildrenConfig>;
 }
 
 /**
@@ -60,6 +77,12 @@ export const TreeSpeciesPresets: Record<string, TreeSpeciesConfig> = {
     hasSnowCap: true,
     leafType: 'oak',
     leafCount: 300,
+    fruitConfig: {
+      fruitEnabled: true,
+      fruitType: FruitType.APPLE,
+      fruitDensity: 0.3,
+      fruitSizeRange: [0.03, 0.06],
+    },
   },
   pine: {
     name: 'Pine',
@@ -76,6 +99,9 @@ export const TreeSpeciesPresets: Record<string, TreeSpeciesConfig> = {
     hasSnowCap: true,
     leafType: 'needle',
     leafCount: 500,
+    fruitConfig: {
+      fruitEnabled: false,
+    },
   },
   birch: {
     name: 'Birch',
@@ -114,6 +140,12 @@ export const TreeSpeciesPresets: Record<string, TreeSpeciesConfig> = {
     hasSnowCap: false,
     leafType: 'palm',
     leafCount: 100,
+    fruitConfig: {
+      fruitEnabled: true,
+      fruitType: FruitType.COCONUT,
+      fruitDensity: 0.2,
+      fruitSizeRange: [0.05, 0.08],
+    },
   },
   willow: {
     name: 'Willow',
@@ -130,6 +162,12 @@ export const TreeSpeciesPresets: Record<string, TreeSpeciesConfig> = {
     hasSnowCap: false,
     leafType: 'willow',
     leafCount: 400,
+    flowerConfig: {
+      flowerEnabled: true,
+      flowerType: FlowerType.CHERRY_BLOSSOM,
+      flowerDensity: 0.15,
+      flowerSizeRange: [0.02, 0.04],
+    },
   },
 };
 
@@ -209,6 +247,8 @@ export class TreeGenerator {
       includeColliders?: boolean;
       /** Force per-leaf geometry instead of primitive approximations (default: true) */
       usePerLeafGeometry?: boolean;
+      /** Whether to add fruit/flower children (default: true) */
+      includeFruitFlowers?: boolean;
     } = {}
   ): THREE.Group {
     const config = typeof species === 'string'
@@ -218,6 +258,7 @@ export class TreeGenerator {
     const season = options.season || 'summer';
     const lod = options.lod || 0;
     const usePerLeafGeometry = options.usePerLeafGeometry !== false; // default true
+    const includeFruitFlowers = options.includeFruitFlowers !== false; // default true
     const treeRng = new SeededRandom(seed);
 
     const treeGroup = new THREE.Group();
@@ -235,6 +276,16 @@ export class TreeGenerator {
     const foliageMesh = this.generateFoliage(config, season, seed, lod, actualTrunkHeight, usePerLeafGeometry);
     treeGroup.add(foliageMesh);
 
+    // Add fruit/flowers if configured and season allows
+    if (includeFruitFlowers) {
+      const fruitFlowerGroup = this.generateFruitFlowers(
+        config, season, seed, lod, actualTrunkHeight
+      );
+      if (fruitFlowerGroup.children.length > 0) {
+        treeGroup.add(fruitFlowerGroup);
+      }
+    }
+
     // Add snow cap if applicable
     if (config.hasSnowCap && season === 'winter') {
       const snowMesh = this.generateSnowCap(config, seed, lod, actualTrunkHeight);
@@ -242,6 +293,92 @@ export class TreeGenerator {
     }
 
     return treeGroup;
+  }
+
+  /**
+   * Generate fruit and flower children on the tree.
+   *
+   * Uses TreeChildPlacer from FruitFlowerSystem for placement.
+   * Supports seasonal variation:
+   *   - spring: flowers bloom, no fruit
+   *   - summer: flowers fade, fruit growing
+   *   - autumn: ripe fruit
+   *   - winter: no fruit or flowers
+   *
+   * Connected with TreeCollectionHierarchy so fruits are in their own collection.
+   */
+  private generateFruitFlowers(
+    config: TreeSpeciesConfig,
+    season: string,
+    seed: number,
+    lod: number,
+    trunkHeight: number
+  ): THREE.Group {
+    const group = new THREE.Group();
+    const rng = new SeededRandom(seed + 8000);
+
+    // Seasonal logic: what to show
+    const showFlowers = season === 'spring';
+    const showFruit = season === 'summer' || season === 'autumn';
+    const fruitMaturity = season === 'autumn' ? 1.0 : season === 'summer' ? 0.5 : 0;
+
+    // Place flowers if in spring
+    if (showFlowers && config.flowerConfig?.flowerEnabled) {
+      const flowerConfig = config.flowerConfig;
+      const flowerCount = Math.floor((flowerConfig.flowerDensity ?? 0.2) * 20);
+
+      for (let i = 0; i < flowerCount; i++) {
+        const flowerParams: FlowerParams = FlowerFactory.getDefaultParams(
+          flowerConfig.flowerType ?? FlowerType.CHERRY_BLOSSOM
+        );
+        flowerParams.petalColor = config.seasonalColors?.spring ?? new THREE.Color(0xff69b4);
+
+        const flower = FlowerFactory.generate(flowerParams, rng);
+        flower.position.set(
+          rng.uniform(-2, 2),
+          trunkHeight + rng.uniform(-1, 2),
+          rng.uniform(-2, 2)
+        );
+        flower.scale.setScalar(rng.uniform(0.8, 1.5));
+        flower.userData.treePart = 'foliage';
+        group.add(flower);
+      }
+    }
+
+    // Place fruits if in summer/autumn
+    if (showFruit && config.fruitConfig?.fruitEnabled) {
+      const fruitConfig = config.fruitConfig;
+      const fruitCount = Math.floor((fruitConfig.fruitDensity ?? 0.3) * 15);
+
+      for (let i = 0; i < fruitCount; i++) {
+        const fruitParams: FruitParams = FruitFactory.randomize(
+          fruitConfig.fruitType ?? FruitType.APPLE,
+          rng
+        );
+
+        // Adjust size based on maturity
+        if (fruitMaturity < 1.0) {
+          fruitParams.size *= fruitMaturity;
+        }
+
+        // Adjust color based on maturity (green when unripe)
+        if (fruitMaturity < 0.7) {
+          fruitParams.color = new THREE.Color(0x4a7a2a); // Green unripe
+        }
+
+        const fruit = FruitFactory.generate(fruitParams, rng);
+        fruit.position.set(
+          rng.uniform(-2, 2),
+          trunkHeight + rng.uniform(-2, 1),
+          rng.uniform(-2, 2)
+        );
+        fruit.scale.setScalar(rng.uniform(0.8, 1.3));
+        fruit.userData.treePart = 'foliage';
+        group.add(fruit);
+      }
+    }
+
+    return group;
   }
 
   /**

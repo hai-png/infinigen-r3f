@@ -18,6 +18,12 @@
 
 import * as THREE from 'three';
 import { SeededRandom } from '@/core/util/MathUtils';
+import {
+  createGLSLLeafMaterial,
+  createLeafMesh,
+  type LeafShaderType,
+  type GLSLLeafMaterialParams,
+} from './LeafGLSLMaterial';
 
 // ============================================================================
 // Types & Interfaces
@@ -563,4 +569,60 @@ export function generateLeaf(
 ): THREE.BufferGeometry {
   const gen = new LeafGenerator({ leafType, seed });
   return gen.generate();
+}
+
+// ============================================================================
+// GLSL Leaf Material Integration
+// ============================================================================
+
+/**
+ * Create a GLSL leaf material for use with leaf geometries.
+ * This provides GPU-accelerated procedural leaf textures with vein patterns,
+ * translucency, and seasonal color variation.
+ *
+ * @param leafType Shader type variant (broadleaf, maple, pine, palm)
+ * @param params Material parameters
+ * @returns THREE.ShaderMaterial with leaf-specific GLSL
+ */
+export function createGLSLeafMaterial(
+  leafType: LeafShaderType = 'broadleaf',
+  params: Partial<GLSLLeafMaterialParams> = {}
+): THREE.ShaderMaterial {
+  return createGLSLLeafMaterial({ ...params, leafType });
+}
+
+/**
+ * Create a complete leaf mesh with GLSL material.
+ * Generates the geometry and applies the GLSL leaf shader material.
+ *
+ * @param type The leaf shader type (broadleaf, maple, pine, palm)
+ * @param params Material and generation parameters
+ * @returns THREE.Mesh with leaf geometry and GLSL material
+ */
+export function createLeafMeshWithGLSL(
+  type: LeafShaderType = 'broadleaf',
+  params: Partial<GLSLLeafMaterialParams & { seed?: number; length?: number; width?: number }> = {}
+): THREE.Mesh {
+  const { seed = 42, length, width, ...materialParams } = params;
+
+  // Map shader type to geometry type
+  const geometryTypeMap: Record<LeafShaderType, LeafShapeType> = {
+    broadleaf: 'broadleaf',
+    maple: 'maple',
+    pine: 'pine',
+    palm: 'broadleaf', // Palm uses broadleaf geometry with palm shader
+  };
+
+  const geometryType = geometryTypeMap[type];
+  const genParams: Partial<LeafGeneratorParams> = {
+    leafType: geometryType,
+    seed,
+  };
+  if (length !== undefined) genParams.length = length;
+  if (width !== undefined) genParams.width = width;
+
+  const generator = new LeafGenerator(genParams);
+  const geometry = generator.generate();
+
+  return createLeafMesh(type, geometry, { ...materialParams, seed });
 }

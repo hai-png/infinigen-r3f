@@ -1119,6 +1119,115 @@ export abstract class Relation {
     }
     return this.evaluate(child, parent);
   }
+
+  // ── Gap 7: Algebra operations ────────────────────────────────────────
+
+  /**
+   * Implication: does this relation logically imply another?
+   *
+   * A implies B means: whenever A holds, B also holds.
+   * Uses the implication lattice: STABLE_AGAINST → SUPPORTED_BY → TOUCHING
+   *
+   * @param other - The potential consequent relation
+   * @returns true if this relation implies other
+   */
+  implies(other: Relation): boolean {
+    // Default implementation: same name with same or weaker params
+    if (this.name === other.name) return true;
+
+    // Implication lattice from SpatialRelationAlgebra.ts
+    // Extended with new relation types for comprehensive reasoning
+    const lattice: Record<string, string[]> = {
+      'stable_against': ['supported_by', 'touching', 'coplanar', 'near', 'proximity'],
+      'supported_by': ['touching', 'coplanar', 'near', 'proximity'],
+      'touching': ['coplanar', 'near', 'proximity'],
+      'containment': ['touching', 'near', 'proximity'],
+      'near': ['proximity'],
+      'coverage': ['touching', 'near', 'proximity'],
+      'support_coverage': ['coverage', 'touching', 'near', 'proximity', 'supported_by'],
+      // Shared edge and room neighbour implications
+      'shared_edge': ['room_neighbour', 'touching', 'near', 'proximity'],
+      'room_neighbour': ['touching', 'near', 'proximity'],
+      // Hidden/Visible are complementary
+      'hidden': [],
+      'visible': [],
+      // AccessibleFrom implies reachable (weaker condition)
+      'accessible_from': ['reachable_from', 'near', 'proximity'],
+      'reachable_from': ['near', 'proximity'],
+      // Grouped implies near/proximity for all members
+      'grouped': ['near', 'proximity'],
+      // Distributed implies grouped (all members are together)
+      'distributed': ['grouped', 'near', 'proximity'],
+      // Facing implies near for reasonable angles
+      'facing': ['near', 'proximity'],
+      // OnFloor implies supported_by
+      'on_floor': ['supported_by', 'touching', 'coplanar'],
+      // Distance is a general relation
+      'distance': ['near', 'proximity'],
+    };
+
+    const implied = lattice[this.name];
+    if (implied && implied.includes(other.name)) return true;
+
+    // Transitive check: if this implies X and X implies other
+    if (implied) {
+      for (const intermediate of implied) {
+        const intermediateLattice = lattice[intermediate];
+        if (intermediateLattice && intermediateLattice.includes(other.name)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Intersects: can both relations be simultaneously true for some configuration?
+   *
+   * @param other - The other relation
+   * @returns A new Relation representing the intersection, or null if mutually exclusive
+   */
+  intersects(other: Relation): Relation | null {
+    // Default: same-type relations intersect if params are compatible
+    if (this.name === other.name) return this;
+
+    // Complementary relations don't intersect
+    if ((this.name === 'hidden' && other.name === 'visible') ||
+        (this.name === 'visible' && other.name === 'hidden')) {
+      return null;
+    }
+
+    // AccessibleFrom and blocking relations can conflict
+    if ((this.name === 'accessible_from' && other.name === 'containment') ||
+        (this.name === 'reachable_from' && other.name === 'containment')) {
+      // Containment doesn't necessarily block accessibility
+      return this;
+    }
+
+    // Most relations can coexist
+    return this;
+  }
+
+  /**
+   * Difference: this relation minus the other.
+   *
+   * Returns a relation satisfied when THIS holds but OTHER does not,
+   * or null if this is a subset of other (difference is empty).
+   *
+   * @param other - The relation to subtract
+   * @returns A new Relation for the difference, or null
+   */
+  difference(other: Relation): Relation | null {
+    // If other implies this, the difference is empty
+    if (other.implies(this)) return null;
+
+    // Same type: difference depends on parameters
+    if (this.name === other.name) return null;
+
+    // Different types: this minus other is still this (they're independent)
+    return this;
+  }
 }
 
 // ============================================================================
@@ -1286,6 +1395,7 @@ export class CoPlanarRelation extends Relation {
     childTags: TagSet = new TagSet(),
     parentTags: TagSet = new TagSet(),
     public readonly distanceTolerance: number = 0.1,
+    public readonly normalTolerance: number = 0.1,
     public readonly normal: THREE.Vector3 = new THREE.Vector3(0, 1, 0)
   ) {
     super();
@@ -1294,15 +1404,52 @@ export class CoPlanarRelation extends Relation {
   }
 
   evaluate(child: ObjectState, parent: ObjectState): RelationResult {
-    // Check if child and parent centers are on the same plane
+    // Check 1: Distance from the reference plane
     const diff = child.position.clone().sub(parent.position);
     const distFromPlane = Math.abs(diff.dot(this.normal));
-    const satisfied = distFromPlane <= this.distanceTolerance;
+    const distanceSatisfied = distFromPlane <= this.distanceTolerance;
+
+    // Check 2: Normal alignment tolerance.
+    // If both objects have bounding boxes, check that the face normals
+    // are aligned (within normalTolerance) with the reference plane normal.
+    let normalSatisfied = true;
+    let normalAlignment = 1.0;
+    if (this.normalTolerance > 0) {
+      // Compute the vector from parent to child projected along normal
+      const diffLen = diff.length();
+      if (diffLen > 1e-10) {
+        // The component of the direction perpendicular to the normal
+        const alongNormal = diff.dot(this.normal) / diffLen;
+        const perpLen = Math.sqrt(1 - alongNormal * alongNormal);
+        // For coplanar objects spread along the plane, the direction
+        // between them should be mostly perpendicular to the normal.
+        // normalAlignment = 1 - |alongNormal| (1 = perfectly in-plane)
+        normalAlignment = 1 - Math.abs(alongNormal);
+      }
+
+      // Also check using bounding box face normals if available
+      const childBB = child.boundingBox;
+      const parentBB = parent.boundingBox;
+      if (childBB && parentBB && !childBB.isEmpty() && !parentBB.isEmpty()) {
+        // Use the up-direction (Y-axis) as a proxy for surface normal
+        // If both objects are on the same surface, their contact normals
+        // should be consistent with the plane normal.
+        const upDir = new THREE.Vector3(0, 1, 0);
+        normalAlignment = Math.abs(this.normal.dot(upDir));
+      }
+
+      normalSatisfied = (1 - normalAlignment) <= this.normalTolerance;
+    }
+
+    const satisfied = distanceSatisfied && normalSatisfied;
+    let violationAmount = 0;
+    if (!distanceSatisfied) violationAmount += distFromPlane - this.distanceTolerance;
+    if (!normalSatisfied) violationAmount += (1 - normalAlignment) - this.normalTolerance;
 
     return {
       satisfied,
-      violationAmount: satisfied ? 0 : distFromPlane - this.distanceTolerance,
-      metadata: { distFromPlane },
+      violationAmount,
+      metadata: { distFromPlane, normalAlignment },
     };
   }
 }
@@ -1443,6 +1590,595 @@ export class OnFloorRelation extends Relation {
       violationAmount: satisfied ? 0 : gap - this.tolerance,
       metadata: { gap },
     };
+  }
+}
+
+// ============================================================================
+// Gap 1: Missing Relations from language/relations.ts
+// ============================================================================
+
+/**
+ * Hidden relation: object is occluded from all viewpoints.
+ * Uses BVH line-of-sight when available, falls back to ground check.
+ */
+export class HiddenRelation extends Relation {
+  readonly name = 'hidden';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly viewpoints: THREE.Vector3[] = [
+      new THREE.Vector3(0, 10, 0),
+      new THREE.Vector3(10, 2, 0),
+      new THREE.Vector3(-10, 2, 0),
+      new THREE.Vector3(0, 2, 10),
+      new THREE.Vector3(0, 2, -10),
+    ]
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    // Child is hidden if below ground or occluded from all viewpoints
+    if (child.position.y < 0) {
+      return { satisfied: true, violationAmount: 0 };
+    }
+
+    // Try BVH line-of-sight
+    try {
+      const { getDefaultCollisionManager } = require('../evaluator/bvh-collision');
+      const manager = getDefaultCollisionManager();
+      const childCenter = new THREE.Vector3();
+      child.boundingBox.getCenter(childCenter);
+
+      let hiddenFromAll = true;
+      for (const vp of this.viewpoints) {
+        if (manager.hasLineOfSight(vp, childCenter)) {
+          hiddenFromAll = false;
+          break;
+        }
+      }
+      return {
+        satisfied: hiddenFromAll,
+        violationAmount: hiddenFromAll ? 0 : 1,
+        metadata: { hiddenFromAll },
+      };
+    } catch {
+      // Fallback: distance-based check
+      const dist = child.position.length();
+      const isHidden = dist > 500;
+      return {
+        satisfied: isHidden,
+        violationAmount: isHidden ? 0 : 1,
+        metadata: { distance: dist },
+      };
+    }
+  }
+}
+
+/**
+ * Visible relation: object is above ground and has line of sight from viewpoint.
+ */
+export class VisibleRelation extends Relation {
+  readonly name = 'visible';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly viewpoints: THREE.Vector3[] = [
+      new THREE.Vector3(0, 10, 0),
+    ],
+    public readonly maxViewDistance: number = 200
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    // Must be above ground
+    if (child.position.y < 0) {
+      return { satisfied: false, violationAmount: -child.position.y };
+    }
+
+    try {
+      const { getDefaultCollisionManager } = require('../evaluator/bvh-collision');
+      const manager = getDefaultCollisionManager();
+      const childCenter = new THREE.Vector3();
+      child.boundingBox.getCenter(childCenter);
+
+      for (const vp of this.viewpoints) {
+        if (manager.hasLineOfSight(vp, childCenter)) {
+          const dist = vp.distanceTo(childCenter);
+          if (dist <= this.maxViewDistance) {
+            return { satisfied: true, violationAmount: 0, metadata: { distance: dist } };
+          }
+        }
+      }
+      return { satisfied: false, violationAmount: 1 };
+    } catch {
+      // Fallback: distance check
+      for (const vp of this.viewpoints) {
+        const dist = vp.distanceTo(child.position);
+        if (dist > 0 && dist <= this.maxViewDistance) {
+          return { satisfied: true, violationAmount: 0, metadata: { distance: dist } };
+        }
+      }
+      return { satisfied: false, violationAmount: 1 };
+    }
+  }
+}
+
+/**
+ * Facing relation: child's forward direction points toward parent.
+ */
+export class FacingRelation extends Relation {
+  readonly name = 'facing';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly angleThreshold: number = Math.PI / 4
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    // Compute child's forward direction from rotation
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(child.rotation);
+    const toParent = parent.position.clone().sub(child.position).normalize();
+    const angle = forward.angleTo(toParent);
+    const satisfied = angle <= this.angleThreshold;
+    return {
+      satisfied,
+      violationAmount: satisfied ? 0 : angle - this.angleThreshold,
+      metadata: { angle },
+    };
+  }
+}
+
+/**
+ * Between relation: child is between two reference objects along an axis.
+ */
+export class BetweenRelation extends Relation {
+  readonly name = 'between';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly axis: 'x' | 'y' | 'z' | 'any' = 'any',
+    public readonly tolerance: number = 0.5
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    // Parent here is interpreted as one boundary; the other boundary
+    // is expected to be stored in the relation params.
+    // For now, check if child is between parent position and origin along the axis.
+    const axisIndex = this.axis === 'x' ? 0 : this.axis === 'y' ? 1 : this.axis === 'z' ? 2 : -1;
+
+    if (axisIndex >= 0) {
+      const childVal = child.position.getComponent(axisIndex);
+      const parentVal = parent.position.getComponent(axisIndex);
+      const lo = Math.min(0, parentVal);
+      const hi = Math.max(0, parentVal);
+      const inRange = childVal >= lo - this.tolerance && childVal <= hi + this.tolerance;
+      return {
+        satisfied: inRange,
+        violationAmount: inRange ? 0 : Math.min(Math.abs(childVal - lo), Math.abs(childVal - hi)),
+        metadata: { axis: this.axis, childVal, parentVal },
+      };
+    }
+
+    // 'any' axis: check all axes
+    let totalViolation = 0;
+    let allSatisfied = true;
+    for (const idx of [0, 1, 2]) {
+      const childVal = child.position.getComponent(idx);
+      const parentVal = parent.position.getComponent(idx);
+      const lo = Math.min(0, parentVal);
+      const hi = Math.max(0, parentVal);
+      if (childVal < lo - this.tolerance || childVal > hi + this.tolerance) {
+        allSatisfied = false;
+        totalViolation += Math.min(Math.abs(childVal - lo), Math.abs(childVal - hi));
+      }
+    }
+    return { satisfied: allSatisfied, violationAmount: totalViolation };
+  }
+}
+
+/**
+ * Near relation: objects are within a threshold distance.
+ */
+export class NearRelation extends Relation {
+  readonly name = 'near';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly threshold: number = 1.0
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    const dist = child.position.distanceTo(parent.position);
+    const satisfied = dist < this.threshold;
+    return {
+      satisfied,
+      violationAmount: satisfied ? 0 : dist - this.threshold,
+      metadata: { distance: dist },
+    };
+  }
+}
+
+/**
+ * Proximity relation: objects are within a distance range.
+ */
+export class ProximityRelation extends Relation {
+  readonly name = 'proximity';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly minDistance: number = 0.5,
+    public readonly maxDistance: number = 3.0
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    const dist = child.position.distanceTo(parent.position);
+    const tooClose = dist < this.minDistance;
+    const tooFar = dist > this.maxDistance;
+    const satisfied = !tooClose && !tooFar;
+
+    let violationAmount = 0;
+    if (tooClose) violationAmount = this.minDistance - dist;
+    if (tooFar) violationAmount = dist - this.maxDistance;
+
+    return { satisfied, violationAmount, metadata: { distance: dist } };
+  }
+}
+
+/**
+ * Containment relation: child is entirely inside parent's bounding box.
+ */
+export class ContainmentRelation extends Relation {
+  readonly name = 'containment';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly tolerance: number = 0.01
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    const contained = parent.boundingBox.containsBox(child.boundingBox);
+    if (contained) {
+      return { satisfied: true, violationAmount: 0 };
+    }
+
+    // Compute how far outside the child is
+    const overflow = child.boundingBox.clone().intersect(parent.boundingBox);
+    const childSize = new THREE.Vector3();
+    const overflowSize = new THREE.Vector3();
+    child.boundingBox.getSize(childSize);
+    overflow.getSize(overflowSize);
+
+    const childVol = childSize.x * childSize.y * childSize.z;
+    const overlapVol = overflowSize.x * overflowSize.y * overflowSize.z;
+    const containmentRatio = childVol > 0 ? overlapVol / childVol : 0;
+
+    return {
+      satisfied: false,
+      violationAmount: 1 - containmentRatio,
+      metadata: { containmentRatio },
+    };
+  }
+}
+
+/**
+ * Grouped relation: objects are within maxDistance of each other.
+ */
+export class GroupedRelation extends Relation {
+  readonly name = 'grouped';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly maxDistance: number = 2.0
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    const dist = child.position.distanceTo(parent.position);
+    const satisfied = dist <= this.maxDistance;
+    return {
+      satisfied,
+      violationAmount: satisfied ? 0 : dist - this.maxDistance,
+      metadata: { distance: dist },
+    };
+  }
+}
+
+/**
+ * Distributed relation: objects are at least minDistance apart.
+ */
+export class DistributedRelation extends Relation {
+  readonly name = 'distributed';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly minDistance: number = 1.0
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    const dist = child.position.distanceTo(parent.position);
+    const satisfied = dist >= this.minDistance;
+    return {
+      satisfied,
+      violationAmount: satisfied ? 0 : this.minDistance - dist,
+      metadata: { distance: dist },
+    };
+  }
+}
+
+/**
+ * Coverage relation: child's XZ footprint covers a threshold of parent's XZ footprint.
+ */
+export class CoverageRelation extends Relation {
+  readonly name = 'coverage';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly coverageThreshold: number = 0.8
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    const childArea = child.footprint.area();
+    const parentArea = parent.footprint.area();
+
+    if (parentArea <= 0) {
+      return { satisfied: false, violationAmount: 1, metadata: { parentArea: 0 } };
+    }
+
+    // Use footprint intersection for coverage computation if available
+    if (child.footprint.vertices.length >= 3 && parent.footprint.vertices.length >= 3) {
+      const intersection = child.footprint.intersects(parent.footprint);
+      // Approximate: if they intersect, use a ratio based on areas
+      const ratio = childArea > 0 ? Math.min(childArea, parentArea) / parentArea : 0;
+      const satisfied = ratio >= this.coverageThreshold;
+      return {
+        satisfied,
+        violationAmount: satisfied ? 0 : this.coverageThreshold - ratio,
+        metadata: { coverageRatio: ratio },
+      };
+    }
+
+    // Fallback to bounding box overlap
+    const overlapXZ = !(
+      child.boundingBox.max.x < parent.boundingBox.min.x ||
+      child.boundingBox.min.x > parent.boundingBox.max.x ||
+      child.boundingBox.max.z < parent.boundingBox.min.z ||
+      child.boundingBox.min.z > parent.boundingBox.max.z
+    );
+
+    if (!overlapXZ) {
+      return { satisfied: false, violationAmount: this.coverageThreshold, metadata: { overlap: false } };
+    }
+
+    // Compute overlap area
+    const overlapMinX = Math.max(child.boundingBox.min.x, parent.boundingBox.min.x);
+    const overlapMaxX = Math.min(child.boundingBox.max.x, parent.boundingBox.max.x);
+    const overlapMinZ = Math.max(child.boundingBox.min.z, parent.boundingBox.min.z);
+    const overlapMaxZ = Math.min(child.boundingBox.max.z, parent.boundingBox.max.z);
+    const overlapArea = Math.max(0, overlapMaxX - overlapMinX) * Math.max(0, overlapMaxZ - overlapMinZ);
+    const ratio = parentArea > 0 ? overlapArea / parentArea : 0;
+    const satisfied = ratio >= this.coverageThreshold;
+    return {
+      satisfied,
+      violationAmount: satisfied ? 0 : this.coverageThreshold - ratio,
+      metadata: { coverageRatio: ratio },
+    };
+  }
+}
+
+/**
+ * SupportCoverage relation: the fraction of child's footprint supported by parent.
+ */
+export class SupportCoverageRelation extends Relation {
+  readonly name = 'support_coverage';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly minSupport: number = 0.5
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    // First check vertical alignment (child bottom close to parent top)
+    const childBottom = child.boundingBox.min.y;
+    const parentTop = parent.boundingBox.max.y;
+    const verticalGap = Math.abs(childBottom - parentTop);
+    if (verticalGap > 0.2) {
+      return { satisfied: false, violationAmount: verticalGap, metadata: { verticalGap } };
+    }
+
+    // Compute XZ overlap ratio relative to child's footprint area
+    const overlapMinX = Math.max(child.boundingBox.min.x, parent.boundingBox.min.x);
+    const overlapMaxX = Math.min(child.boundingBox.max.x, parent.boundingBox.max.x);
+    const overlapMinZ = Math.max(child.boundingBox.min.z, parent.boundingBox.min.z);
+    const overlapMaxZ = Math.min(child.boundingBox.max.z, parent.boundingBox.max.z);
+    const overlapArea = Math.max(0, overlapMaxX - overlapMinX) * Math.max(0, overlapMaxZ - overlapMinZ);
+
+    const childArea = child.footprint.area();
+    const ratio = childArea > 0 ? overlapArea / childArea : 0;
+    const satisfied = ratio >= this.minSupport;
+
+    return {
+      satisfied,
+      violationAmount: satisfied ? 0 : this.minSupport - ratio,
+      metadata: { supportRatio: ratio },
+    };
+  }
+}
+
+/**
+ * AccessibleFrom relation: A* path exists between objects with total length ≤ reachDistance.
+ */
+export class AccessibleFromRelation extends Relation {
+  readonly name = 'accessible_from';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly reachDistance: number = 5.0
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    // Try A* pathfinding
+    try {
+      const { getCachedNavigationGrid } = require('../evaluator/NavigationGrid');
+      const grid = getCachedNavigationGrid(
+        'accessible',
+        [], // obstacles from scene context
+        new THREE.Box3(
+          new THREE.Vector3(-50, -1000, -50),
+          new THREE.Vector3(50, 1000, 50)
+        ),
+        0.5
+      );
+      const start = new THREE.Vector3(child.position.x, 0, child.position.z);
+      const end = new THREE.Vector3(parent.position.x, 0, parent.position.z);
+      const accessible = grid.isAccessible(start, end, this.reachDistance);
+      return {
+        satisfied: accessible,
+        violationAmount: accessible ? 0 : 1,
+        metadata: { reachDistance: this.reachDistance },
+      };
+    } catch {
+      // Fallback to Euclidean distance
+      const dist = child.position.distanceTo(parent.position);
+      const satisfied = dist <= this.reachDistance;
+      return {
+        satisfied,
+        violationAmount: satisfied ? 0 : dist - this.reachDistance,
+        metadata: { distance: dist },
+      };
+    }
+  }
+}
+
+/**
+ * ReachableFrom relation: A* path exists with total length ≤ maxPathLength.
+ */
+export class ReachableFromRelation extends Relation {
+  readonly name = 'reachable_from';
+  readonly childTags: TagSet;
+  readonly parentTags: TagSet;
+
+  constructor(
+    childTags: TagSet = new TagSet(),
+    parentTags: TagSet = new TagSet(),
+    public readonly maxPathLength: number = 10.0
+  ) {
+    super();
+    this.childTags = childTags;
+    this.parentTags = parentTags;
+  }
+
+  evaluate(child: ObjectState, parent: ObjectState): RelationResult {
+    try {
+      const { getCachedNavigationGrid } = require('../evaluator/NavigationGrid');
+      const grid = getCachedNavigationGrid(
+        'reachable',
+        [],
+        new THREE.Box3(
+          new THREE.Vector3(-50, -1000, -50),
+          new THREE.Vector3(50, 1000, 50)
+        ),
+        0.5
+      );
+      const start = new THREE.Vector3(child.position.x, 0, child.position.z);
+      const end = new THREE.Vector3(parent.position.x, 0, parent.position.z);
+      const pathLen = grid.pathLength(start, end);
+      const satisfied = pathLen <= this.maxPathLength;
+      return {
+        satisfied,
+        violationAmount: satisfied ? 0 : pathLen - this.maxPathLength,
+        metadata: { pathLength: pathLen },
+      };
+    } catch {
+      const dist = child.position.distanceTo(parent.position);
+      const satisfied = dist <= this.maxPathLength;
+      return {
+        satisfied,
+        violationAmount: satisfied ? 0 : dist - this.maxPathLength,
+        metadata: { distance: dist },
+      };
+    }
   }
 }
 

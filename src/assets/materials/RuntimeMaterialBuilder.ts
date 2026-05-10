@@ -260,6 +260,170 @@ vec3 domainWarp3D(vec3 p, float warpStrength, float warpScale, int octaves) {
   float qz = fbm3D(p * warpScale + vec3(9.1, 3.7, 7.4), octaves, 2.0, 0.5);
   return p + vec3(qx, qy, qz) * warpStrength;
 }
+
+// ============================================================================
+// 4D Noise Functions (3D position + W seed dimension)
+// ============================================================================
+
+// 4D Simplex noise — uses 3D position + W seed for per-instance variation
+vec4 _mod289_4d(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 _mod289_4d_v3(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 _permute_4d(vec4 x) { return _mod289_4d(((x * 34.0) + 10.0) * x); }
+vec4 _taylorInvSqrt_4d(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+float snoise4D(vec4 v) {
+  const vec2 C = vec2(0.1381966011250105, 0.3090169943749475);
+  const vec4 D = vec4(1.0, 1.0, 1.0, -1.0);
+
+  vec3 i = floor(v.xyz + dot(v.xyz, C.yyy));
+  vec3 x0 = v.xyz - i + dot(i, C.xxx);
+
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+
+  i = _mod289_4d_v3(i);
+  float w = v.w;
+  vec4 p = _permute_4d(_permute_4d(_permute_4d(
+    i.z + vec4(0.0, i1.z, i2.z, 1.0))
+    + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+    + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+
+  p = _permute_4d(p + vec4(w));
+
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+
+  vec4 s0 = floor(b0) * 2.0 + 1.0;
+  vec4 s1 = floor(b1) * 2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+
+  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+  vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+
+  vec4 norm = _taylorInvSqrt_4d(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+
+  vec4 m = max(0.5 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+  m = m * m;
+  return 105.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+}
+
+// 4D FBM (3D position + W seed)
+float fbm4D(vec3 p, float w, int octaves, float lacunarity, float gain) {
+  float value = 0.0;
+  float amplitude = 1.0;
+  float frequency = 1.0;
+  float maxValue = 0.0;
+  float wOffset = w;
+
+  for (int i = 0; i < 16; i++) {
+    if (i >= octaves) break;
+    value += amplitude * snoise4D(vec4(p * frequency, wOffset));
+    maxValue += amplitude;
+    amplitude *= gain;
+    frequency *= lacunarity;
+    wOffset += 17.0;
+  }
+
+  return value / max(maxValue, 0.001);
+}
+
+// 4D Musgrave FBM
+float musgraveFBM4D(vec3 p, float w, float scale, int octaves, float dimension, float lacunarity) {
+  float gain = pow(0.5, 2.0 - dimension);
+  return fbm4D(p * scale, w, octaves, lacunarity, gain);
+}
+
+// 4D Musgrave Ridged
+float musgraveRidged4D(vec3 p, float w, float scale, int octaves, float dimension, float lacunarity, float offset, float gain) {
+  float value = 0.0;
+  float amplitude = 1.0;
+  float frequency = 1.0;
+  float maxValue = 0.0;
+  float weight = 1.0;
+  float wOffset = w;
+
+  for (int i = 0; i < 16; i++) {
+    if (i >= octaves) break;
+    float signal = snoise4D(vec4(p * scale * frequency, wOffset));
+    signal = abs(signal);
+    signal = offset - signal;
+    signal *= signal;
+    signal *= weight;
+    weight = clamp(signal * gain, 0.0, 1.0);
+    value += signal * amplitude;
+    maxValue += amplitude;
+    amplitude *= pow(lacunarity, -dimension);
+    frequency *= lacunarity;
+    wOffset += 17.0;
+  }
+
+  return value / max(maxValue, 0.001);
+}
+
+// 4D Musgrave HeteroTerrain
+float musgraveHetero4D(vec3 p, float w, float scale, int octaves, float dimension, float lacunarity, float offset) {
+  float gain = pow(0.5, 2.0 - dimension);
+  float value = offset + snoise4D(vec4(p * scale, w));
+  float amplitude = 1.0;
+  float frequency = 1.0;
+  float maxValue = 1.0;
+  float wOffset = w + 31.0;
+
+  for (int i = 1; i < 16; i++) {
+    if (i >= octaves) break;
+    amplitude *= gain;
+    frequency *= lacunarity;
+    float signal = (snoise4D(vec4(p * scale * frequency, wOffset)) + offset) * amplitude;
+    value += signal;
+    maxValue += amplitude;
+    wOffset += 17.0;
+  }
+
+  return value / max(maxValue, 0.001);
+}
+
+// 4D Musgrave MultiFractal
+float musgraveMultiFractal4D(vec3 p, float w, float scale, int octaves, float dimension, float lacunarity, float offset) {
+  float gain = pow(0.5, 2.0 - dimension);
+  float value = 1.0;
+  float amplitude = 1.0;
+  float frequency = 1.0;
+  float wOffset = w;
+
+  for (int i = 0; i < 16; i++) {
+    if (i >= octaves) break;
+    value *= (amplitude * snoise4D(vec4(p * scale * frequency, wOffset)) + offset);
+    amplitude *= gain;
+    frequency *= lacunarity;
+    wOffset += 17.0;
+  }
+
+  return value;
+}
 `;
 
 // ============================================================================
@@ -583,6 +747,8 @@ export class RuntimeMaterialBuilder {
         return this.compileMagicTexture(node, varName);
       case 'image_texture':
         return this.compileImageTexture(node, varName);
+      case 'wave_texture':
+        return this.compileWaveTexture(node, varName, graph);
 
       // ── Color Nodes ──
       case 'mix_rgb':
@@ -623,6 +789,12 @@ export class RuntimeMaterialBuilder {
         return this.compileMixShader(node, varName, graph);
       case 'add_shader':
         return this.compileAddShader(node, varName, graph);
+
+      // ── Curve / Ramp Nodes ──
+      case 'float_curve':
+        return this.compileFloatCurve(node, varName, graph);
+      case 'map_range':
+        return this.compileMapRange(node, varName, graph);
 
       // ── Input Nodes ──
       case 'texture_coordinate':
@@ -726,11 +898,15 @@ export class RuntimeMaterialBuilder {
     const dimension = this.getNodeSetting(node, 'dimension', 2.0);
     const lacunarity = this.getNodeSetting(node, 'lacunarity', 2.0);
     const musgraveType = this.getNodeSetting(node, 'musgraveType', 'fbm');
+    const offset = this.getNodeSetting(node, 'offset', 1.0);
+    const gain = this.getNodeSetting(node, 'gain', 0.5);
 
     this.addUniform(`${varName}_scale`, 'float', scale);
     this.addUniform(`${varName}_detail`, 'int', detail);
     this.addUniform(`${varName}_dimension`, 'float', dimension);
     this.addUniform(`${varName}_lacunarity`, 'float', lacunarity);
+    this.addUniform(`${varName}_offset`, 'float', offset);
+    this.addUniform(`${varName}_gain`, 'float', gain);
 
     // Resolve vector input
     const vectorInput = graph
@@ -740,17 +916,29 @@ export class RuntimeMaterialBuilder {
     let noiseCall: string;
     switch (musgraveType) {
       case 'ridged':
-        noiseCall = `musgraveRidged(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, 1.0, 0.5)`;
+        noiseCall = `musgraveRidged(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, ${varName}_offset, ${varName}_gain)`;
         break;
       case 'hetero':
-        noiseCall = `musgraveHetero(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, 1.0)`;
+      case 'heterogeneous_terrain':
+        noiseCall = `musgraveHetero(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, ${varName}_offset)`;
+        break;
+      case 'multifractal':
+        // MultiFractal: value *= (amplitude * noise + offset) per octave
+        noiseCall = `(1.0 + musgraveFBM(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail) * ${varName}_offset)`;
+        break;
+      case 'ridged_multifractal':
+        noiseCall = `musgraveRidged(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, ${varName}_offset, ${varName}_gain)`;
+        break;
+      case 'hybrid_multifractal':
+        // Hybrid: blend between FBM and multifractal
+        noiseCall = `(musgraveFBM(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail) + musgraveHetero(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail, ${varName}_offset)) * 0.5`;
         break;
       default: // 'fbm'
         noiseCall = `musgraveFBM(${vectorInput} * ${varName}_scale, ${varName}_dimension, ${varName}_lacunarity, ${varName}_detail)`;
     }
 
     const glslCode = `
-  // Musgrave Texture: ${node.id}
+  // Musgrave Texture: ${node.id} (${musgraveType})
   vec3 ${varName}_inputVec = ${vectorInput};
   float ${varName}_fac = ${noiseCall};
 `;
@@ -2217,6 +2405,7 @@ float displacement(vec3 p, vec3 n) {
       'ShaderNodeTexChecker': 'checker_texture',
       'ShaderNodeTexMagic': 'magic_texture',
       'ShaderNodeTexImage': 'image_texture',
+      'ShaderNodeTexWave': 'wave_texture',
       'ShaderNodeMixRGB': 'mix_rgb',
       'ShaderNodeValToRGB': 'color_ramp',
       'ShaderNodeHueSaturation': 'hue_saturation',
@@ -2237,6 +2426,9 @@ float displacement(vec3 p, vec3 n) {
       'ShaderNodeRGB': 'rgb',
       'ShaderNodeOutputMaterial': 'material_output',
       'ShaderNodeDisplacement': 'displacement',
+      'ShaderNodeFloatCurve': 'float_curve',
+      'ShaderNodeMapRange': 'map_range',
+      'ShaderNodeCurveFloat': 'float_curve',
     };
 
     return mapping[type] ?? type;
@@ -2266,6 +2458,174 @@ void main() {
       uniforms: {},
       glslVersion: THREE.GLSL3,
     });
+  }
+
+  // ==========================================================================
+  // New Node Type Compilers: WaveTexture, FloatCurve, MapRange
+  // ==========================================================================
+
+  private compileWaveTexture(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
+    const scale = this.getNodeSetting(node, 'scale', 5.0);
+    const distortion = this.getNodeSetting(node, 'distortion', 0.0);
+    const waveType = this.getNodeSetting(node, 'wave_type', 'bands');
+    const direction = this.getNodeSetting(node, 'wave_direction', 'x');
+
+    this.addUniform(`${varName}_scale`, 'float', scale);
+    this.addUniform(`${varName}_distortion`, 'float', distortion);
+
+    const vectorInput = graph
+      ? this.resolveInput(node.id, 'Vector', graph, 'pos3D')
+      : 'pos3D';
+
+    let waveExpr: string;
+    const coord = direction === 'y' ? `${vectorInput}.y` : direction === 'z' ? `${vectorInput}.z` : `${vectorInput}.x`;
+
+    switch (waveType) {
+      case 'rings':
+        waveExpr = `sin(length(${vectorInput} * ${varName}_scale) * 6.2832 + ${varName}_distortion * perlinNoise3D(${vectorInput} * ${varName}_scale))`;
+        break;
+      case 'wave_bands':
+        waveExpr = `sin(${coord} * ${varName}_scale * 6.2832 + ${varName}_distortion * perlinNoise3D(${vectorInput} * ${varName}_scale))`;
+        break;
+      default: // 'bands'
+        waveExpr = `sin(${coord} * ${varName}_scale * 6.2832 + ${varName}_distortion * perlinNoise3D(${vectorInput} * ${varName}_scale))`;
+    }
+
+    const glslCode = `
+  // Wave Texture: ${node.id}
+  float ${varName}_fac = ${waveExpr} * 0.5 + 0.5;
+  vec3 ${varName}_color = vec3(${varName}_fac);
+`;
+
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'Color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'color', `${varName}_color`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_fac`);
+    }
+
+    return {
+      glslCode,
+      outputVar: varName,
+      outputType: 'float',
+      uniforms: new Map(),
+      functions: new Set(['perlinNoise3D']),
+    };
+  }
+
+  private compileFloatCurve(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
+    // FloatCurve maps input value through a curve defined by control points
+    const points = this.getNodeSetting(node, 'points', [
+      { position: 0.0, value: 0.0 },
+      { position: 0.5, value: 0.8 },
+      { position: 1.0, value: 1.0 },
+    ]);
+
+    const facInput = graph
+      ? this.resolveInput(node.id, 'Fac', graph, '0.5')
+      : '0.5';
+
+    // Build piecewise linear interpolation GLSL
+    const controlPoints = Array.isArray(points) ? points : [
+      { position: 0.0, value: 0.0 },
+      { position: 0.5, value: 0.8 },
+      { position: 1.0, value: 1.0 },
+    ];
+
+    let curveCode = `float ${varName}_curve(float t) {\n  t = clamp(t, 0.0, 1.0);\n`;
+    for (let i = 0; i < controlPoints.length; i++) {
+      const p = controlPoints[i];
+      const pos = typeof p.position === 'number' ? p.position : i / (controlPoints.length - 1);
+      const val = typeof p.value === 'number' ? p.value : pos;
+      if (i === 0) {
+        curveCode += `  if (t <= ${pos.toFixed(4)}) return ${val.toFixed(4)};\n`;
+      } else if (i === controlPoints.length - 1) {
+        curveCode += `  return ${val.toFixed(4)};\n`;
+      } else {
+        const prevP = controlPoints[i - 1];
+        const prevPos = typeof prevP.position === 'number' ? prevP.position : (i - 1) / (controlPoints.length - 1);
+        const prevVal = typeof prevP.value === 'number' ? prevP.value : prevPos;
+        curveCode += `  if (t <= ${pos.toFixed(4)}) return mix(${prevVal.toFixed(4)}, ${val.toFixed(4)}, (t - ${prevPos.toFixed(4)}) / max(${(pos - prevPos).toFixed(6)}, 0.001));\n`;
+      }
+    }
+    curveCode += `  return 1.0;\n}\n`;
+
+    const glslCode = `
+  // FloatCurve: ${node.id}
+  ${curveCode}
+  float ${varName}_fac_in = ${facInput};
+  float ${varName}_fac = ${varName}_curve(${varName}_fac_in);
+`;
+
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'fac', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'Value', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'value', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_fac`);
+    }
+
+    return {
+      glslCode,
+      outputVar: varName,
+      outputType: 'float',
+      uniforms: new Map(),
+      functions: new Set(),
+    };
+  }
+
+  private compileMapRange(node: NodeInstance, varName: string, graph?: NodeGraph): CompiledNode {
+    // MapRange: remaps a value from one range to another
+    const fromMin = this.getNodeSetting(node, 'from_min', 0.0);
+    const fromMax = this.getNodeSetting(node, 'from_max', 1.0);
+    const toMin = this.getNodeSetting(node, 'to_min', 0.0);
+    const toMax = this.getNodeSetting(node, 'to_max', 1.0);
+    const clampOutput = this.getNodeSetting(node, 'clamp', true);
+    const interpolationType = this.getNodeSetting(node, 'interpolation_type', 'linear');
+
+    this.addUniform(`${varName}_from_min`, 'float', fromMin);
+    this.addUniform(`${varName}_from_max`, 'float', fromMax);
+    this.addUniform(`${varName}_to_min`, 'float', toMin);
+    this.addUniform(`${varName}_to_max`, 'float', toMax);
+
+    const valueInput = graph
+      ? this.resolveInput(node.id, 'Value', graph, '0.0')
+      : '0.0';
+
+    let mapExpr: string;
+    switch (interpolationType) {
+      case 'stepped':
+        mapExpr = `mix(${varName}_to_min, ${varName}_to_max, floor((${valueInput} - ${varName}_from_min) / max(${varName}_from_max - ${varName}_from_min, 0.001)))`;
+        break;
+      case 'smoothstep':
+        mapExpr = `mix(${varName}_to_min, ${varName}_to_max, smoothstep(0.0, 1.0, (${valueInput} - ${varName}_from_min) / max(${varName}_from_max - ${varName}_from_min, 0.001)))`;
+        break;
+      default: // 'linear'
+        mapExpr = `mix(${varName}_to_min, ${varName}_to_max, (${valueInput} - ${varName}_from_min) / max(${varName}_from_max - ${varName}_from_min, 0.001))`;
+    }
+
+    const clampedExpr = clampOutput ? `clamp(${mapExpr}, ${varName}_to_min, ${varName}_to_max)` : mapExpr;
+
+    const glslCode = `
+  // MapRange: ${node.id}
+  float ${varName}_fac = ${clampedExpr};
+`;
+
+    if (graph) {
+      this.registerNodeOutput(node.id, 'Result', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'result', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'Value', `${varName}_fac`);
+      this.registerNodeOutput(node.id, 'default', `${varName}_fac`);
+    }
+
+    return {
+      glslCode,
+      outputVar: varName,
+      outputType: 'float',
+      uniforms: new Map(),
+      functions: new Set(),
+    };
   }
 
   private createErrorResult(): ShaderBuildResult {

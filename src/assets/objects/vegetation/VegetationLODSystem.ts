@@ -44,6 +44,7 @@ import {
   type TwigParams,
 } from './FruitFlowerSystem';
 import type { TreeSkeleton, TreeVertex } from './SpaceColonization';
+import { QEMEdgeCollapse } from './QEMEdgeCollapse';
 
 // ============================================================================
 // Interfaces
@@ -855,11 +856,15 @@ export class LODGeometrySimplifier {
   // --------------------------------------------------------------------------
 
   /**
-   * Simplify geometry using iterative edge collapse.
-   * Collapses the shortest edges first, merging their vertices.
+   * Simplify geometry using QEM (Quadric Error Metrics) edge collapse.
    *
-   * This is a simplified implementation that reduces face count by
-   * selectively removing vertices and re-triangulating.
+   * Uses the proper Garland & Heckbert algorithm from QEMEdgeCollapse for
+   * production-quality simplification. Falls back to fast vertex decimation
+   * for very large meshes (>50000 faces) where QEM would be too slow.
+   *
+   * The old implementation just skipped every Nth vertex, which produced
+   * terrible results. This replacement uses quadric error metrics to
+   * intelligently choose which edges to collapse.
    */
   private edgeCollapseSimplify(
     geometry: THREE.BufferGeometry,
@@ -873,51 +878,18 @@ export class LODGeometrySimplifier {
       return geometry.clone();
     }
 
-    // Simple vertex decimation: skip every Nth vertex
-    const ratio = targetFaces / currentFaces;
-    const step = Math.max(1, Math.floor(1 / ratio));
-
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
-
-    const normAttr = geometry.attributes.normal;
-    const uvAttr = geometry.attributes.uv;
-    const indexAttr = geometry.index;
-
-    // Select vertices to keep
-    const keptIndices: number[] = [];
-    for (let i = 0; i < posAttr.count; i += step) {
-      keptIndices.push(i);
-      positions.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-      if (normAttr) {
-        normals.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
-      } else {
-        normals.push(0, 1, 0);
-      }
-      if (uvAttr) {
-        uvs.push(uvAttr.getX(i), uvAttr.getY(i));
-      } else {
-        uvs.push(0, 0);
-      }
+    // Use fast fallback for very large meshes
+    if (currentFaces > 50000) {
+      return QEMEdgeCollapse.fastSimplify(geometry, targetFaces);
     }
 
-    // Re-triangulate using kept vertices
-    for (let i = 0; i < keptIndices.length - 2; i++) {
-      indices.push(i, i + 1, i + 2);
+    // Use proper QEM edge collapse for normal-sized meshes
+    try {
+      return QEMEdgeCollapse.simplify(geometry, targetFaces);
+    } catch {
+      // Fallback to fast simplification if QEM fails
+      return QEMEdgeCollapse.fastSimplify(geometry, targetFaces);
     }
-
-    const simplified = new THREE.BufferGeometry();
-    simplified.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    simplified.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    simplified.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    if (indices.length > 0) {
-      simplified.setIndex(indices);
-    }
-    simplified.computeVertexNormals();
-
-    return simplified;
   }
 
   // --------------------------------------------------------------------------

@@ -1464,12 +1464,160 @@ export function executeEulerToRotation(inputs: NodeInputs): NodeOutput {
  * 30. AccumulateField — Running total/average/min/max across geometry elements.
  * Inputs: Geometry, Value, GroupIndex, ResultType
  * Outputs: Leading, Trailing, Total
+ *
+ * Supports data_type property: 'FLOAT' (scalar), 'FLOAT_VECTOR' (vec3), 'FLOAT_COLOR' (rgb).
+ * When Value is an array of vectors/colors, accumulates each component independently.
  */
 export function executeAccumulateField(inputs: NodeInputs): NodeOutput {
   const geometry = (inputs.Geometry ?? inputs.geometry ?? null) as THREE.BufferGeometry | null;
-  const value = (inputs.Value ?? inputs.value ?? inputs.Attribute ?? inputs.attribute ?? 1.0) as number;
-  const groupIndex = (inputs.GroupIndex ?? inputs.groupIndex ?? 0) as number;
+  const value = (inputs.Value ?? inputs.value ?? inputs.Attribute ?? inputs.attribute ?? 1.0) as number | number[] | Vector3Like[] | ColorLike[];
+  const groupIndex = (inputs.GroupIndex ?? inputs.groupIndex ?? 0) as number | number[];
   const resultType = (inputs.ResultType ?? inputs.resultType ?? 'total') as string; // 'total' | 'average' | 'min' | 'max'
+  const dataType = (inputs.data_type ?? inputs.DataType ?? 'FLOAT') as string; // 'FLOAT' | 'FLOAT_VECTOR' | 'FLOAT_COLOR'
+
+  // ── Vector / Color accumulation support ──
+
+  // Determine component count based on data_type
+  const componentCount = dataType === 'FLOAT_VECTOR' ? 3 : dataType === 'FLOAT_COLOR' ? 3 : 1;
+
+  if (componentCount > 1) {
+    // Vector or Color accumulation: accumulate each component independently
+    // Normalize value input to array of number arrays (each of length componentCount)
+    let values: number[][];
+    if (Array.isArray(value) && value.length > 0) {
+      const firstEl = value[0];
+      if (typeof firstEl === 'number') {
+        // Flat number array — reshape into component groups
+        values = [];
+        for (let i = 0; i < value.length; i += componentCount) {
+          const comp: number[] = [];
+          for (let c = 0; c < componentCount; c++) {
+            comp.push((value as number[])[i + c] ?? 0);
+          }
+          values.push(comp);
+        }
+      } else if (typeof firstEl === 'object' && firstEl !== null) {
+        // Array of vector/color-like objects
+        values = (value as (Vector3Like | ColorLike)[]).map(v => {
+          if (dataType === 'FLOAT_VECTOR') {
+            const vec = v as Vector3Like;
+            return [vec.x ?? 0, vec.y ?? 0, vec.z ?? 0];
+          } else {
+            const col = v as ColorLike;
+            return [col.r ?? 0, col.g ?? 0, col.b ?? 0];
+          }
+        });
+      } else {
+        values = [[typeof firstEl === 'number' ? firstEl : 0]];
+      }
+    } else if (typeof value === 'number') {
+      // Single scalar broadcast to all components
+      values = [[value, value, value]];
+    } else {
+      values = [[0, 0, 0]];
+    }
+
+    if (values.length === 0) {
+      return {
+        Leading: componentCount === 3 ? { x: 0, y: 0, z: 0 } : 0,
+        Trailing: componentCount === 3 ? { x: 0, y: 0, z: 0 } : 0,
+        Total: componentCount === 3 ? { x: 0, y: 0, z: 0 } : 0,
+      };
+    }
+
+    // Group indices
+    const groups: Map<number, number[][]> = new Map();
+    if (Array.isArray(groupIndex)) {
+      for (let i = 0; i < values.length; i++) {
+        const g = (groupIndex as number[])[i] ?? 0;
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g)!.push(values[i]);
+      }
+    } else {
+      groups.set(0, values);
+    }
+
+    // Compute accumulation per group per component
+    const leading: number[][] = [];
+    const trailing: number[][] = [];
+    const total: number[][] = [];
+
+    for (const [, groupValues] of groups) {
+      const runningTotals = new Array(componentCount).fill(0);
+      const runningMins = new Array(componentCount).fill(Infinity);
+      const runningMaxs = new Array(componentCount).fill(-Infinity);
+      const groupLeading: number[][] = [];
+      const groupTrailing: number[][] = [];
+
+      for (let i = 0; i < groupValues.length; i++) {
+        const val = groupValues[i];
+        const leadVal: number[] = new Array(componentCount);
+        const trailVal: number[] = new Array(componentCount);
+
+        for (let c = 0; c < componentCount; c++) {
+          const vc = val[c] ?? 0;
+          switch (resultType) {
+            case 'average':
+              runningTotals[c] += vc;
+              leadVal[c] = i > 0 ? runningTotals[c] / (i + 1) : 0;
+              trailVal[c] = runningTotals[c] / (i + 1);
+              break;
+            case 'min':
+              runningMins[c] = Math.min(runningMins[c], vc);
+              leadVal[c] = i > 0 ? runningMins[c] : Infinity;
+              trailVal[c] = runningMins[c];
+              break;
+            case 'max':
+              runningMaxs[c] = Math.max(runningMaxs[c], vc);
+              leadVal[c] = i > 0 ? runningMaxs[c] : -Infinity;
+              trailVal[c] = runningMaxs[c];
+              break;
+            default: // 'total'
+              leadVal[c] = runningTotals[c];
+              runningTotals[c] += vc;
+              trailVal[c] = runningTotals[c];
+          }
+        }
+
+        groupLeading.push(leadVal);
+        groupTrailing.push(trailVal);
+      }
+
+      leading.push(...groupLeading);
+      trailing.push(...groupTrailing);
+      const totalVal = groupTrailing.length > 0 ? groupTrailing[groupTrailing.length - 1] : new Array(componentCount).fill(0);
+      total.push(totalVal);
+    }
+
+    // Convert arrays back to vector/color-like objects
+    const toOutput = (arr: number[][]): Vector3Like[] | Vector3Like => {
+      const objects = arr.map(a => {
+        if (dataType === 'FLOAT_COLOR') {
+          return { r: a[0], g: a[1], b: a[2] } as unknown as Vector3Like;
+        }
+        return { x: a[0], y: a[1], z: a[2] } as Vector3Like;
+      });
+      return objects.length === 1 ? objects[0] : objects;
+    };
+
+    const toTotalOutput = (arr: number[][]): Vector3Like | Vector3Like[] => {
+      const objects = arr.map(a => {
+        if (dataType === 'FLOAT_COLOR') {
+          return { r: a[0], g: a[1], b: a[2] } as unknown as Vector3Like;
+        }
+        return { x: a[0], y: a[1], z: a[2] } as Vector3Like;
+      });
+      return objects.length === 1 ? objects[0] : objects;
+    };
+
+    return {
+      Leading: toOutput(leading),
+      Trailing: toOutput(trailing),
+      Total: toTotalOutput(total),
+    };
+  }
+
+  // ── Scalar (FLOAT) accumulation path (original implementation) ──
 
   // Collect values from geometry attribute or direct input
   let values: number[];

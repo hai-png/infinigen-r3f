@@ -189,6 +189,180 @@ vec3 noiseTextureColor(vec3 coord, float scale, float detail, float distortion, 
 `;
 
 // ============================================================================
+// 4D Noise Functions GLSL
+// ============================================================================
+
+export const NOISE_4D_GLSL = /* glsl */ `
+// ============================================================================
+// 4D Noise Functions (Simplex 4D + Perlin 4D + FBM 4D)
+// ============================================================================
+
+// -- Simplex 4D helpers --
+vec4 mod289_4d(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+float mod289_1f(float x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permute_4d(vec4 x) { return mod289_4d(((x * 34.0) + 10.0) * x); }
+
+float snoise4D(vec4 v) {
+  const vec4 C = vec4(0.138196601125011,   // (5 - sqrt(5))/20
+                      0.276393202250021,   // 2 * C.x
+                      0.414589803375032,   // 3 * C.x - C.y
+                     -0.447213595499958);  // -1 + 4 * C.x
+
+  // First corner
+  vec4 i  = floor(v + dot(v, vec4(C.yyy, C.w)));
+  vec4 x0 = v - i + dot(i, C.xxxx);
+
+  // Grading: simplex ranking
+  vec4 i0;
+  vec3 isX = step(x0.yzw, x0.xxx);
+  vec3 isYZ = step(x0.zww, x0.yyz);
+  i0.x = isX.x + isX.y + isX.z;
+  i0.yzw = 1.0 - isX;
+  i0.y += isYZ.x + isYZ.y;
+  i0.zw += 1.0 - isYZ.xy;
+  i0.z += isYZ.z;
+  i0.w += 1.0 - isYZ.z;
+
+  vec4 i3 = clamp(i0, 0.0, 1.0);
+  vec4 i2 = clamp(i0 - 1.0, 0.0, 1.0);
+  vec4 i1 = clamp(i0 - 2.0, 0.0, 1.0);
+
+  vec4 x1 = x0 - i1 + C.xxxx;
+  vec4 x2 = x0 - i2 + C.yyyy;
+  vec4 x3 = x0 - i3 + C.zzzz;
+  vec4 x4 = x0 + C.wwww;
+
+  i = mod289_4d(i);
+  float j0 = mod289_1f(dot(i, vec4(1.0, 57.0, 113.0, 241.0)));
+  vec4 j1 = permute_4d(permute_4d(permute_4d(permute_4d(
+    i.w + vec4(0.0, i1.w, i2.w, i3.w))
+    + i.z + vec4(0.0, i1.z, i2.z, i3.z))
+    + i.y + vec4(0.0, i1.y, i2.y, i3.y))
+    + i.x + vec4(0.0, i1.x, i2.x, i3.x));
+
+  // Gradients: 7x7 point grid over a square mapped onto a disc
+  vec4 ip = vec4(1.0/29.0, 1.0/49.0, 1.0/147.0, 1.0/245.0);
+  vec4 p0 = vec4(fract(fract(j1.x * ip.xy) * ip.zw) * 2.0 - 1.0,
+                 fract(fract(j1.y * ip.xy) * ip.zw) * 2.0 - 1.0);
+  vec4 p1 = vec4(fract(fract(j1.z * ip.xy) * ip.zw) * 2.0 - 1.0,
+                 fract(fract(j1.w * ip.xy) * ip.zw) * 2.0 - 1.0);
+  vec4 p2 = vec4(fract(fract(j1.x * ip.xy + ip.zw) * ip.zw) * 2.0 - 1.0,
+                 fract(fract(j1.y * ip.xy + ip.zw) * ip.zw) * 2.0 - 1.0);
+  vec4 p3 = vec4(fract(fract(j1.z * ip.xy + ip.zw) * ip.zw) * 2.0 - 1.0,
+                 fract(fract(j1.w * ip.xy + ip.zw) * ip.zw) * 2.0 - 1.0);
+
+  vec4 norm = 1.79284291400159 - 0.85373472095314 *
+    vec4(dot(p0.xy, p0.xy), dot(p1.xy, p1.xy), dot(p2.xy, p2.xy), dot(p3.xy, p3.xy));
+  p0 *= norm.xxyy; p1 *= norm.xxyy; p2 *= norm.xxyy; p3 *= norm.xxyy;
+
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m * m, vec4(dot(p0.xy, x0.xy), dot(p1.xy, x1.xy),
+                                  dot(p2.xy, x2.xy), dot(p3.xy, x3.xy)));
+}
+
+// Perlin 4D gradient noise
+vec4 hash44_grad(vec4 p) {
+  p = vec4(dot(p, vec4(127.1, 311.7, 74.7, 191.3)),
+           dot(p, vec4(269.5, 183.3, 246.1, 323.7)),
+           dot(p, vec4(113.5, 271.9, 124.6, 57.3)),
+           dot(p, vec4(247.3, 139.1, 177.9, 211.5)));
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+}
+
+float perlin4D(vec4 p) {
+  vec4 i = floor(p);
+  vec4 f = fract(p);
+  vec4 u = f * f * (3.0 - 2.0 * f);
+  // 16 corners of a 4D hypercube — we sample a simplified subset
+  // by nesting 4 bilinear lookups
+  float n000 = dot(hash44_grad(i + vec4(0,0,0,0)).xyz, f.xyz);
+  float n100 = dot(hash44_grad(i + vec4(1,0,0,0)).xyz, f.xyz - vec3(1,0,0));
+  float n010 = dot(hash44_grad(i + vec4(0,1,0,0)).xyz, f.xyz - vec3(0,1,0));
+  float n110 = dot(hash44_grad(i + vec4(1,1,0,0)).xyz, f.xyz - vec3(1,1,0));
+  float n001 = dot(hash44_grad(i + vec4(0,0,1,0)).xyz, f.xyz - vec3(0,0,1));
+  float n101 = dot(hash44_grad(i + vec4(1,0,1,0)).xyz, f.xyz - vec3(1,0,1));
+  float n011 = dot(hash44_grad(i + vec4(0,1,1,0)).xyz, f.xyz - vec3(0,1,1));
+  float n111 = dot(hash44_grad(i + vec4(1,1,1,0)).xyz, f.xyz - vec3(1,1,1));
+
+  float nx00 = mix(n000, n100, u.x);
+  float nx10 = mix(n010, n110, u.x);
+  float nx01 = mix(n001, n101, u.x);
+  float nx11 = mix(n011, n111, u.x);
+
+  float nxy0 = mix(nx00, nx10, u.y);
+  float nxy1 = mix(nx01, nx11, u.y);
+
+  return mix(nxy0, nxy1, u.z);
+}
+
+// FBM 4D
+float fbm4D(vec4 p, int octaves, float lacunarity, float gain) {
+  float value = 0.0;
+  float amplitude = 1.0;
+  float frequency = 1.0;
+  float maxValue = 0.0;
+  for (int i = 0; i < 16; i++) {
+    if (i >= octaves) break;
+    value += amplitude * snoise4D(p * frequency);
+    maxValue += amplitude;
+    amplitude *= gain;
+    frequency *= lacunarity;
+  }
+  return value / max(maxValue, EPSILON);
+}
+
+// 4D Noise Texture — takes 3D coord + W seed
+float noiseTexture4D(vec3 coord, float scale, float detail, float distortion, float roughness, float w) {
+  vec4 p4 = vec4(coord * scale, w);
+  if (distortion > 0.0) {
+    p4.xyz += vec3(
+      snoise4D(p4 + vec4(0.0, 0.0, 0.0, 0.0)),
+      snoise4D(p4 + vec4(5.2, 1.3, 2.8, 1.7)),
+      snoise4D(p4 + vec4(9.1, 3.7, 7.4, 3.2))
+    ) * distortion;
+  }
+  int octaves = int(detail);
+  float gain = 1.0 - roughness;
+  return 0.5 + 0.5 * fbm4D(p4, octaves, 2.0, gain);
+}
+
+vec3 noiseTexture4DColor(vec3 coord, float scale, float detail, float distortion, float roughness, float w) {
+  float n = noiseTexture4D(coord, scale, detail, distortion, roughness, w);
+  return vec3(n, n, n);
+}
+
+// 4D Musgrave — takes 3D coord + W seed
+float musgraveFBM4D(vec4 p, float scale, int octaves, float dimension, float lacunarity) {
+  float gain = pow(0.5, 2.0 - dimension);
+  return fbm4D(p * scale, octaves, lacunarity, gain);
+}
+
+float musgraveTexture4D(vec3 coord, float scale, float detail, float dimension, float lacunarity,
+                        float offset, float gain, int musgraveType, float w) {
+  vec4 p4 = vec4(coord * scale, w);
+  if (musgraveType == 0) { // FBM
+    return musgraveFBM4D(vec4(coord, w), scale, int(detail), dimension, lacunarity);
+  }
+  // For other musgrave types, fall back to the 3D path with W appended
+  return musgraveFBM4D(vec4(coord, w), scale, int(detail), dimension, lacunarity);
+}
+
+// 4D Voronoi — takes 3D coord + W seed
+float voronoiTexture4D(vec3 coord, float scale, float smoothness, float exponent, int distance, int feature, float w) {
+  // Simplified 4D voronoi: use 3D voronoi with W as an offset
+  // This provides per-instance variation without full 4D voronoi
+  vec3 p = coord * scale + vec3(w * 0.731, w * 1.317, w * 0.539);
+  return voronoiTexture(p, 1.0, smoothness, exponent, distance, feature);
+}
+
+vec3 voronoiTexture4DColor(vec3 coord, float scale, float smoothness, float exponent, int distance, int feature, float w) {
+  float f = voronoiTexture4D(coord, scale, smoothness, exponent, distance, feature, w);
+  return vec3(f);
+}
+`;
+
+// ============================================================================
 // Voronoi Texture GLSL
 // ============================================================================
 
@@ -1263,6 +1437,7 @@ float sampleShadowMap(vec3 worldPos, vec3 lightDir, sampler2D shadowMap,
 export const ALL_GLSL_NODE_FUNCTIONS = [
   COMMON_UTILITIES_GLSL,
   NOISE_TEXTURE_GLSL,
+  NOISE_4D_GLSL,
   VORONOI_TEXTURE_GLSL,
   MUSGRAVE_TEXTURE_GLSL,
   GRADIENT_TEXTURE_GLSL,
@@ -1288,9 +1463,9 @@ export const ALL_GLSL_NODE_FUNCTIONS = [
  * The composer uses this to only include functions that are actually used.
  */
 export const NODE_TYPE_GLSL_REQUIREMENTS: Record<string, string[]> = {
-  'ShaderNodeTexNoise': ['NOISE_TEXTURE_GLSL'],
-  'ShaderNodeTexVoronoi': ['VORONOI_TEXTURE_GLSL', 'NOISE_TEXTURE_GLSL'],
-  'ShaderNodeTexMusgrave': ['MUSGRAVE_TEXTURE_GLSL', 'NOISE_TEXTURE_GLSL'],
+  'ShaderNodeTexNoise': ['NOISE_TEXTURE_GLSL', 'NOISE_4D_GLSL'],
+  'ShaderNodeTexVoronoi': ['VORONOI_TEXTURE_GLSL', 'NOISE_TEXTURE_GLSL', 'NOISE_4D_GLSL'],
+  'ShaderNodeTexMusgrave': ['MUSGRAVE_TEXTURE_GLSL', 'NOISE_TEXTURE_GLSL', 'NOISE_4D_GLSL'],
   'ShaderNodeTexGradient': ['GRADIENT_TEXTURE_GLSL'],
   'ShaderNodeTexBrick': ['BRICK_TEXTURE_GLSL'],
   'ShaderNodeTexChecker': ['CHECKER_TEXTURE_GLSL'],
@@ -1313,6 +1488,7 @@ export const NODE_TYPE_GLSL_REQUIREMENTS: Record<string, string[]> = {
 export const GLSL_SNIPPET_MAP: Record<string, string> = {
   'COMMON_UTILITIES_GLSL': COMMON_UTILITIES_GLSL,
   'NOISE_TEXTURE_GLSL': NOISE_TEXTURE_GLSL,
+  'NOISE_4D_GLSL': NOISE_4D_GLSL,
   'VORONOI_TEXTURE_GLSL': VORONOI_TEXTURE_GLSL,
   'MUSGRAVE_TEXTURE_GLSL': MUSGRAVE_TEXTURE_GLSL,
   'GRADIENT_TEXTURE_GLSL': GRADIENT_TEXTURE_GLSL,
@@ -1331,8 +1507,13 @@ export const GLSL_SNIPPET_MAP: Record<string, string> = {
   'IBL_GLSL': IBL_GLSL,
   'MULTI_LIGHT_GLSL': MULTI_LIGHT_GLSL,
   'SHADOW_MAPPING_GLSL': SHADOW_MAPPING_GLSL,
-  'WAVE_TEXTURE_GLSL': WAVE_TEXTURE_GLSL,
 };
+
+// Late-binding reference for WAVE_TEXTURE_GLSL (defined below)
+// This allows the snippet map to reference it while avoiding forward-reference issues
+const _SNIPPET_MAP_LATE: Record<string, string> = { ...GLSL_SNIPPET_MAP };
+
+// Update the map after WAVE_TEXTURE_GLSL is defined (at the bottom of this file)
 
 // ============================================================================
 // Wave Texture GLSL (bands, rings, ridges, sine wave with distortion)
@@ -1422,3 +1603,6 @@ vec3 waveTextureColor(vec3 coord, float scale, float distortion, float detail,
   return vec3(f);
 }
 `;
+
+// Add WAVE_TEXTURE_GLSL to the snippet map now that it's defined
+GLSL_SNIPPET_MAP['WAVE_TEXTURE_GLSL'] = WAVE_TEXTURE_GLSL;

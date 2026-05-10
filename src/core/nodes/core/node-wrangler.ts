@@ -12,6 +12,12 @@
 import { NodeTypes } from './node-types';
 import { SocketType, NodeSocket, SocketDefinition } from './socket-types';
 import { nodeDefinitionRegistry } from './node-definition-registry';
+import {
+  InputConsistencyManager,
+  shouldAutoInjectTextureInputs,
+  autoInjectTextureInputs,
+  applyPositionTranslation,
+} from './InputConsistency';
 
 export interface NodeDefinition {
   type: NodeTypes | string;
@@ -59,10 +65,17 @@ export class NodeWrangler {
   private nodeCounter: number;
   private linkCounter: number;
 
+  /** Input consistency manager for auto-injecting Position into texture nodes */
+  readonly inputConsistency: InputConsistencyManager;
+
+  /** Guard flag to prevent infinite recursion during auto-injection */
+  private _injecting: boolean = false;
+
   constructor(initialGroup?: NodeGroup) {
     this.nodeGroups = new Map();
     this.nodeCounter = 0;
     this.linkCounter = 0;
+    this.inputConsistency = new InputConsistencyManager();
 
     if (initialGroup) {
       this.nodeGroups.set(initialGroup.id, initialGroup);
@@ -80,6 +93,33 @@ export class NodeWrangler {
       this.nodeGroups.set('root', rootGroup);
       this.activeGroup = 'root';
     }
+  }
+
+  /**
+   * Enable force_input_consistency.
+   *
+   * When enabled, texture nodes created through this wrangler will automatically
+   * receive a Position node as their Vector input if no explicit connection
+   * is provided.
+   *
+   * Optionally pass a seed key for position translation (deterministic per-key offset).
+   *
+   * Mirrors the Python `NodeWrangler.force_input_consistency()` method.
+   */
+  forceInputConsistency(seedKey?: string): void {
+    this.inputConsistency.enable();
+    if (seedKey) {
+      // Pre-generate a seed for this key to enable position translation
+      this.inputConsistency.getOrCreateSeed(seedKey);
+    }
+  }
+
+  /**
+   * Disable force_input_consistency.
+   * Existing injected connections are NOT removed.
+   */
+  disableInputConsistency(): void {
+    this.inputConsistency.disable();
   }
 
   /**
@@ -154,6 +194,32 @@ export class NodeWrangler {
     }
 
     group.nodes.set(nodeId, node);
+
+    // ── Input Consistency Integration ──
+    // When force_input_consistency is enabled and this is a texture node,
+    // auto-inject a Position node as the Vector input if no explicit
+    // connection was provided.
+    // Guard: skip injection if we're already inside an injection call to
+    // prevent infinite recursion (autoInjectTextureInputs creates sub-nodes).
+    if (this.inputConsistency.enabled && !this._injecting && shouldAutoInjectTextureInputs(String(type))) {
+      // Only inject if the node has a Vector input that is NOT connected
+      const vectorInput = node.inputs.get('Vector');
+      if (vectorInput && !vectorInput.connectedTo) {
+        // Generate a deterministic seed from the node counter for variation
+        const seed = this.nodeCounter;
+        this._injecting = true;
+        try {
+          autoInjectTextureInputs(
+            this as unknown as import('./InputConsistency').NodeWranglerLike,
+            node,
+            seed,
+          );
+        } finally {
+          this._injecting = false;
+        }
+      }
+    }
+
     return node;
   }
 

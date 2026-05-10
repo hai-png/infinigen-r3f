@@ -10,6 +10,8 @@
 import { Relation } from '../language/relations';
 import { TagSet, SemanticsTag } from '../tags/index';
 import * as THREE from 'three';
+import { Polygon2D as UnifiedPolygon2D } from '../unified/UnifiedConstraintSystem';
+import { computeFootprintUnified, footprintFromBoundingBox } from './FootprintComputer';
 
 /**
  * Represents a relation between two objects in the solver state
@@ -29,7 +31,7 @@ export class RelationState {
  */
 export class ObjectState {
   obj: THREE.Object3D | null = null;
-  polygon: any = null; // Shapely Polygon equivalent
+  polygon: any = null; // Shapely Polygon equivalent (legacy)
   generator: any = null; // AssetFactory equivalent
   tags: TagSet = new TagSet();
   relations: RelationState[] = [];
@@ -117,6 +119,42 @@ export class ObjectState {
     }
     // Fallback to position
     return new THREE.Vector3(this.position.x, this.position.y, this.position.z);
+  }
+
+  /**
+   * Compute the 2D footprint polygon from the object's mesh.
+   * Projects mesh vertices onto the XZ plane and computes the convex hull.
+   * Updates both the legacy `polygon` field and returns the unified Polygon2D.
+   */
+  computeFootprint(): UnifiedPolygon2D | null {
+    if (this.obj instanceof THREE.Mesh && this.obj.geometry) {
+      try {
+        const footprint = computeFootprintUnified(this.obj);
+        this.polygon = footprint; // Update legacy field
+        return footprint;
+      } catch {
+        // Footprint computation failed — fall back to bounding box
+      }
+    }
+
+    // Fallback: compute from bounding box
+    if (this.obj) {
+      const box = new THREE.Box3().setFromObject(this.obj);
+      if (!box.isEmpty()) {
+        const footprint = footprintFromBoundingBox(box);
+        this.polygon = footprint;
+        return footprint;
+      }
+    }
+
+    // Final fallback: use position as a point footprint
+    const box = new THREE.Box3(
+      new THREE.Vector3(this.position.x - 0.5, this.position.y - 0.5, this.position.z - 0.5),
+      new THREE.Vector3(this.position.x + 0.5, this.position.y + 0.5, this.position.z + 0.5)
+    );
+    const footprint = footprintFromBoundingBox(box);
+    this.polygon = footprint;
+    return footprint;
   }
 
   toString(): string {

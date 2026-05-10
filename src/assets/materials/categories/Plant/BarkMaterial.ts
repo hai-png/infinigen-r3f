@@ -1,6 +1,7 @@
 import { createCanvas } from '../../../utils/CanvasUtils';
 import * as THREE from 'three';
 import { NoiseUtils } from '@/core/util/math/noise';
+import { ShaderIncludes } from '@/assets/shaders/common/ShaderIncludes';
 
 export interface BarkParams {
   baseColor: THREE.Color;
@@ -283,6 +284,176 @@ export class BarkMaterial {
         config.enableLichen !== undefined) {
       this.generateBarkTexture(this.material);
     }
+  }
+
+  /**
+   * Create a GLSL-based bark ShaderMaterial with stretched mapping,
+   * Musgrave noise + base noise + FloatCurve modulation.
+   *
+   * This provides higher visual fidelity than the canvas-based path,
+   * especially at close range and with different UV mappings.
+   *
+   * @param config - Optional bark configuration overrides
+   * @returns THREE.ShaderMaterial with procedural bark GLSL shader
+   */
+  static createGLSLBarkMaterial(config?: Partial<BarkMaterialConfig>): THREE.ShaderMaterial {
+    const cfg: BarkMaterialConfig = {
+      baseColor: new THREE.Color(0x5d4037),
+      creviceColor: new THREE.Color(0x3e2723),
+      roughness: 0.9,
+      pattern: 'rough',
+      depth: 0.5,
+      enableMoss: false,
+      mossDensity: 0.3,
+      mossColor: new THREE.Color(0x689f38),
+      enableLichen: false,
+      lichenColor: new THREE.Color(0xbcaaa4),
+      ...config,
+    };
+
+    const noiseGLSL = ShaderIncludes.getNoiseGLSL('bark');
+    const hsvGLSL = ShaderIncludes.getNoiseGLSL('bark'); // includes hsv via full include
+    const fullInclude = ShaderIncludes.getFullInclude('bark', false);
+
+    const vertexShader = /* glsl */ `
+      varying vec3 vWorldPosition;
+      varying vec3 vWorldNormal;
+      varying vec2 vUv;
+
+      void main() {
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+        vUv = uv;
+        gl_Position = projectionMatrix * viewMatrix * worldPos;
+      }
+    `;
+
+    const fragmentShader = /* glsl */ `
+      precision highp float;
+
+      varying vec3 vWorldPosition;
+      varying vec3 vWorldNormal;
+      varying vec2 vUv;
+
+      uniform vec3 uBaseColor;
+      uniform vec3 uCreviceColor;
+      uniform float uRoughness;
+      uniform float uDepth;
+      uniform int uPattern; // 0=smooth, 1=rough, 2=furrowed, 3=peeling, 4=ridged
+      uniform float uMossDensity;
+      uniform vec3 uMossColor;
+      uniform int uEnableMoss;
+      uniform vec3 uLichenColor;
+      uniform int uEnableLichen;
+      uniform float uSeed;
+
+      ${fullInclude}
+
+      // Stretched mapping: UV stretched vertically for bark-like elongation
+      vec2 barkStretch(vec2 uv) {
+        // Stretch V (vertical) by 3x for vertical bark grain
+        return vec2(uv.x * 1.0, uv.y * 3.0 + uSeed * 0.1);
+      }
+
+      // FloatCurve: maps 0..1 input through a curve for bark ridges
+      float barkFloatCurve(float x) {
+        // Sharpen ridges: steep walls, flat tops
+        float raised = smoothstep(0.2, 0.5, x) * smoothstep(1.0, 0.7, x);
+        return raised;
+      }
+
+      void main() {
+        vec2 stretchedUV = barkStretch(vUv);
+        vec3 pos = vWorldPosition;
+        vec3 N = normalize(vWorldNormal);
+
+        // Use stretched UV for primary bark pattern
+        vec3 barkPos = vec3(stretchedUV * 5.0, uSeed * 0.3);
+
+        float barkValue = 0.0;
+
+        // Musgrave noise base for organic bark structure
+        float musgraveVal = bark_musgraveFBM(barkPos, 5.0, 6, 2.0, 2.0);
+
+        // Base noise layer
+        float baseNoise = bark_fbm3D(barkPos * 1.5, 4, 2.0, 0.5);
+
+        if (uPattern == 0) {
+          // Smooth bark — subtle undulation
+          barkValue = musgraveVal * 0.3 + baseNoise * 0.2;
+        } else if (uPattern == 1) {
+          // Rough bark — strong noise
+          barkValue = musgraveVal * 0.6 + baseNoise * 0.4;
+        } else if (uPattern == 2) {
+          // Furrowed bark — vertical ridges via stretched ridged noise
+          float ridge = bark_musgraveRidged(barkPos, 4.0, 5, 2.0, 2.2, 1.0, 0.5);
+          barkValue = ridge * 0.7 + baseNoise * 0.3;
+        } else if (uPattern == 3) {
+          // Peeling bark — patch-like patterns
+          float patch = bark_musgraveHeteroTerrain(barkPos * 0.8, 3.0, 5, 2.0, 2.0, 0.5);
+          barkValue = patch * 0.6 + baseNoise * 0.4;
+        } else if (uPattern == 4) {
+          // Ridged bark — horizontal ridges
+          float ridgeH = bark_musgraveRidged(
+            vec3(barkPos.x * 0.5, barkPos.y * 2.0, barkPos.z),
+            5.0, 5, 2.0, 2.0, 1.0, 0.5
+          );
+          barkValue = ridgeH * 0.8 + baseNoise * 0.2;
+        } else {
+          barkValue = musgraveVal * 0.5 + baseNoise * 0.3;
+        }
+
+        // Apply FloatCurve to sharpen bark ridges
+        barkValue = barkFloatCurve(clamp(barkValue * 0.5 + 0.5, 0.0, 1.0));
+
+        // Blend base and crevice colors
+        vec3 color = mix(uBaseColor, uCreviceColor, barkValue);
+
+        // Add fine detail noise
+        float detail = bark_perlin3D(pos * 15.0 + uSeed) * 0.06;
+        color += detail;
+
+        // Slope-based darkening: faces pointing up get lighter, sideways darker
+        float slopeFactor = dot(N, vec3(0.0, 1.0, 0.0));
+        color *= 0.85 + slopeFactor * 0.15;
+
+        // Moss: grows on upward-facing surfaces
+        if (uEnableMoss == 1) {
+          float mossNoise = bark_perlin3D(pos * 3.0 + vec3(100.0)) * 0.5 + 0.5;
+          float mossMask = slopeFactor > 0.3 ? smoothstep(1.0 - uMossDensity, 1.0, mossNoise) : 0.0;
+          color = mix(color, uMossColor, mossMask * 0.7);
+        }
+
+        // Lichen: random patches on any surface
+        if (uEnableLichen == 1) {
+          float lichenNoise = bark_perlin3D(pos * 5.0 + vec3(200.0)) * 0.5 + 0.5;
+          float lichenMask = smoothstep(0.7, 0.85, lichenNoise);
+          color = mix(color, uLichenColor, lichenMask * 0.4);
+        }
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    return new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: {
+        uBaseColor: { value: cfg.baseColor },
+        uCreviceColor: { value: cfg.creviceColor },
+        uRoughness: { value: cfg.roughness },
+        uDepth: { value: cfg.depth },
+        uPattern: { value: ['smooth', 'rough', 'furrowed', 'peeling', 'ridged'].indexOf(cfg.pattern) },
+        uMossDensity: { value: cfg.mossDensity },
+        uMossColor: { value: cfg.mossColor },
+        uEnableMoss: { value: cfg.enableMoss ? 1 : 0 },
+        uLichenColor: { value: cfg.lichenColor },
+        uEnableLichen: { value: cfg.enableLichen ? 1 : 0 },
+        uSeed: { value: Math.random() * 100 },
+      },
+      side: THREE.DoubleSide,
+    });
   }
 
   /**

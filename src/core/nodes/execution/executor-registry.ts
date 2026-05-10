@@ -796,12 +796,42 @@ export function registerAllExecutors(): void {
     passThrough,
   );
 
-  // ShaderNodeOutputMaterial — returns the Surface input
+  // ShaderNodeOutputMaterial — validates Surface input and returns it
   registerExecutor(
     'ShaderNodeOutputMaterial',
     (inputs): Record<string, unknown> => {
       const surface = inputs.Surface ?? inputs.surface ?? inputs.bsdf;
-      return surface != null ? { Surface: surface } : inputs;
+
+      if (surface == null) {
+        throw new Error(
+          'MaterialOutput: No Surface/BSDF input connected. ' +
+          'A MaterialOutput node requires a valid shader input (e.g. PrincipledBSDF, ' +
+          'DiffuseBSDF, Emission, MixShader, AddShader). ' +
+          'Connect a shader node to the Surface input before rendering.'
+        );
+      }
+
+      // Validate that the surface input looks like a shader result
+      // A valid shader result should be an object with color-like properties
+      // or a plain object (not a primitive number/string)
+      if (typeof surface === 'number') {
+        throw new Error(
+          `MaterialOutput: Surface input received a bare number (${surface}). ` +
+          'This usually means a float/value node was connected directly to the ' +
+          'MaterialOutput instead of a proper BSDF shader. ' +
+          'Connect a shader node (PrincipledBSDF, DiffuseBSDF, Emission, etc.) instead.'
+        );
+      }
+
+      if (typeof surface === 'string') {
+        throw new Error(
+          `MaterialOutput: Surface input received a string ("${surface}"). ` +
+          'This is not a valid shader input. ' +
+          'Connect a shader node (PrincipledBSDF, DiffuseBSDF, Emission, etc.) instead.'
+        );
+      }
+
+      return { Surface: surface };
     },
   );
 

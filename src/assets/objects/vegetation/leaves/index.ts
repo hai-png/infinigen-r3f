@@ -7,6 +7,8 @@
 export {
   LeafGenerator,
   generateLeaf,
+  createGLSLeafMaterial,
+  createLeafMeshWithGLSL,
 } from './LeafGenerator';
 
 export type {
@@ -25,3 +27,15 @@ export type {
   LeafColorScheme,
   LeafMaterialParams,
 } from './LeafMaterial';
+
+export {
+  createGLSLLeafMaterial,
+  createLeafMesh,
+  updateLeafSeason,
+} from './LeafGLSLMaterial';
+
+export type {
+  LeafShaderType,
+  LeafSeason,
+  GLSLLeafMaterialParams,
+} from './LeafGLSLMaterial';

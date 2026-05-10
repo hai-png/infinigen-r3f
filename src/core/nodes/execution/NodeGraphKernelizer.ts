@@ -25,6 +25,7 @@ import { SocketType } from '../core/socket-types';
 import {
   COMMON_UTILITIES_GLSL,
   NOISE_TEXTURE_GLSL,
+  NOISE_4D_GLSL,
   VORONOI_TEXTURE_GLSL,
   MUSGRAVE_TEXTURE_GLSL,
   GRADIENT_TEXTURE_GLSL,
@@ -35,6 +36,8 @@ import {
   VECTOR_MATH_GLSL,
   MAPPING_GLSL,
   TEXTURE_COORD_GLSL,
+  PRINCIPLED_BSDF_GLSL,
+  MIX_ADD_SHADER_GLSL,
   GLSL_SNIPPET_MAP,
 } from './glsl/GLSLNodeFunctions';
 
@@ -344,7 +347,7 @@ export class NodeGraphKernelizer {
 
       // Step 7: Compose the complete shaders
       const { vertexShader, fragmentShader } = this.composeShaders(
-        nodeCode, sortedIds, outputVar, mode
+        nodeCode, sortedIds, outputVar, mode, regularized.nodes
       );
 
       return {
@@ -655,6 +658,14 @@ export class NodeGraphKernelizer {
                  t === 'ShaderNodeCombineColor' || t === 'CombineColorNode' ||
                  t === 'ShaderNodeSeparateRGB' || t === 'ShaderNodeCombineRGB') {
         this.requiredSnippets.add('SEPARATE_COMBINE');
+      } else if (t === 'ShaderNodeBsdfPrincipled' || t === 'PrincipledBSDFNode') {
+        this.requiredSnippets.add('PRINCIPLED_BSDF');
+      } else if (t === 'ShaderNodeBsdfDiffuse' || t === 'DiffuseBSDFNode') {
+        this.requiredSnippets.add('PRINCIPLED_BSDF'); // Uses same PBR helpers
+      } else if (t === 'ShaderNodeMixShader' || t === 'ShaderNodeAddShader') {
+        this.requiredSnippets.add('MIX_ADD_SHADER');
+      } else if (t === 'ShaderNodeEmission' || t === 'EmissionNode') {
+        // No extra GLSL needed beyond common utilities
       }
 
       // Noise is needed by several texture types
@@ -766,6 +777,49 @@ export class NodeGraphKernelizer {
     }
     if (nodeType === 'FunctionNodeInputInt' || nodeType === 'IntegerNode') {
       return this.generateIntegerInputCode(nodeId, node, prefix);
+    }
+
+    // ---- BSDF / Shader nodes ----
+    if (nodeType === 'ShaderNodeBsdfPrincipled' || nodeType === 'PrincipledBSDFNode') {
+      return this.generatePrincipledBSDFCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'ShaderNodeBsdfDiffuse' || nodeType === 'DiffuseBSDFNode') {
+      return this.generateDiffuseBSDFCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'ShaderNodeMixShader') {
+      return this.generateMixShaderCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'ShaderNodeAddShader') {
+      return this.generateAddShaderCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'ShaderNodeEmission' || nodeType === 'EmissionNode') {
+      return this.generateEmissionCode(nodeId, node, prefix, links, allNodes);
+    }
+
+    // ---- Material Output node ----
+    if (nodeType === 'ShaderNodeOutputMaterial' || nodeType === 'MaterialOutputNode') {
+      return this.generateMaterialOutputCode(nodeId, node, prefix, links, allNodes);
+    }
+
+    // ---- Geometry nodes ----
+    if (nodeType === 'GeometryNodeSetPosition' || nodeType === 'SetPositionNode') {
+      return this.generateSetPositionCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'GeometryNodeCaptureAttribute' || nodeType === 'CaptureAttributeNode') {
+      return this.generateCaptureAttributeCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'GeometryNodeStoreNamedAttribute' || nodeType === 'StoreNamedAttributeNode') {
+      return this.generateStoreNamedAttributeCode(nodeId, node, prefix, links, allNodes);
+    }
+    if (nodeType === 'GeometryNodeInputPosition' || nodeType === 'InputPosition' ||
+        nodeType === String('InputPosition')) {
+      return this.generateInputPositionCode(nodeId, node, prefix);
+    }
+    if (nodeType === 'GeometryNodeInputNormal' || nodeType === 'InputNormal') {
+      return this.generateInputNormalCode(nodeId, node, prefix);
+    }
+    if (nodeType === 'GeometryNodeInputIndex' || nodeType === 'Index') {
+      return this.generateInputIndexCode(nodeId, node, prefix);
     }
 
     // Unknown node — generate a passthrough with a warning
@@ -890,8 +944,23 @@ export class NodeGraphKernelizer {
     const roughness = this.resolveInput(nodeId, 'Roughness', node, links, allNodes);
     const distortion = this.resolveInput(nodeId, 'Distortion', node, links, allNodes);
 
+    // Read noise_dimensions property to determine 3D vs 4D
+    const noiseDims = node.properties.noise_dimensions ?? node.properties.noise_type ?? '3D';
+    const is4D = noiseDims === '4D';
+
+    if (is4D) {
+      // Add 4D noise snippet and seed uniform
+      this.requiredSnippets.add('NOISE_4D');
+      const seedUniform = this.addUniform('u_noise_seed', 'float', 0.0);
+      return `
+  // Noise Texture 4D: ${node.name} (dimensions=${noiseDims})
+  float ${prefix}_Fac = noiseTexture4D(${vector.varName}, ${scale.varName}, ${detail.varName}, ${distortion.varName}, ${roughness.varName}, ${seedUniform});
+  vec3 ${prefix}_Color = noiseTexture4DColor(${vector.varName}, ${scale.varName}, ${detail.varName}, ${distortion.varName}, ${roughness.varName}, ${seedUniform});
+`;
+    }
+
     return `
-  // Noise Texture: ${node.name}
+  // Noise Texture: ${node.name} (dimensions=${noiseDims})
   float ${prefix}_Fac = noiseTexture(${vector.varName}, ${scale.varName}, ${detail.varName}, ${distortion.varName}, ${roughness.varName});
   vec3 ${prefix}_Color = noiseTextureColor(${vector.varName}, ${scale.varName}, ${detail.varName}, ${distortion.varName}, ${roughness.varName});
 `;
@@ -916,6 +985,19 @@ export class NodeGraphKernelizer {
     const musgraveType = node.properties.musgrave_type ?? 'FBM';
     const typeInt = this.musgraveTypeToInt(musgraveType);
 
+    // Read noise_dimensions for 4D support
+    const noiseDims = node.properties.noise_dimensions ?? '3D';
+    const is4D = noiseDims === '4D';
+
+    if (is4D) {
+      this.requiredSnippets.add('NOISE_4D');
+      const seedUniform = this.addUniform('u_noise_seed_musgrave', 'float', 0.0);
+      return `
+  // Musgrave Texture 4D: ${node.name} (type=${musgraveType}, dimensions=${noiseDims})
+  float ${prefix}_Fac = musgraveTexture4D(${vector.varName}, ${scale.varName}, ${detail.varName}, ${dimension.varName}, ${lacunarity.varName}, ${offset.varName}, ${gain.varName}, ${typeInt}, ${seedUniform});
+`;
+    }
+
     return `
   // Musgrave Texture: ${node.name} (type=${musgraveType})
   float ${prefix}_Fac = musgraveTexture(${vector.varName}, ${scale.varName}, ${detail.varName}, ${dimension.varName}, ${lacunarity.varName}, ${offset.varName}, ${gain.varName}, ${typeInt});
@@ -939,6 +1021,20 @@ export class NodeGraphKernelizer {
     const feature = node.properties.feature ?? 'F1';
     const distInt = distance === 'MANHATTAN' ? 1 : distance === 'CHEBYCHEV' ? 2 : 0;
     const featInt = feature === 'F2' ? 1 : feature === 'DISTANCE_TO_EDGE' || feature === 'N_SPHERE_RADIUS' ? 2 : 0;
+
+    // Read noise_dimensions for 4D support
+    const noiseDims = node.properties.noise_dimensions ?? '3D';
+    const is4D = noiseDims === '4D';
+
+    if (is4D) {
+      this.requiredSnippets.add('NOISE_4D');
+      const seedUniform = this.addUniform('u_noise_seed_voronoi', 'float', 0.0);
+      return `
+  // Voronoi Texture 4D: ${node.name} (feature=${feature}, dimensions=${noiseDims})
+  float ${prefix}_Fac = voronoiTexture4D(${vector.varName}, ${scale.varName}, ${smoothness.varName}, ${exponent.varName}, ${distInt}, ${featInt}, ${seedUniform});
+  vec3 ${prefix}_Color = voronoiTexture4DColor(${vector.varName}, ${scale.varName}, ${smoothness.varName}, ${exponent.varName}, ${distInt}, ${featInt}, ${seedUniform});
+`;
+    }
 
     return `
   // Voronoi Texture: ${node.name} (feature=${feature})
@@ -1329,6 +1425,278 @@ export class NodeGraphKernelizer {
   }
 
   // =========================================================================
+  // BSDF / Shader Node Generators
+  // =========================================================================
+
+  // -- PrincipledBSDF --
+  private generatePrincipledBSDFCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    this.requiredSnippets.add('PRINCIPLED_BSDF');
+
+    const baseColor = this.resolveInput(nodeId, 'Base Color', node, links, allNodes);
+    const metallic = this.resolveInput(nodeId, 'Metallic', node, links, allNodes);
+    const roughness = this.resolveInput(nodeId, 'Roughness', node, links, allNodes);
+    const specular = this.resolveInput(nodeId, 'Specular', node, links, allNodes);
+    const alpha = this.resolveInput(nodeId, 'Alpha', node, links, allNodes);
+    const emissionColor = this.resolveInput(nodeId, 'Emission Color', node, links, allNodes);
+    const emissionStrength = this.resolveInput(nodeId, 'Emission Strength', node, links, allNodes);
+    const clearcoat = this.resolveInput(nodeId, 'Clearcoat', node, links, allNodes);
+    const clearcoatRoughness = this.resolveInput(nodeId, 'Clearcoat Roughness', node, links, allNodes);
+    const transmission = this.resolveInput(nodeId, 'Transmission', node, links, allNodes);
+
+    // Default fallback values for unresolved inputs
+    const bc = baseColor.varName !== '0' ? baseColor.varName : 'vec3(0.8)';
+    const met = metallic.varName !== '0' ? metallic.varName : '0.0';
+    const rough = roughness.varName !== '0' ? roughness.varName : '0.5';
+    const spec = specular.varName !== '0' ? specular.varName : '0.5';
+    const alp = alpha.varName !== '0' ? alpha.varName : '1.0';
+    const emCol = emissionColor.varName !== '0' ? emissionColor.varName : 'vec3(0.0)';
+    const emStr = emissionStrength.varName !== '0' ? emissionStrength.varName : '0.0';
+    const cc = clearcoat.varName !== '0' ? clearcoat.varName : '0.0';
+    const ccR = clearcoatRoughness.varName !== '0' ? clearcoatRoughness.varName : '0.0';
+    const tr = transmission.varName !== '0' ? transmission.varName : '0.0';
+
+    return `
+  // Principled BSDF: ${node.name}
+  vec3 N = normalize(vNormal);
+  vec3 V = normalize(cameraPosition - vWorldPosition);
+  vec3 F0 = mix(vec3(0.04), ${bc}, ${met});
+  vec3 Lo = vec3(0.0);
+  // Simplified PBR lighting — directional light
+  vec3 L = normalize(vec3(1.0, 2.0, 1.5));
+  vec3 H = normalize(V + L);
+  float NDF = D_GGX(N, H, ${rough});
+  float G = G_Smith(N, V, L, ${rough});
+  vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+  vec3 kD = (vec3(1.0) - F) * (1.0 - ${met});
+  float NdotL = max(dot(N, L), 0.0);
+  vec3 numerator = NDF * G * F;
+  float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL + 0.0001;
+  Lo += (kD * ${bc} / PI + numerator / denominator) * NdotL * vec3(1.0);
+  // Ambient
+  vec3 ambient = vec3(0.03) * ${bc};
+  // Clearcoat
+  if (${cc} > 0.0) {
+    float ccNDF = D_GGX(N, H, ${ccR});
+    float ccF = fresnelSchlick(max(dot(H, V), 0.0), vec3(0.04)).x;
+    Lo += ${cc} * ccF * ccNDF * NdotL;
+  }
+  // Emission
+  Lo += ${emCol} * ${emStr};
+  // Transmission (simplified)
+  if (${tr} > 0.0) {
+    Lo = mix(Lo, ${bc} * 0.5, ${tr});
+  }
+  vec3 ${prefix}_bsdf_color = ambient + Lo;
+  float ${prefix}_bsdf_alpha = ${alp};
+  vec3 ${prefix}_BSDF = ${prefix}_bsdf_color;
+`;
+  }
+
+  // -- DiffuseBSDF --
+  private generateDiffuseBSDFCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    const color = this.resolveInput(nodeId, 'Color', node, links, allNodes);
+    const roughness = this.resolveInput(nodeId, 'Roughness', node, links, allNodes);
+
+    const col = color.varName !== '0' ? color.varName : 'vec3(0.8)';
+    const rough = roughness.varName !== '0' ? roughness.varName : '1.0';
+
+    return `
+  // Diffuse BSDF: ${node.name}
+  vec3 N = normalize(vNormal);
+  vec3 V = normalize(cameraPosition - vWorldPosition);
+  vec3 L = normalize(vec3(1.0, 2.0, 1.5));
+  float NdotL = max(dot(N, L), 0.0);
+  vec3 ${prefix}_BSDF = ${col} * (NdotL / PI + vec3(0.03));
+`;
+  }
+
+  // -- Mix Shader --
+  private generateMixShaderCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    this.requiredSnippets.add('MIX_ADD_SHADER');
+    const factor = this.resolveInput(nodeId, 'Fac', node, links, allNodes);
+    const shader1 = this.resolveInput(nodeId, 'Shader', node, links, allNodes);
+    const shader2 = this.resolveInput(nodeId, 'Shader_001', node, links, allNodes);
+
+    return `
+  // Mix Shader: ${node.name}
+  vec3 ${prefix}_BSDF = mix(${shader1.varName}, ${shader2.varName}, saturate(${factor.varName}));
+`;
+  }
+
+  // -- Add Shader --
+  private generateAddShaderCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    this.requiredSnippets.add('MIX_ADD_SHADER');
+    const shader1 = this.resolveInput(nodeId, 'Shader', node, links, allNodes);
+    const shader2 = this.resolveInput(nodeId, 'Shader_001', node, links, allNodes);
+
+    return `
+  // Add Shader: ${node.name}
+  vec3 ${prefix}_BSDF = ${shader1.varName} + ${shader2.varName};
+`;
+  }
+
+  // -- Emission --
+  private generateEmissionCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    const color = this.resolveInput(nodeId, 'Color', node, links, allNodes);
+    const strength = this.resolveInput(nodeId, 'Strength', node, links, allNodes);
+
+    return `
+  // Emission: ${node.name}
+  vec3 ${prefix}_BSDF = ${color.varName} * ${strength.varName};
+`;
+  }
+
+  // -- Material Output --
+  private generateMaterialOutputCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    const surface = this.resolveInput(nodeId, 'Surface', node, links, allNodes);
+
+    return `
+  // Material Output: ${node.name}
+  vec3 ${prefix}_surface = ${surface.varName};
+`;
+  }
+
+  // =========================================================================
+  // Geometry Node Generators
+  // =========================================================================
+
+  // -- InputPosition --
+  private generateInputPositionCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+  ): string {
+    return `
+  // Input Position: ${node.name}
+  vec3 ${prefix}_Position = vPosition;
+`;
+  }
+
+  // -- InputNormal --
+  private generateInputNormalCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+  ): string {
+    return `
+  // Input Normal: ${node.name}
+  vec3 ${prefix}_Normal = normalize(vNormal);
+`;
+  }
+
+  // -- InputIndex --
+  private generateInputIndexCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+  ): string {
+    // In GLSL, gl_VertexID or a varying can be used; here we approximate with a uniform
+    const uIdx = this.addUniform(`${prefix}_index`, 'int', 0);
+    return `
+  // Input Index: ${node.name}
+  int ${prefix}_Index = ${uIdx};
+  float ${prefix}_Value = float(${uIdx});
+`;
+  }
+
+  // -- SetPosition --
+  private generateSetPositionCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    // SetPosition modifies vertex position in the vertex shader.
+    // The offset is passed as a varying for the fragment shader to use.
+    const position = this.resolveInput(nodeId, 'Position', node, links, allNodes);
+    const offset = this.resolveInput(nodeId, 'Offset', node, links, allNodes);
+
+    return `
+  // SetPosition: ${node.name}
+  vec3 ${prefix}_newPosition = ${position.varName} + ${offset.varName};
+  vec3 ${prefix}_Geometry = ${prefix}_newPosition;
+`;
+  }
+
+  // -- CaptureAttribute --
+  private generateCaptureAttributeCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    // In GLSL, CaptureAttribute evaluates the Value input and stores it
+    // as a varying for interpolation in the fragment shader.
+    const value = this.resolveInput(nodeId, 'Value', node, links, allNodes);
+    const geometry = this.resolveInput(nodeId, 'Geometry', node, links, allNodes);
+
+    return `
+  // CaptureAttribute: ${node.name}
+  vec3 ${prefix}_Attribute = ${value.varName};
+  vec3 ${prefix}_Geometry = ${geometry.varName};
+`;
+  }
+
+  // -- StoreNamedAttribute --
+  private generateStoreNamedAttributeCode(
+    nodeId: string,
+    node: KernelNode,
+    prefix: string,
+    links: NodeLink[],
+    allNodes: Map<string, KernelNode>,
+  ): string {
+    const value = this.resolveInput(nodeId, 'Value', node, links, allNodes);
+    const geometry = this.resolveInput(nodeId, 'Geometry', node, links, allNodes);
+    const attrName = node.properties.name ?? node.properties.attribute_name ?? 'custom_attr';
+
+    // Store as a varying for downstream use
+    return `
+  // StoreNamedAttribute: ${node.name} (name=${attrName})
+  vec3 v_${this.sanitizeSocketName(attrName)} = ${value.varName};
+  vec3 ${prefix}_Attribute = ${value.varName};
+  vec3 ${prefix}_Geometry = ${geometry.varName};
+`;
+  }
+
+  // =========================================================================
   // Step 6: Resolve Group Output
   // =========================================================================
 
@@ -1430,6 +1798,7 @@ export class NodeGraphKernelizer {
     sortedIds: string[],
     outputVars: { displacement: string; color: string; roughness: string; metallic: string; ao: string },
     mode: KernelizerMode,
+    nodes?: Map<string, KernelNode>,
   ): { vertexShader: string; fragmentShader: string } {
     const versionHeader = '#version 300 es\nprecision highp float;\nprecision highp int;\n';
 
@@ -1494,9 +1863,63 @@ void main() {
   fragColor = vec4(vec3(displacement), 1.0);
 `;
     } else {
-      // Material mode
-      outputCode = `
-  // Output material properties
+      // Material mode — check if a BSDF was compiled (has _surface or _bsdf_color)
+      // If so, use that directly rather than the raw color/roughness/metallic path
+      let hasBSDFOutput = false;
+      let bsdfColorVar = outputVars.color;
+      let bsdfAlphaVar = '1.0';
+
+      // Look for MaterialOutput nodes to find the BSDF color
+      for (const [nodeId, node] of (nodes ?? new Map<string, KernelNode>())) {
+        if (node.type === 'ShaderNodeOutputMaterial' || node.type === 'MaterialOutputNode') {
+          const prefix = this.nodeVarMap.get(nodeId);
+          if (prefix) {
+            bsdfColorVar = `${prefix}_surface`;
+            hasBSDFOutput = true;
+            break;
+          }
+        }
+      }
+
+      // Also check if any PrincipledBSDF node exists (use its color output)
+      if (!hasBSDFOutput) {
+        for (const [nodeId, node] of (nodes ?? new Map<string, KernelNode>())) {
+          if (node.type === 'ShaderNodeBsdfPrincipled' || node.type === 'PrincipledBSDFNode') {
+            const prefix = this.nodeVarMap.get(nodeId);
+            if (prefix) {
+              bsdfColorVar = `${prefix}_bsdf_color`;
+              bsdfAlphaVar = `${prefix}_bsdf_alpha`;
+              hasBSDFOutput = true;
+              break;
+            }
+          }
+          if (node.type === 'ShaderNodeBsdfDiffuse' || node.type === 'DiffuseBSDFNode') {
+            const prefix = this.nodeVarMap.get(nodeId);
+            if (prefix) {
+              bsdfColorVar = `${prefix}_BSDF`;
+              hasBSDFOutput = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (hasBSDFOutput) {
+        outputCode = `
+  // Output: BSDF-shaded color
+  vec3 finalColor = ${bsdfColorVar};
+  float finalAlpha = ${bsdfAlphaVar};
+
+  // Tone mapping
+  finalColor = finalColor / (finalColor + vec3(1.0));
+  finalColor = pow(finalColor, vec3(1.0 / 2.2));
+
+  fragColor = vec4(finalColor, finalAlpha);
+`;
+      } else {
+        // Fallback: simple PBR preview from separate channels
+        outputCode = `
+  // Output material properties (preview mode)
   vec3 baseColor = ${outputVars.color};
   float roughness = ${outputVars.roughness};
   float metallic = ${outputVars.metallic};
@@ -1518,6 +1941,7 @@ void main() {
 
   fragColor = vec4(color, 1.0);
 `;
+      }
     }
 
     const fragmentShader = `${versionHeader}

@@ -31,6 +31,17 @@ import {
 import { SignedDistanceField, extractIsosurface } from '@/terrain/sdf/sdf-operations';
 import { SeededRandom } from '@/core/util/MathUtils';
 import { NoiseUtils } from '@/core/util/math/noise';
+import { TerrainTagSystem, type TagResult } from '@/terrain/tags';
+import {
+  TagMaterialMapper,
+  type TagZoneAssignment,
+} from '@/terrain/surface/TagMaterialMapper';
+import {
+  TerrainMaterialZone,
+  type TerrainVertexAttributes,
+} from '@/terrain/surface/SurfaceKernelPipeline';
+// @ts-ignore — three-mesh-bvh may not have TS declarations
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 
 // ============================================================================
 // Configuration Types
@@ -110,6 +121,10 @@ export interface CoarseTerrainResult {
   terrainData: TerrainData;
   /** Material assignments computed from the coarse phase */
   materialAssignments: MaterialAssignmentMap;
+  /** Tag result from TerrainTagSystem */
+  tagResult?: TagResult;
+  /** Per-face zone assignments from TagMaterialMapper */
+  zoneAssignment?: TagZoneAssignment;
 }
 
 /**
@@ -364,6 +379,155 @@ function applySurfaceTemplate(
 }
 
 // ============================================================================
+// Zone-to-Material Mapping
+// ============================================================================
+
+/** Color palette for terrain material zones */
+const ZONE_COLORS: Record<string, number> = {
+  [TerrainMaterialZone.SNOW]: 0xe8ecf4,
+  [TerrainMaterialZone.ROCK]: 0x7a6e60,
+  [TerrainMaterialZone.GRASS]: 0x4a8c30,
+  [TerrainMaterialZone.SAND]: 0xc2b87a,
+  [TerrainMaterialZone.CLIFF]: 0x6a5e50,
+  [TerrainMaterialZone.CAVE_STONE]: 0x4a4440,
+  [TerrainMaterialZone.WET]: 0x3a5530,
+  [TerrainMaterialZone.SOIL]: 0x6b5b45,
+  [TerrainMaterialZone.UNDERWATER]: 0x2a4560,
+};
+
+/** Roughness values for terrain material zones */
+const ZONE_ROUGHNESS: Record<string, number> = {
+  [TerrainMaterialZone.SNOW]: 0.6,
+  [TerrainMaterialZone.ROCK]: 0.95,
+  [TerrainMaterialZone.GRASS]: 0.85,
+  [TerrainMaterialZone.SAND]: 0.9,
+  [TerrainMaterialZone.CLIFF]: 0.92,
+  [TerrainMaterialZone.CAVE_STONE]: 0.88,
+  [TerrainMaterialZone.WET]: 0.5,
+  [TerrainMaterialZone.SOIL]: 0.92,
+  [TerrainMaterialZone.UNDERWATER]: 0.3,
+};
+
+/**
+ * Create a MeshStandardMaterial for a given material zone.
+ *
+ * @param zone - The terrain material zone
+ * @returns THREE.MeshStandardMaterial with zone-appropriate properties
+ */
+function createZoneMaterial(zone: TerrainMaterialZone): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: ZONE_COLORS[zone] ?? 0x8b7355,
+    roughness: ZONE_ROUGHNESS[zone] ?? 0.9,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+    flatShading: false,
+  });
+}
+
+/**
+ * Apply multi-material to a mesh using geometry groups based on per-face zone assignments.
+ *
+ * Sorts faces by zone, creates geometry groups, and assigns per-zone materials.
+ *
+ * @param mesh - The terrain mesh
+ * @param geometry - The terrain geometry
+ * @param zoneAssignment - Per-face zone assignment from TagMaterialMapper
+ */
+function applyMultiMaterial(
+  mesh: THREE.Mesh,
+  geometry: THREE.BufferGeometry,
+  zoneAssignment: TagZoneAssignment,
+): void {
+  const indexAttr = geometry.getIndex();
+  if (!indexAttr) return;
+
+  const { faceZones, uniqueZones } = zoneAssignment;
+  const zoneIndexMap = TagMaterialMapper.zoneToIndexMap(uniqueZones);
+  const zoneCount = zoneIndexMap.size;
+
+  if (zoneCount <= 1) {
+    // Single zone — use a single material
+    const zone = uniqueZones.values().next().value as TerrainMaterialZone;
+    mesh.material = createZoneMaterial(zone);
+    return;
+  }
+
+  // Group face indices by zone
+  const zoneFaceIndices: Map<number, number[]> = new Map();
+  for (let z = 0; z < zoneCount; z++) {
+    zoneFaceIndices.set(z, []);
+  }
+
+  for (let f = 0; f < faceZones.length; f++) {
+    const zoneIdx = zoneIndexMap.get(faceZones[f]) ?? 0;
+    zoneFaceIndices.get(zoneIdx)!.push(
+      indexAttr.getX(f * 3),
+      indexAttr.getX(f * 3 + 1),
+      indexAttr.getX(f * 3 + 2),
+    );
+  }
+
+  // Build new index buffer and groups
+  const newIndexArray: number[] = [];
+  geometry.clearGroups();
+  let offset = 0;
+
+  const materials: THREE.MeshStandardMaterial[] = [];
+  for (let z = 0; z < zoneCount; z++) {
+    const indices = zoneFaceIndices.get(z)!;
+    if (indices.length === 0) continue;
+
+    newIndexArray.push(...indices);
+    geometry.addGroup(offset, indices.length, materials.length);
+
+    // Find the zone for this index
+    const zoneEntry = Array.from(zoneIndexMap.entries()).find(([, v]) => v === z);
+    const zone = zoneEntry ? zoneEntry[0] : TerrainMaterialZone.ROCK;
+    materials.push(createZoneMaterial(zone));
+
+    offset += indices.length;
+  }
+
+  // Update index buffer
+  const newIndex = new (newIndexArray.length > 65535 ? Uint32Array : Uint16Array)(newIndexArray);
+  geometry.setIndex(new THREE.BufferAttribute(newIndex, 1));
+
+  // Set multi-material
+  mesh.material = materials;
+}
+
+/**
+ * Construct a BVH for the terrain mesh and attach it.
+ *
+ * Accelerates raycasting and spatial queries on the terrain geometry.
+ *
+ * @param mesh - The terrain mesh to build BVH for
+ */
+function buildTerrainBVH(mesh: THREE.Mesh): void {
+  try {
+    // Register accelerated raycast on THREE.Mesh if not already done
+    if (!(THREE.Mesh as any).prototype.raycast?.__meshBVH) {
+      THREE.Mesh.prototype.raycast = acceleratedRaycast;
+      (THREE.Mesh.prototype.raycast as any).__meshBVH = true;
+    }
+
+    const geometry = mesh.geometry;
+    const bvh = new MeshBVH(geometry, {
+      strategy: 0, // CENTER strategy
+      maxDepth: 40,
+      maxLeafTris: 10,
+      verbose: false,
+    });
+
+    // Store BVH on geometry for reuse
+    (geometry as any).boundsTree = bvh;
+  } catch (err) {
+    // BVH construction is best-effort; terrain still works without it
+    console.warn('[TwoPhaseTerrainPipeline] BVH construction failed (non-critical):', err);
+  }
+}
+
+// ============================================================================
 // Camera-Adaptive LOD
 // ============================================================================
 
@@ -591,23 +755,51 @@ export class TwoPhaseTerrainPipeline {
     }
 
     // Create mesh
-    const material = new THREE.MeshStandardMaterial({
+    geometry.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
       color: 0x8b7355,
       roughness: 0.9,
       metalness: 0.0,
       side: THREE.DoubleSide,
-      flatShading: false,
-      wireframe: false,
-    });
-
-    geometry.computeBoundingSphere();
-    const mesh = new THREE.Mesh(geometry, material);
+    }));
     mesh.name = 'CoarseTerrainMesh';
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
     // Compute auxiliary attributes
     const attributes = this.computeAttributes(geometry, elementRegistry);
+
+    // --- Tag Computation & Multi-Material Assignment ---
+    let tagResult: TagResult | undefined;
+    let zoneAssignment: TagZoneAssignment | undefined;
+
+    try {
+      // Run tag system on the geometry
+      const tagSystem = new TerrainTagSystem();
+      tagResult = tagSystem.tagTerrain(geometry);
+
+      // Build per-vertex terrain attributes for the mapper
+      const vertexAttrs = this.buildVertexAttributes(geometry, attributes);
+
+      // Use TagMaterialMapper to assign zones per face
+      const mapper = new TagMaterialMapper();
+      zoneAssignment = mapper.assignZones(geometry, tagResult, vertexAttrs);
+
+      // Apply multi-material via geometry groups
+      applyMultiMaterial(mesh, geometry, zoneAssignment);
+    } catch (err) {
+      // Tag-to-material pipeline is best-effort; fall back to single material
+      console.warn('[TwoPhaseTerrainPipeline] Tag-to-material failed, using single material:', err);
+      mesh.material = new THREE.MeshStandardMaterial({
+        color: 0x8b7355,
+        roughness: 0.9,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+      });
+    }
+
+    // --- Build BVH for accelerated raycasting ---
+    buildTerrainBVH(mesh);
 
     const terrainData: TerrainData = {
       sdf,
@@ -621,6 +813,8 @@ export class TwoPhaseTerrainPipeline {
       mesh,
       terrainData,
       materialAssignments,
+      tagResult,
+      zoneAssignment,
     };
   }
 
@@ -736,21 +930,32 @@ export class TwoPhaseTerrainPipeline {
       this.bakeOceanDisplacement(geometry, terrainData.registry);
     }
 
-    // Create mesh with vertex colors
-    const material = new THREE.MeshStandardMaterial({
+    // Create mesh with multi-material from coarse zone assignments
+    geometry.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
       color: 0x8b7355,
       roughness: 0.9,
       metalness: 0.0,
       side: THREE.DoubleSide,
-      flatShading: false,
-      vertexColors: false,
-    });
-
-    geometry.computeBoundingSphere();
-    const mesh = new THREE.Mesh(geometry, material);
+    }));
     mesh.name = 'FineTerrainMesh';
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+
+    // --- Transfer zone assignments from coarse phase and apply multi-material ---
+    try {
+      if (coarseResult.zoneAssignment && coarseResult.tagResult) {
+        const vertexAttrs = this.buildVertexAttributes(geometry, this.computeAttributes(geometry, terrainData.registry));
+        const mapper = new TagMaterialMapper();
+        const zoneAssignment = mapper.assignZones(geometry, coarseResult.tagResult, vertexAttrs);
+        applyMultiMaterial(mesh, geometry, zoneAssignment);
+      }
+    } catch (err) {
+      console.warn('[TwoPhaseTerrainPipeline] Fine terrain multi-material failed, using single material:', err);
+    }
+
+    // --- Build BVH for the fine mesh ---
+    buildTerrainBVH(mesh);
 
     // Compute auxiliary attributes
     const attributes = this.computeAttributes(geometry, terrainData.registry);
@@ -883,6 +1088,45 @@ export class TwoPhaseTerrainPipeline {
     geometry.setAttribute('liquidCovered', new THREE.BufferAttribute(liquidCovered, 1));
 
     return attributes;
+  }
+
+  /**
+   * Build TerrainVertexAttributes array from computed geometry attributes.
+   * Used by TagMaterialMapper to assign material zones.
+   */
+  private buildVertexAttributes(
+    geometry: THREE.BufferGeometry,
+    attributes: Map<string, Float32Array>,
+  ): TerrainVertexAttributes[] {
+    const posAttr = geometry.getAttribute('position');
+    if (!posAttr) return [];
+
+    const vertexCount = posAttr.count;
+    const posArray = posAttr.array as Float32Array;
+    const heightArr = attributes.get('height') ?? new Float32Array(vertexCount);
+    const caveTagArr = attributes.get('caveTag') ?? new Float32Array(vertexCount);
+    const liquidArr = attributes.get('liquidCovered') ?? new Float32Array(vertexCount);
+    const materialIdArr = attributes.get('materialId') ?? new Float32Array(vertexCount);
+    const boundarySDFArr = attributes.get('boundarySDF') ?? new Float32Array(vertexCount);
+
+    const result: TerrainVertexAttributes[] = new Array(vertexCount);
+
+    for (let i = 0; i < vertexCount; i++) {
+      const slope = this.computeSlopeAt(posArray, i, vertexCount);
+      result[i] = {
+        height: heightArr[i] ?? posArray[i * 3 + 1],
+        slope,
+        caveTag: caveTagArr[i] > 0.5,
+        boundarySDF: boundarySDFArr[i],
+        liquidCovered: liquidArr[i] > 0.5,
+        waterPlaneHeight: 0,
+        materialId: materialIdArr[i],
+        sandDuneHeight: 0,
+        auxiliary: {},
+      };
+    }
+
+    return result;
   }
 
   /**

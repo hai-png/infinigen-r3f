@@ -17,6 +17,10 @@ export {
   HSV_RGB_GLSL,
   VALUE_NOISE_GLSL,
   ALL_NOISE_GLSL,
+  // 4D noise variants
+  SIMPLEX_4D_GLSL,
+  PERLIN_4D_GLSL,
+  FBM_4D_GLSL,
 } from './NoiseGLSL';
 
 export {
@@ -30,3 +34,6 @@ export {
 export { BLACKBODY_GLSL } from './BlackbodyGLSL';
 
 export { PBR_GLSL } from './PBRGLSL';
+
+// Unified shader include system with namespace prefixing
+export { ShaderIncludes } from './ShaderIncludes';

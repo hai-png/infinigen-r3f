@@ -692,7 +692,8 @@ export class TerrainMaterialLibrary extends BaseMaterialGenerator<TerrainParams>
   }
 
   // --------------------------------------------------------------------------
-  // 6. Mountain — Rocky mountain face with snow dusting
+  // 6. Mountain — Rocky mountain face with multi-layer noise, Voronoi cracks,
+  //    slope modulation, and height-based coloring
   // --------------------------------------------------------------------------
 
   private generateMountainTexture(params: TerrainParams, rng: SeededRandom): Texture {
@@ -703,6 +704,8 @@ export class TerrainMaterialLibrary extends BaseMaterialGenerator<TerrainParams>
     if (!ctx) return new CanvasTexture(canvas);
 
     const noise = new Noise3D(rng.seed);
+    const noise2 = new Noise3D(rng.seed + 57);
+    const noise3 = new Noise3D(rng.seed + 123);
     const imageData = ctx.createImageData(size, size);
     const data = imageData.data;
 
@@ -712,51 +715,125 @@ export class TerrainMaterialLibrary extends BaseMaterialGenerator<TerrainParams>
     const sc = params.scale;
     const moisture = params.moisture;
 
+    // Height gradient colors (low→high)
+    const colorLow  = { r: 0x6b, g: 0x5e, b: 0x50 };  // warm brown
+    const colorMid  = { r: 0x80, g: 0x78, b: 0x70 };  // medium gray
+    const colorHigh = { r: 0x9a, g: 0x96, b: 0x92 };  // light gray
+    const colorPeak = { r: 0xe8, g: 0xec, b: 0xf4 };  // near-white snow
+
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const idx = (y * size + x) * 4;
         const u = x / size;
         const v = y / size;
 
-        // Rocky face — ridged multifractal for craggy surface
-        const rockFace = fbm(u * 4 * sc, v * 4 * sc, 0, 7, 2.0, 0.55, 1.0);
-        const rockRelief = rockFace * 25;
+        // === Layer 1: Large-scale ridged multifractal for craggy macro structure ===
+        const rockFace1 = fbm(u * 4 * sc, v * 4 * sc, 0, 7, 2.0, 0.55, 1.0);
 
-        // Lichen/moss patches on shaded areas
-        const lichen = noise.perlin(x / (60 * sc), y / (60 * sc), 0);
-        const lichenFactor = (lichen > 0.5 && moisture > 0.1)
-          ? (lichen - 0.5) * 20 * moisture
-          : 0;
+        // === Layer 2: Medium-scale heterogeneous terrain noise for surface variation ===
+        const rockFace2 = fbm(u * 8 * sc + 3.7, v * 8 * sc + 1.2, 0.5, 5, 2.2, 0.5, 0.8);
 
-        // Snow accumulation — occurs on flatter/lower-noise areas
-        const snowMask = noise.perlin(x / (120 * sc), y / (120 * sc), 1);
-        const snowDetail = noise.perlin(x / (20 * sc), y / (20 * sc), 2);
-        const snowAmount = (snowMask > 0.4 && snowDetail > 0.1) ? (snowMask - 0.4) * 80 : 0;
+        // === Layer 3: Fine-scale Musgrave-like ridged detail ===
+        const ridgeDetail = noise.perlin(x / (15 * sc), y / (15 * sc), 0);
+        const ridge = 1.0 - Math.abs(ridgeDetail);
+        const ridgeFactor = ridge * ridge * 12;
 
-        // Fine rock grain
-        const grain = noise.perlin(x / (8 * sc), y / (8 * sc), 3) * 8;
+        // Combine multi-layer rock structure
+        const rockRelief = rockFace1 * 20 + rockFace2 * 10 + ridgeFactor;
+
+        // === Voronoi cracks ===
+        // Approximate Voronoi crack pattern via domain-warped high-frequency noise
+        const crackWarpX = noise2.perlin(u * 12 * sc, v * 12 * sc, 0) * 0.03;
+        const crackWarpY = noise2.perlin(u * 12 * sc + 5.3, v * 12 * sc + 2.1, 0) * 0.03;
+        const crackNoise = fbm(
+          (u + crackWarpX) * 15 * sc,
+          (v + crackWarpY) * 15 * sc,
+          1.0, 4, 2.5, 0.5, 1.0,
+        );
+        const crackLine = Math.abs(crackNoise);
+        const isCrack = crackLine < 0.03;
+        const crackDepth = isCrack ? (0.03 - crackLine) * 500 : 0;
+
+        // === Slope modulation (simulated from gradient of height field) ===
+        const heightL = noise3.perlin((x - 1) / (40 * sc), y / (40 * sc), 0);
+        const heightR = noise3.perlin((x + 1) / (40 * sc), y / (40 * sc), 0);
+        const heightU = noise3.perlin(x / (40 * sc), (y - 1) / (40 * sc), 0);
+        const heightD = noise3.perlin(x / (40 * sc), (y + 1) / (40 * sc), 0);
+        const slopeX = heightR - heightL;
+        const slopeY = heightD - heightU;
+        const slopeMag = Math.sqrt(slopeX * slopeX + slopeY * slopeY);
+        // Steep slopes get more rock texture, flat areas get smoother
+        const slopeMod = Math.min(1, slopeMag * 8);
+
+        // === Height-based coloring ===
+        // Simulated altitude via low-frequency noise
+        const altitudeNoise = noise3.perlin(x / (300 * sc), y / (300 * sc), 1);
+        const simulatedAlt = (v + altitudeNoise * 0.15); // 0 = bottom, 1 = top
+
+        // Interpolate height gradient colors
+        let gradR: number, gradG: number, gradB: number;
+        if (simulatedAlt < 0.3) {
+          const t = simulatedAlt / 0.3;
+          gradR = colorLow.r * (1 - t) + colorMid.r * t;
+          gradG = colorLow.g * (1 - t) + colorMid.g * t;
+          gradB = colorLow.b * (1 - t) + colorMid.b * t;
+        } else if (simulatedAlt < 0.65) {
+          const t = (simulatedAlt - 0.3) / 0.35;
+          gradR = colorMid.r * (1 - t) + colorHigh.r * t;
+          gradG = colorMid.g * (1 - t) + colorHigh.g * t;
+          gradB = colorMid.b * (1 - t) + colorHigh.b * t;
+        } else {
+          const t = (simulatedAlt - 0.65) / 0.35;
+          gradR = colorHigh.r * (1 - t) + colorPeak.r * t;
+          gradG = colorHigh.g * (1 - t) + colorPeak.g * t;
+          gradB = colorHigh.b * (1 - t) + colorPeak.b * t;
+        }
+
+        // === Rock grain and strata ===
+        const grain = noise.perlin(x / (8 * sc), y / (8 * sc), 3) * 8 * slopeMod;
         const microGrain = noise.perlin(x / (3 * sc), y / (3 * sc), 4) * 3;
 
-        // Rock strata — horizontal lines
+        // Rock strata — horizontal lines with warp
         const strataWarp = noise.perlin(x / (250 * sc), y / (250 * sc), 5) * 15;
         const strataVal = Math.sin((y + strataWarp) / (40 * sc) * Math.PI * 2);
         const strataLine = Math.abs(strataVal) < 0.05 ? -12 : 0;
 
-        // Mix rock and snow
-        const rockR = baseR + rockRelief + grain + microGrain + strataLine + lichenFactor * 0.3;
-        const rockG = baseG + rockRelief + grain + microGrain + strataLine + lichenFactor;
-        const rockB = baseB + rockRelief + grain + microGrain + strataLine + lichenFactor * 0.4;
+        // === Lichen/moss on flatter surfaces ===
+        const lichen = noise.perlin(x / (60 * sc), y / (60 * sc), 0);
+        const lichenFactor = (lichen > 0.5 && moisture > 0.1 && slopeMag < 0.15)
+          ? (lichen - 0.5) * 20 * moisture
+          : 0;
 
-        // Snow is white with very faint blue shadows
+        // === Snow accumulation — on flat-ish areas above simulated snow line ===
+        const snowMask = noise.perlin(x / (120 * sc), y / (120 * sc), 1);
+        const snowDetail = noise.perlin(x / (20 * sc), y / (20 * sc), 2);
+        const snowThreshold = simulatedAlt > 0.7 ? 0.2 : 0.5;
+        const snowAmount = (snowMask > snowThreshold && snowDetail > 0.1 && slopeMag < 0.2)
+          ? (snowMask - snowThreshold) * 80
+          : 0;
+
+        // === Compose rock color with slope + height modulation ===
+        const rockR = gradR + rockRelief + grain + microGrain + strataLine + lichenFactor * 0.3 - crackDepth;
+        const rockG = gradG + rockRelief + grain + microGrain + strataLine + lichenFactor - crackDepth;
+        const rockB = gradB + rockRelief + grain + microGrain + strataLine + lichenFactor * 0.4 - crackDepth;
+
+        // Snow is white with faint blue shadows
         const snowR = 235 + snowDetail * 5;
         const snowG = 238 + snowDetail * 4;
         const snowB = 245 + snowDetail * 3;
 
         const snowBlend = Math.min(1, snowAmount / 20);
 
-        data[idx]     = Math.max(0, Math.min(255, rockR * (1 - snowBlend) + snowR * snowBlend));
-        data[idx + 1] = Math.max(0, Math.min(255, rockG * (1 - snowBlend) + snowG * snowBlend));
-        data[idx + 2] = Math.max(0, Math.min(255, rockB * (1 - snowBlend) + snowB * snowBlend));
+        // Final blend: crack areas stay dark
+        if (isCrack) {
+          data[idx]     = Math.max(0, Math.min(255, gradR * 0.3 - crackDepth));
+          data[idx + 1] = Math.max(0, Math.min(255, gradG * 0.25 - crackDepth));
+          data[idx + 2] = Math.max(0, Math.min(255, gradB * 0.2 - crackDepth));
+        } else {
+          data[idx]     = Math.max(0, Math.min(255, rockR * (1 - snowBlend) + snowR * snowBlend));
+          data[idx + 1] = Math.max(0, Math.min(255, rockG * (1 - snowBlend) + snowG * snowBlend));
+          data[idx + 2] = Math.max(0, Math.min(255, rockB * (1 - snowBlend) + snowB * snowBlend));
+        }
         data[idx + 3] = 255;
       }
     }

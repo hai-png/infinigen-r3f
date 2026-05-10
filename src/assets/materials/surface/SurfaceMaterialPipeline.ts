@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { MaterialPipeline } from '../MaterialPipeline';
 import type { NodeGraph } from '../../../core/nodes/execution/NodeEvaluator';
 import { FaceTagger } from '../../../core/tags/FaceTagger';
+import { SDFPerturbSurface } from './SDFPerturbSurface';
 
 // ============================================================================
 // Types
@@ -118,15 +119,7 @@ export class SurfaceMaterialPipeline {
       const geometry = child.geometry;
       if (!geometry.attributes.position) return;
 
-      // Create a displacement texture from the node graph
       try {
-        const shaderMaterial = SurfaceMaterialPipeline.pipeline.create3DMaterialFromGraph(
-          displacementGraph,
-          { enableDisplacement: true, displacementScale: 0.1 },
-        );
-
-        // For displacement, we modify the geometry directly
-        // rather than using a vertex shader (which requires custom materials)
         const positions = geometry.attributes.position;
         const normals = geometry.attributes.normal;
 
@@ -134,28 +127,101 @@ export class SurfaceMaterialPipeline {
           const posArray = positions.array as Float32Array;
           const normArray = normals.array as Float32Array;
 
-          // Simple displacement along normals
-          // In a full implementation, this would evaluate the displacement
-          // graph per-vertex
-          for (let i = 0; i < positions.count; i++) {
-            const nx = normArray[i * 3];
-            const ny = normArray[i * 3 + 1];
-            const nz = normArray[i * 3 + 2];
+          // --- Phase 1: Evaluate displacement graph per-vertex via SurfaceKernelPipeline ---
+          let displacementValues: Float32Array | null = null;
 
-            // Use a simple noise-based displacement as placeholder
-            const px = posArray[i * 3];
-            const py = posArray[i * 3 + 1];
-            const pz = posArray[i * 3 + 2];
+          try {
+            // Use SurfaceKernelPipeline to evaluate the NodeGraph per-vertex
+            const { SurfaceKernel, DisplacementMode } = require('@/terrain/surface/SurfaceKernelPipeline') as typeof import('@/terrain/surface/SurfaceKernelPipeline');
+            const kernel = new SurfaceKernel({
+              displacementMode: DisplacementMode.VERTEX,
+              displacementScale: 0.1,
+              seed: 0,
+            });
 
-            const displacement = Math.sin(px * 5) * Math.cos(py * 5) * Math.sin(pz * 5) * 0.02;
+            // Try to evaluate the displacement graph using NodeGroup evaluation
+            const nodeGroup = displacementGraph as any;
+            if (nodeGroup && typeof nodeGroup.instantiate === 'function') {
+              const instance = nodeGroup.instantiate();
+              displacementValues = new Float32Array(positions.count);
 
-            posArray[i * 3] += nx * displacement;
-            posArray[i * 3 + 1] += ny * displacement;
-            posArray[i * 3 + 2] += nz * displacement;
+              for (let i = 0; i < positions.count; i++) {
+                try {
+                  const inputs = new Map<string, any>();
+                  inputs.set('Position', new THREE.Vector3(posArray[i * 3], posArray[i * 3 + 1], posArray[i * 3 + 2]));
+                  inputs.set('Normal', new THREE.Vector3(normArray[i * 3], normArray[i * 3 + 1], normArray[i * 3 + 2]));
+                  inputs.set('Strength', 0.1);
+                  inputs.set('MidLevel', 0.0);
+
+                  const outputs = instance.evaluate(inputs);
+                  const dispValue = outputs.get('Displacement');
+
+                  if (typeof dispValue === 'number' && isFinite(dispValue)) {
+                    displacementValues[i] = dispValue;
+                  } else {
+                    displacementValues[i] = 0;
+                  }
+                } catch {
+                  displacementValues[i] = 0;
+                }
+              }
+            }
+          } catch (err) {
+            // SurfaceKernelPipeline not available or instantiation failed
+            console.warn('[SurfaceMaterialPipeline] addGeomod: NodeGraph evaluation failed, falling back to SDFPerturbSurface:', err);
+          }
+
+          // --- Phase 2: If NodeGraph evaluation failed, fall back to SDFPerturbSurface ---
+          if (!displacementValues) {
+            try {
+              const result = SDFPerturbSurface.apply(geometry, {
+                type: 'fbm',
+                scale: 0.05,
+                frequency: 5.0,
+                octaves: 4,
+                seed: 0,
+              });
+              // SDFPerturbSurface modifies geometry in-place, displacementValues are in result
+              displacementValues = result.displacementValues;
+            } catch (err) {
+              console.warn('[SurfaceMaterialPipeline] addGeomod: SDFPerturbSurface fallback also failed:', err);
+            }
+          }
+
+          // --- Phase 3: Apply computed displacement values to geometry ---
+          if (displacementValues) {
+            for (let i = 0; i < positions.count; i++) {
+              const disp = displacementValues[i];
+              if (Math.abs(disp) > 1e-8) {
+                const nx = normArray[i * 3];
+                const ny = normArray[i * 3 + 1];
+                const nz = normArray[i * 3 + 2];
+
+                posArray[i * 3] += nx * disp;
+                posArray[i * 3 + 1] += ny * disp;
+                posArray[i * 3 + 2] += nz * disp;
+              }
+            }
           }
 
           positions.needsUpdate = true;
           geometry.computeVertexNormals();
+
+          // --- Phase 4: Apply material shader (dual geometry+shader pipeline) ---
+          // The displacement is applied BEFORE the material shader
+          // so that the material can reference the displaced geometry
+          try {
+            const shaderMaterial = SurfaceMaterialPipeline.pipeline.create3DMaterialFromGraph(
+              displacementGraph,
+              { enableDisplacement: true, displacementScale: 0.1 },
+            );
+            // Store the shader material for later use by the rendering pipeline
+            if (child instanceof THREE.Mesh) {
+              (child as THREE.Mesh).material = shaderMaterial;
+            }
+          } catch {
+            // Material shader creation is optional; geometry displacement is primary
+          }
         }
       } catch (err) {
         console.warn('SurfaceMaterialPipeline: addGeomod failed:', err);

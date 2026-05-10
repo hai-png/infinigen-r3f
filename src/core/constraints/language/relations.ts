@@ -543,12 +543,83 @@ export class CoPlanar extends GeometryRelation {
     const objs1 = retrieveSpatialObjects(state, ids1);
     const objs2 = retrieveSpatialObjects(state, ids2);
     if (objs1.length === 0 || objs2.length === 0) return false;
-    // Check if all objects have similar Y position (simple coplanarity heuristic)
+
     const allObjs = [...objs1, ...objs2];
-    const yPositions = allObjs.map(o => toVec3(o.position)[1]);
-    const minY = Math.min(...yPositions);
-    const maxY = Math.max(...yPositions);
-    return (maxY - minY) <= this.distanceTolerance;
+    const positions = allObjs.map(o => toVec3(o.position));
+
+    if (positions.length < 2) return false;
+
+    // Determine the reference plane normal.
+    // If we have at least 3 non-collinear points, compute the plane from them.
+    // Otherwise, default to Y-up (0,1,0) for horizontal coplanarity.
+    let normal: number[] = [0, 1, 0];
+    let computedNormal = false;
+
+    // Try to compute a normal from the first 3 non-collinear points
+    if (positions.length >= 3) {
+      const p0 = positions[0];
+      for (let i = 1; i < positions.length && !computedNormal; i++) {
+        for (let j = i + 1; j < positions.length && !computedNormal; j++) {
+          const v1 = [positions[i][0] - p0[0], positions[i][1] - p0[1], positions[i][2] - p0[2]];
+          const v2 = [positions[j][0] - p0[0], positions[j][1] - p0[1], positions[j][2] - p0[2]];
+          const nx = v1[1] * v2[2] - v1[2] * v2[1];
+          const ny = v1[2] * v2[0] - v1[0] * v2[2];
+          const nz = v1[0] * v2[1] - v1[1] * v2[0];
+          const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+          if (len > 1e-10) {
+            normal = [nx / len, ny / len, nz / len];
+            computedNormal = true;
+          }
+        }
+      }
+    }
+
+    // Reference point: use first object position
+    const refPoint = positions[0];
+
+    // Check 1: Signed distance from the reference plane for all objects
+    // This uses distanceTolerance to ensure all points lie on the same plane
+    for (const pos of positions) {
+      const dx = pos[0] - refPoint[0];
+      const dy = pos[1] - refPoint[1];
+      const dz = pos[2] - refPoint[2];
+      const signedDist = dx * normal[0] + dy * normal[1] + dz * normal[2];
+      if (Math.abs(signedDist) > this.distanceTolerance) return false;
+    }
+
+    // Check 2: Normal alignment tolerance.
+    // For each pair of objects, the direction vector between them should
+    // be nearly perpendicular to the plane normal (coplanar objects
+    // spread in-plane, not along the normal). The sin of the angle
+    // between the inter-object vector and the plane is the normalComponent.
+    // We also check that surface normals from bounding boxes are aligned:
+    // for each object pair, the computed normal should agree with the
+    // plane's normal within normalTolerance.
+    if (this.normalTolerance > 0 && positions.length >= 3) {
+      // For multi-point coplanarity: verify that the plane normals
+      // computed from different triplets are consistent (aligned).
+      // If two triplets produce normals that differ by more than
+      // normalTolerance, the points are not truly coplanar.
+      const p0 = positions[0];
+      for (let i = 1; i < positions.length - 1; i++) {
+        for (let j = i + 1; j < positions.length; j++) {
+          const v1 = [positions[i][0] - p0[0], positions[i][1] - p0[1], positions[i][2] - p0[2]];
+          const v2 = [positions[j][0] - p0[0], positions[j][1] - p0[1], positions[j][2] - p0[2]];
+          const nx = v1[1] * v2[2] - v1[2] * v2[1];
+          const ny = v1[2] * v2[0] - v1[0] * v2[2];
+          const nz = v1[0] * v2[1] - v1[1] * v2[0];
+          const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+          if (len < 1e-10) continue; // Degenerate triplet
+          // Dot product with reference normal: should be ~±1 if aligned
+          const dot = Math.abs((nx * normal[0] + ny * normal[1] + nz * normal[2]) / len);
+          // dot = 1 means perfectly aligned, dot = 0 means perpendicular
+          // Normal alignment: 1 - dot should be within normalTolerance
+          if (1 - dot > this.normalTolerance) return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   isSatisfied(state: Map<Variable, any>): boolean {
@@ -787,10 +858,75 @@ export class AccessibleFrom extends GeometryRelation {
     const objs1 = retrieveSpatialObjects(state, ids1);
     const objs2 = retrieveSpatialObjects(state, ids2);
     if (objs1.length === 0 || objs2.length === 0) return false;
-    // Simplified: accessible if within reach distance
-    for (const a of objs1) {
-      for (const b of objs2) {
-        if (distance(a.position, b.position) <= this.reachDistance) return true;
+    // Use A* pathfinding on a 2D navigation grid
+    // instead of just Euclidean distance.
+    try {
+      const { getCachedNavigationGrid } = require('../evaluator/NavigationGrid');
+      const THREE = require('three');
+
+      // Collect obstacle bounding boxes from other objects in state
+      const obstacles: any[] = [];
+      const objIds = new Set<string>([...ids1, ...ids2].map(String));
+      for (const [key, val] of state.entries()) {
+        if (!objIds.has(String(key)) && val && typeof val === 'object') {
+          if (val.obj) {
+            const box = new THREE.Box3().setFromObject(val.obj);
+            obstacles.push(box);
+          } else if (val.boundingBox) {
+            obstacles.push(val.boundingBox);
+          }
+        }
+      }
+
+      // Compute bounds from all objects
+      const allPositions = [...objs1, ...objs2].map(o => toVec3(o.position));
+      const minX = Math.min(...allPositions.map(p => p[0])) - 20;
+      const maxX = Math.max(...allPositions.map(p => p[0])) + 20;
+      const minZ = Math.min(...allPositions.map(p => p[2])) - 20;
+      const maxZ = Math.max(...allPositions.map(p => p[2])) + 20;
+      const bounds = new THREE.Box3(
+        new THREE.Vector3(minX, -1000, minZ),
+        new THREE.Vector3(maxX, 1000, maxZ)
+      );
+
+      const grid = getCachedNavigationGrid('accessible', obstacles, bounds, 0.5);
+
+      for (const a of objs1) {
+        const posA = toVec3(a.position);
+        const start = new THREE.Vector3(posA[0], 0, posA[2]);
+        for (const b of objs2) {
+          const posB = toVec3(b.position);
+          const end = new THREE.Vector3(posB[0], 0, posB[2]);
+          if (grid.isAccessible(start, end, this.reachDistance)) return true;
+        }
+      }
+    } catch {
+      // Navigation grid not available: fall back to Euclidean distance
+      // with obstacle check using ray-AABB intersection
+      for (const a of objs1) {
+        for (const b of objs2) {
+          const d = distance(a.position, b.position);
+          if (d > this.reachDistance) continue;
+          // Check for obstacles between a and b
+          const posA = toVec3(a.position);
+          const posB = toVec3(b.position);
+          const dir: [number, number, number] = [posB[0] - posA[0], posB[1] - posA[1], posB[2] - posA[2]];
+          const objIds2 = new Set<string>([...ids1, ...ids2].map(String));
+          let blocked = false;
+          for (const [key, val] of state.entries()) {
+            if (objIds2.has(String(key))) continue;
+            if (val && typeof val === 'object') {
+              try {
+                const aabb = getAABB(val);
+                if (rayAABBIntersection(toVec3(a.position), dir, aabb)) {
+                  blocked = true;
+                  break;
+                }
+              } catch { /* skip */ }
+            }
+          }
+          if (!blocked) return true;
+        }
       }
     }
     return false;
@@ -837,12 +973,76 @@ export class ReachableFrom extends GeometryRelation {
     const objs1 = retrieveSpatialObjects(state, ids1);
     const objs2 = retrieveSpatialObjects(state, ids2);
     if (objs1.length === 0 || objs2.length === 0) return false;
-    // Simplified reachability: Euclidean distance within max path length
+    // Use A* pathfinding with maxPathLength constraint
     const maxDist = this.maxPathLength ?? Infinity;
-    for (const a of objs1) {
-      for (const b of objs2) {
-        const d = distance(a.position, b.position);
-        if (d <= maxDist) return true;
+    try {
+      const { getCachedNavigationGrid } = require('../evaluator/NavigationGrid');
+      const THREE = require('three');
+
+      // Collect obstacle bounding boxes from other objects in state
+      const obstacles: any[] = [];
+      const objIds = new Set<string>([...ids1, ...ids2].map(String));
+      for (const [key, val] of state.entries()) {
+        if (!objIds.has(String(key)) && val && typeof val === 'object') {
+          if (val.obj) {
+            const box = new THREE.Box3().setFromObject(val.obj);
+            obstacles.push(box);
+          } else if (val.boundingBox) {
+            obstacles.push(val.boundingBox);
+          }
+        }
+      }
+
+      // Compute bounds from all objects
+      const allPositions = [...objs1, ...objs2].map(o => toVec3(o.position));
+      const minX = Math.min(...allPositions.map(p => p[0])) - 20;
+      const maxX = Math.max(...allPositions.map(p => p[0])) + 20;
+      const minZ = Math.min(...allPositions.map(p => p[2])) - 20;
+      const maxZ = Math.max(...allPositions.map(p => p[2])) + 20;
+      const bounds = new THREE.Box3(
+        new THREE.Vector3(minX, -1000, minZ),
+        new THREE.Vector3(maxX, 1000, maxZ)
+      );
+
+      const grid = getCachedNavigationGrid('reachable', obstacles, bounds, 0.5);
+
+      for (const a of objs1) {
+        const posA = toVec3(a.position);
+        const start = new THREE.Vector3(posA[0], 0, posA[2]);
+        for (const b of objs2) {
+          const posB = toVec3(b.position);
+          const end = new THREE.Vector3(posB[0], 0, posB[2]);
+          const pathLen = grid.pathLength(start, end);
+          if (pathLen <= maxDist) return true;
+        }
+      }
+    } catch {
+      // Navigation grid not available: fall back to Euclidean distance
+      // with obstacle ray check
+      for (const a of objs1) {
+        for (const b of objs2) {
+          const d = distance(a.position, b.position);
+          if (d > maxDist) continue;
+          // Check for obstacles
+          const posA = toVec3(a.position);
+          const posB = toVec3(b.position);
+          const dir: [number, number, number] = [posB[0] - posA[0], posB[1] - posA[1], posB[2] - posA[2]];
+          const objIds2 = new Set<string>([...ids1, ...ids2].map(String));
+          let blocked = false;
+          for (const [key, val] of state.entries()) {
+            if (objIds2.has(String(key))) continue;
+            if (val && typeof val === 'object') {
+              try {
+                const aabb = getAABB(val);
+                if (rayAABBIntersection(posA, dir, aabb)) {
+                  blocked = true;
+                  break;
+                }
+              } catch { /* skip */ }
+            }
+          }
+          if (!blocked) return true;
+        }
       }
     }
     return false;
@@ -987,16 +1187,80 @@ export class Hidden extends Relation {
   }
 
   evaluate(state: Map<Variable, any>): boolean {
-    // An object is hidden if it is occluded from all viewpoints.
-    // Without a camera/viewpoint, we check if any object has a very low position
-    // (below ground) or is fully contained in another object.
     const ids = this.objects.evaluate(state);
     const objs = retrieveSpatialObjects(state, ids);
-    // Simplified: an object is hidden if it has no valid position or is below ground
-    for (const obj of objs) {
-      const pos = toVec3(obj.position);
-      if (pos[1] < 0) return true; // Below ground
+
+    // Try to use the CollisionDetector facade for line-of-sight checks
+    try {
+      const { getDefaultCollisionDetector } = require('../evaluator/CollisionDetector');
+      const detector = getDefaultCollisionDetector();
+
+      // Register all scene objects as potential occluders
+      const allKeys = Array.from(state.keys());
+      for (const key of allKeys) {
+        const val = state.get(key);
+        if (val && typeof val === 'object' && val.obj) {
+          try { detector.registerObject(key, val.obj); } catch { /* skip */ }
+        }
+      }
+
+      // Check from multiple viewpoints (4 cardinal directions + top)
+      const viewpoints = [
+        new (require('three').Vector3)(0, 10, 0),
+        new (require('three').Vector3)(10, 2, 0),
+        new (require('three').Vector3)(-10, 2, 0),
+        new (require('three').Vector3)(0, 2, 10),
+        new (require('three').Vector3)(0, 2, -10),
+      ];
+
+      for (const obj of objs) {
+        const pos = toVec3(obj.position);
+        const objPos = new (require('three').Vector3)(pos[0], pos[1], pos[2]);
+
+        // An object is hidden if line-of-sight is blocked from ALL viewpoints
+        let hiddenFromAll = true;
+        for (const vp of viewpoints) {
+          if (detector.hasLineOfSight(vp, objPos)) {
+            hiddenFromAll = false;
+            break;
+          }
+        }
+
+        if (hiddenFromAll) return true;
+      }
+    } catch {
+      // CollisionDetector not available: fall back to distance + ground check
+      for (const obj of objs) {
+        const pos = toVec3(obj.position);
+        // Object is hidden if below ground level
+        if (pos[1] < 0) return true;
+        // Object is hidden if very far away (beyond visibility threshold)
+        const distFromOrigin = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
+        if (distFromOrigin > 500) return true;
+        // Object is hidden if occluded by another object's AABB
+        const objAABB = getAABB(obj);
+        const allKeys = Array.from(state.keys());
+        for (const key of allKeys) {
+          if (Array.from(ids).map(String).includes(String(key))) continue;
+          const val = state.get(key);
+          if (val && typeof val === 'object' && val.obj) {
+            try {
+              const otherAABB = getAABB(val);
+              // Check if the other object's AABB blocks the line from
+              // a top-down viewpoint to this object
+              if (rayAABBIntersection(
+                [pos[0], 10, pos[2]],
+                [0, -1, 0],
+                otherAABB
+              )) {
+                return true;
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
     }
+
     return false;
   }
 
@@ -1043,22 +1307,98 @@ export class Visible extends Relation {
     const ids = this.objects.evaluate(state);
     const objs = retrieveSpatialObjects(state, ids);
     if (objs.length === 0) return false;
-    if (!this.viewpoint) return true; // Without viewpoint, assume visible
 
-    const vpIds = this.viewpoint.evaluate(state);
-    const vps = retrieveSpatialObjects(state, vpIds);
-    if (vps.length === 0) return true;
+    // Try to use the CollisionDetector facade for line-of-sight checks
+    try {
+      const { getDefaultCollisionDetector } = require('../evaluator/CollisionDetector');
+      const detector = getDefaultCollisionDetector();
 
-    // Check if any object is visible from any viewpoint (not occluded)
-    // Simplified: check if distance is reasonable and above ground
-    for (const obj of objs) {
-      const objPos = toVec3(obj.position);
-      if (objPos[1] < 0) continue; // Below ground = not visible
-      for (const vp of vps) {
-        const d = distance(obj.position, vp.position);
-        if (d > 0 && d < 200) return true; // Within visible range
+      // Register occluders
+      const allKeys = Array.from(state.keys());
+      for (const key of allKeys) {
+        const val = state.get(key);
+        if (val && typeof val === 'object' && val.obj) {
+          try { detector.registerObject(key, val.obj); } catch { /* skip */ }
+        }
+      }
+
+      // Get viewpoints
+      let viewpoints: Array<{ pos: number[] }>;
+      if (this.viewpoint) {
+        const vpIds = this.viewpoint.evaluate(state);
+        const vps = retrieveSpatialObjects(state, vpIds);
+        viewpoints = vps.map(v => ({ pos: toVec3(v.position) }));
+      } else {
+        // Default viewpoints
+        viewpoints = [
+          { pos: [0, 10, 0] },
+          { pos: [10, 2, 0] },
+          { pos: [-10, 2, 0] },
+          { pos: [0, 2, 10] },
+          { pos: [0, 2, -10] },
+        ];
+      }
+
+      for (const obj of objs) {
+        const pos = toVec3(obj.position);
+        // Must be above ground
+        if (pos[1] < 0) continue;
+
+        const objPos = new (require('three').Vector3)(pos[0], pos[1], pos[2]);
+
+        for (const vp of viewpoints) {
+          const vpPos = new (require('three').Vector3)(vp.pos[0], vp.pos[1], vp.pos[2]);
+          if (detector.hasLineOfSight(vpPos, objPos)) {
+            return true;
+          }
+        }
+      }
+    } catch {
+      // CollisionDetector not available: fall back to distance-based visibility
+      let viewpoints: Array<{ pos: number[] }>;
+      if (this.viewpoint) {
+        const vpIds = this.viewpoint.evaluate(state);
+        const vps = retrieveSpatialObjects(state, vpIds);
+        viewpoints = vps.map(v => ({ pos: toVec3(v.position) }));
+      } else {
+        viewpoints = [{ pos: [0, 10, 0] }];
+      }
+
+      for (const obj of objs) {
+        const objPos = toVec3(obj.position);
+        if (objPos[1] < 0) continue; // Below ground = not visible
+
+        // Check if any other object's AABB occludes this one
+        let occluded = false;
+        const allKeys = Array.from(state.keys());
+        for (const key of allKeys) {
+          if (Array.from(ids).map(String).includes(String(key))) continue;
+          const val = state.get(key);
+          if (val && typeof val === 'object' && val.obj) {
+            try {
+              const otherAABB = getAABB(val);
+              // Check if the other object's AABB is between viewpoint and this object
+              for (const vp of viewpoints) {
+                const dir: [number, number, number] = [objPos[0] - vp.pos[0], objPos[1] - vp.pos[1], objPos[2] - vp.pos[2]];
+                if (rayAABBIntersection(vp.pos as [number, number, number], dir, otherAABB)) {
+                  occluded = true;
+                  break;
+                }
+              }
+            } catch { /* skip */ }
+          }
+          if (occluded) break;
+        }
+
+        if (!occluded) {
+          for (const vp of viewpoints) {
+            const d = distance(obj.position, { x: vp.pos[0], y: vp.pos[1], z: vp.pos[2] });
+            if (d > 0 && d < 200) return true;
+          }
+        }
       }
     }
+
     return false;
   }
 

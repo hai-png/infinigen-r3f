@@ -15,6 +15,7 @@
 
 import * as THREE from 'three';
 import type { TreeSkeleton, TreeVertex, TreeEdge } from './SpaceColonization';
+import { computeRevDepth } from './BranchSkinner';
 import { GeometryPipeline } from '@/assets/utils/GeometryPipeline';
 
 // ============================================================================
@@ -43,6 +44,12 @@ export interface SkeletonMeshConfig {
   junctionBoost: number;
   /** Closed flag for tubes (default false) */
   closed: boolean;
+  /** Whether to use rev_depth for radius computation (default true) */
+  useRevDepth: boolean;
+  /** Exponent for rev_depth-based radius (default 0.5, square root = pipe model) */
+  revDepthExponent: number;
+  /** Blend factor between rev_depth and generation-based radius (0=generation, 1=rev_depth, default 0.7) */
+  revDepthBlend: number;
 }
 
 /**
@@ -58,6 +65,9 @@ export const DEFAULT_SKELETON_MESH_CONFIG: SkeletonMeshConfig = {
   branchTubularSegments: 6,
   junctionBoost: 1.15,
   closed: false,
+  useRevDepth: true,
+  revDepthExponent: 0.5,
+  revDepthBlend: 0.7,
 };
 
 // ============================================================================
@@ -108,6 +118,13 @@ export class TreeSkeletonMeshBuilder {
       return this.createEmptyGeometry();
     }
 
+    // Compute rev_depth for the skeleton
+    const revDepthArray = computeRevDepth(skeleton);
+    let maxRevDepth = 0;
+    for (let i = 0; i < revDepthArray.length; i++) {
+      if (revDepthArray[i] > maxRevDepth) maxRevDepth = revDepthArray[i];
+    }
+
     // Step 1: Trace all branch chains from the skeleton
     const chains = this.traceBranchChains(skeleton);
 
@@ -133,7 +150,9 @@ export class TreeSkeletonMeshBuilder {
         branchPoints,
         radialSegments,
         tubularSegmentsPerUnit,
-        cfg
+        cfg,
+        revDepthArray,
+        maxRevDepth
       );
 
       if (chainGeo.attributes.position.count > 0) {
@@ -146,8 +165,30 @@ export class TreeSkeletonMeshBuilder {
       return this.createEmptyGeometry();
     }
 
-    const merged = this.mergeGeometriesWithGeneration(geometries);
+    const merged = this.mergeGeometriesWithGenerationAndRevDepth(geometries);
     merged.computeVertexNormals();
+
+    // Store rev_depth as a vertex attribute for shader access
+    if (cfg.useRevDepth && maxRevDepth > 0) {
+      const posAttr = merged.attributes.position;
+      if (posAttr) {
+        const revDepthAttr = new Float32Array(posAttr.count);
+        // For each vertex in the merged geometry, interpolate rev_depth from chain data
+        // We already stored per-vertex rev_depth in the chain geometries, just copy them
+        let offset = 0;
+        for (const geo of geometries) {
+          const rdAttr = geo.attributes.aRevDepth;
+          const count = geo.attributes.position.count;
+          if (rdAttr) {
+            for (let i = 0; i < count; i++) {
+              revDepthAttr[offset + i] = rdAttr.getX(i);
+            }
+          }
+          offset += count;
+        }
+        merged.setAttribute('aRevDepth', new THREE.BufferAttribute(revDepthAttr, 1));
+      }
+    }
 
     return merged;
   }
@@ -295,7 +336,9 @@ export class TreeSkeletonMeshBuilder {
     branchPoints: Set<number>,
     radialSegments: number,
     tubularSegmentsPerUnit: number,
-    cfg: SkeletonMeshConfig
+    cfg: SkeletonMeshConfig,
+    revDepthArray?: Float32Array,
+    maxRevDepth?: number
   ): THREE.BufferGeometry {
     const { vertices } = skeleton;
     const { vertexIndices, generation } = chain;
@@ -307,6 +350,7 @@ export class TreeSkeletonMeshBuilder {
     // Collect positions and radii along the chain
     const positions: THREE.Vector3[] = [];
     const radii: number[] = [];
+    const revDepths: number[] = [];
 
     for (let i = 0; i < vertexIndices.length; i++) {
       const vIdx = vertexIndices[i];
@@ -316,8 +360,22 @@ export class TreeSkeletonMeshBuilder {
       // Compute radius for this vertex
       let radius = Math.max(vertex.radius, cfg.minRadius);
 
-      // Apply generation decay for generation > 0
-      if (generation > 0) {
+      // Apply rev_depth-based radius if enabled
+      if (cfg.useRevDepth && revDepthArray && maxRevDepth && maxRevDepth > 0) {
+        const revDepth = revDepthArray[vIdx];
+        const normalizedRevDepth = revDepth / maxRevDepth;
+
+        // Rev-depth based radius (pipe model)
+        const revDepthRadius = vertex.radius * Math.pow(normalizedRevDepth, cfg.revDepthExponent);
+
+        // Generation-based radius
+        const generationRadius = radius;
+
+        // Blend
+        radius = revDepthRadius * cfg.revDepthBlend + generationRadius * (1 - cfg.revDepthBlend);
+        radius = Math.max(radius, cfg.minRadius);
+      } else if (generation > 0) {
+        // Apply generation decay for generation > 0
         radius = Math.max(radius, cfg.minRadius);
       }
 
@@ -332,6 +390,7 @@ export class TreeSkeletonMeshBuilder {
       }
 
       radii.push(radius);
+      revDepths.push(revDepthArray ? revDepthArray[vIdx] : 0);
     }
 
     // Create smooth path using CatmullRomCurve3
@@ -357,6 +416,7 @@ export class TreeSkeletonMeshBuilder {
       tubularSegments,
       radialSegments,
       generation,
+      revDepths,
       cfg
     );
   }
@@ -373,18 +433,20 @@ export class TreeSkeletonMeshBuilder {
     tubularSegments: number,
     radialSegments: number,
     generation: number,
+    revDepths: number[],
     cfg: SkeletonMeshConfig
   ): THREE.BufferGeometry {
     const positions: number[] = [];
     const normals: number[] = [];
     const uvs: number[] = [];
     const generationAttr: number[] = [];
+    const revDepthAttr: number[] = [];
     const indices: number[] = [];
 
     // Sample the curve at regular intervals
     const frames = curve.computeFrenetFrames(tubularSegments, false);
 
-    // Interpolate radius along the path
+    // Interpolate radius and rev_depth along the path
     const getRadiusAtT = (t: number): number => {
       // Map t to the index in the original positions/radii array
       const idx = t * (radii.length - 1);
@@ -394,10 +456,19 @@ export class TreeSkeletonMeshBuilder {
       return radii[lo] * (1 - frac) + radii[hi] * frac;
     };
 
+    const getRevDepthAtT = (t: number): number => {
+      const idx = t * (revDepths.length - 1);
+      const lo = Math.floor(idx);
+      const hi = Math.min(lo + 1, revDepths.length - 1);
+      const frac = idx - lo;
+      return revDepths[lo] * (1 - frac) + revDepths[hi] * frac;
+    };
+
     // Generate vertices ring by ring
     for (let i = 0; i <= tubularSegments; i++) {
       const t = i / tubularSegments;
       const radius = Math.max(getRadiusAtT(t), cfg.minRadius);
+      const revDepthVal = getRevDepthAtT(t);
 
       // Get point on curve
       const point = curve.getPointAt(t);
@@ -432,6 +503,9 @@ export class TreeSkeletonMeshBuilder {
 
         // Generation attribute
         generationAttr.push(generation);
+
+        // Rev depth attribute
+        revDepthAttr.push(revDepthVal);
       }
     }
 
@@ -457,6 +531,7 @@ export class TreeSkeletonMeshBuilder {
     normals.push(-startTangent.x, -startTangent.y, -startTangent.z);
     uvs.push(0.5, 0);
     generationAttr.push(generation);
+    revDepthAttr.push(revDepths.length > 0 ? revDepths[0] : 0);
 
     for (let j = 0; j < radialSegments; j++) {
       indices.push(startCenterIdx, j + 1, j);
@@ -470,6 +545,7 @@ export class TreeSkeletonMeshBuilder {
     normals.push(endTangent.x, endTangent.y, endTangent.z);
     uvs.push(0.5, 1);
     generationAttr.push(generation);
+    revDepthAttr.push(revDepths.length > 0 ? revDepths[revDepths.length - 1] : 0);
 
     const lastRingStart = tubularSegments * (radialSegments + 1);
     for (let j = 0; j < radialSegments; j++) {
@@ -481,6 +557,7 @@ export class TreeSkeletonMeshBuilder {
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute('generation', new THREE.Float32BufferAttribute(generationAttr, 1));
+    geometry.setAttribute('aRevDepth', new THREE.Float32BufferAttribute(revDepthAttr, 1));
     geometry.setIndex(indices);
 
     return geometry;
@@ -504,36 +581,45 @@ export class TreeSkeletonMeshBuilder {
 
   /**
    * Merge multiple BufferGeometries into one, preserving the 'generation'
-   * custom vertex attribute.
+   * and 'aRevDepth' custom vertex attributes.
    * Uses GeometryPipeline.mergeGeometries for the base merge, then
-   * re-adds the generation attribute.
+   * re-adds the custom attributes.
    */
-  private mergeGeometriesWithGeneration(
+  private mergeGeometriesWithGenerationAndRevDepth(
     geometries: THREE.BufferGeometry[]
   ): THREE.BufferGeometry {
     if (geometries.length === 0) return this.createEmptyGeometry();
     if (geometries.length === 1) return geometries[0];
 
-    // Collect generation data before merging
+    // Collect generation and rev_depth data before merging
     let totalVertices = 0;
     for (const geo of geometries) {
       totalVertices += geo.attributes.position.count;
     }
     const mergedGeneration = new Float32Array(totalVertices);
+    const mergedRevDepth = new Float32Array(totalVertices);
     let vertexOffset = 0;
 
     for (const geo of geometries) {
       const genAttr = geo.attributes.generation;
+      const rdAttr = geo.attributes.aRevDepth;
+      const count = geo.attributes.position.count;
       if (genAttr) {
-        for (let i = 0; i < genAttr.count; i++) {
+        for (let i = 0; i < count; i++) {
           mergedGeneration[vertexOffset + i] = genAttr.getX(i);
         }
       }
-      vertexOffset += geo.attributes.position.count;
+      if (rdAttr) {
+        for (let i = 0; i < count; i++) {
+          mergedRevDepth[vertexOffset + i] = rdAttr.getX(i);
+        }
+      }
+      vertexOffset += count;
     }
 
     const merged = GeometryPipeline.mergeGeometries(geometries);
     merged.setAttribute('generation', new THREE.BufferAttribute(mergedGeneration, 1));
+    merged.setAttribute('aRevDepth', new THREE.BufferAttribute(mergedRevDepth, 1));
 
     return merged;
   }
