@@ -32,8 +32,8 @@ function defaultHandler(node: Node, state: State, childVals: Map<string, any>, k
 // Auto-register geometry-based relations on module load
 export function registerGeometryNodeImpls(): void {
   // Dynamic import to avoid circular dependencies
-  import('../../language/geometry.js').then(({ Distance }) => {
-    import('../../language/relations.js').then(({ Touching, SupportedBy, StableAgainst, Coverage, CoPlanar, Facing, AccessibleFrom, Visible, Hidden }) => {
+  import('../../language/geometry').then(({ Distance }) => {
+    import('../../language/relations').then(({ Touching, SupportedBy, StableAgainst, Coverage, CoPlanar, Facing, AccessibleFrom, Visible, Hidden }) => {
       if (Distance) registerNodeImpl(Distance, geometryNodeImpls.Distance);
       if (Touching) registerNodeImpl(Touching, geometryNodeImpls.Touching);
       if (SupportedBy) registerNodeImpl(SupportedBy, geometryNodeImpls.SupportedBy);
@@ -50,7 +50,7 @@ export function registerGeometryNodeImpls(): void {
 
 // Auto-register symmetry-based relations
 export function registerSymmetryNodeImpls(): void {
-  import('../../language/relations.js').then(({ Symmetric, Aligned, Distributed }) => {
+  import('../../language/relations').then(({ Symmetric, Aligned, Distributed }) => {
     if (Symmetric && symmetryNodeImpls.has('Symmetric')) {
       registerNodeImpl(Symmetric, symmetryNodeImpls.get('Symmetric')!);
     }

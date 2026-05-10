@@ -1,12 +1,12 @@
 // Procedural generators
 export * from './procedural/index';
 
-// Material generators
-// Note: TerrainMaterialConfig is also exported via ./procedural/index (→ terrain).
-// The materials version (from MaterialPipeline) is the primary one here.
-// Explicit re-export resolves the ambiguity.
-export * from './materials/index';
-export type { TerrainMaterialConfig } from './materials/MaterialPipeline';
+// Material generators — avoid barrel re-export to prevent ErosionData name clash
+export { MaterialPipeline, type TerrainMaterialConfig } from './materials/MaterialPipeline';
+export * from './materials/MaterialPresetLibrary';
+export * from './materials/wear/WearGenerator';
+export * from './materials/textures/TextureBakePipeline';
+export { ErosionMaterialBlending, type ErosionData as MaterialErosionData, type ErosionBlendConfig, type TerrainBlendWeights, type ErosionBlendResult } from './materials/blending/ErosionMaterialBlending';
 
 // Specialized shaders
 export * from './shaders/index';
