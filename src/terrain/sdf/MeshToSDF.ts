@@ -20,8 +20,30 @@
  */
 
 import * as THREE from 'three';
-import { MeshBVH } from 'three-mesh-bvh';
-import type { HitPointInfo } from 'three-mesh-bvh';
+
+// Lazy-load three-mesh-bvh to avoid SSR/test issues where THREE.Mesh may not be defined.
+// The library extends THREE.Mesh at import time, which fails in Node.js test environments.
+let _MeshBVH: any = null;
+let _HitPointInfo: any = null;
+
+async function ensureMeshBVH() {
+  if (_MeshBVH) return;
+  const mod = await import('three-mesh-bvh');
+  _MeshBVH = mod.MeshBVH;
+  _HitPointInfo = mod.HitPointInfo;
+}
+
+function getMeshBVH(): any {
+  if (!_MeshBVH) throw new Error('[MeshToSDF] three-mesh-bvh not loaded. Call ensureMeshBVH() first or use async API.');
+  return _MeshBVH;
+}
+
+type HitPointInfo = {
+  point: THREE.Vector3;
+  distance: number;
+  faceIndex: number;
+};
+
 import { LSystemCaveGenerator } from './LSystemCave';
 import type { CaveTunnelData, CaveGrammarConfig } from './LSystemCave';
 import { smoothUnion } from './SDFCombinators';
@@ -111,7 +133,7 @@ export interface SDFGridSerialized {
  * ```
  */
 export class MeshToSDF {
-  private bvh: MeshBVH;
+  private bvh: any;
   private geometry: THREE.BufferGeometry;
   private meshBounds: THREE.Box3;
 
@@ -152,7 +174,8 @@ export class MeshToSDF {
     this.geometry.computeBoundingBox();
     this.meshBounds = this.geometry.boundingBox!.clone();
 
-    // Build the BVH
+    // Build the BVH (requires three-mesh-bvh to be loaded)
+    const MeshBVH = getMeshBVH();
     try {
       this.bvh = new MeshBVH(this.geometry, {
         strategy: bvhStrategy,
@@ -165,6 +188,23 @@ export class MeshToSDF {
         `[MeshToSDF] Failed to build BVH: ${(err as Error).message}`,
       );
     }
+  }
+
+  /**
+   * Asynchronous factory that ensures three-mesh-bvh is loaded before construction.
+   *
+   * @param input - A THREE.BufferGeometry or THREE.Mesh to convert
+   * @param bvhStrategy - BVH construction strategy (0=CENTER, 1=AVERAGE, 2=SAH)
+   * @param maxLeafTris - Maximum triangles per BVH leaf node
+   * @returns Promise<MeshToSDF> instance
+   */
+  static async create(
+    input: THREE.BufferGeometry | THREE.Mesh,
+    bvhStrategy: number = 2,
+    maxLeafTris: number = 10,
+  ): Promise<MeshToSDF> {
+    await ensureMeshBVH();
+    return new MeshToSDF(input, bvhStrategy, maxLeafTris);
   }
 
   // --------------------------------------------------------------------------
@@ -478,7 +518,7 @@ export class MeshToSDF {
   /**
    * Get the computed BVH (for advanced usage or caching).
    */
-  getBVH(): MeshBVH {
+  getBVH(): any {
     return this.bvh;
   }
 
@@ -584,12 +624,12 @@ export class OccupancyVolume {
    * @param threshold - Occupancy threshold for wall thickness (default 0.5)
    * @returns OccupancyVolume with occupancy values derived from the mesh
    */
-  static fromMesh(
+  static async fromMesh(
     mesh: THREE.BufferGeometry | THREE.Mesh,
     config: Partial<MeshToSDFConfig> = {},
     threshold: number = 0.5,
-  ): OccupancyVolume {
-    const converter = new MeshToSDF(mesh, config.bvhStrategy, config.bvhMaxLeafTris);
+  ): Promise<OccupancyVolume> {
+    const converter = await MeshToSDF.create(mesh, config.bvhStrategy, config.bvhMaxLeafTris);
     const sdfGrid = converter.computeSDFGrid(config);
 
     // Convert SDF values to occupancy:

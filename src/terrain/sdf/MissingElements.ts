@@ -17,7 +17,7 @@ import { SeededRandom } from '@/core/util/MathUtils';
 import { NoiseUtils, SeededNoiseGenerator } from '@/core/util/math/noise';
 import { TERRAIN_MATERIALS } from './SDFPrimitives';
 import { smoothUnion, smoothSubtraction, sdfSubtraction, sdfIntersection } from './SDFCombinators';
-import { TerrainElement, ElementEvalResult } from './TerrainElementSystem';
+import { TerrainElement, ElementEvalResult } from './TerrainElementBase';
 
 // ============================================================================
 // LandTilesElement
