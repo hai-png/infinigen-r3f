@@ -1421,13 +1421,45 @@ export class NodeWrangler {
           inputs: inputsMap,
           outputs: outputsMap,
           properties: (nodeData.properties && typeof nodeData.properties === 'object')
-            ? nodeData.properties
+            ? { ...nodeData.properties }
             : {},
         };
 
         if (nodeData.hidden != null) nodeInstance.hidden = !!nodeData.hidden;
         if (nodeData.muted != null) nodeInstance.muted = !!nodeData.muted;
         if (nodeData.parent != null) nodeInstance.parent = String(nodeData.parent);
+
+        // --- Compatibility: populate `settings` from `properties` ---
+        // The ShaderCompiler and NodeEvaluator expect `settings` on the
+        // NodeInstance interface (from core/types.ts). The wrangler's own
+        // NodeInstance uses `properties`. We make both available so that
+        // downstream consumers can use either field.
+        if (!(nodeInstance as any).settings) {
+          (nodeInstance as any).settings = { ...nodeInstance.properties };
+        }
+
+        // --- Compatibility: populate `position` from `location` ---
+        // The evaluator's NodeInstance uses `position: { x, y }` while
+        // the wrangler uses `location: [x, y]`. Provide both.
+        if (!(nodeInstance as any).position) {
+          const loc = nodeInstance.location;
+          (nodeInstance as any).position = { x: loc[0], y: loc[1] };
+        }
+
+        // --- Input value overrides ---
+        // Re-apply input values from the serialized data to ensure they
+        // override any defaults that might have been set during socket
+        // reconstruction. This handles cases where the user explicitly
+        // changed an input value from its default.
+        const overrideInputs = Array.isArray(nodeData.inputs) ? nodeData.inputs : [];
+        for (const overrideInput of overrideInputs) {
+          if (!overrideInput || typeof overrideInput !== 'object') continue;
+          const socketName: string = overrideInput.name ?? '';
+          if ('value' in overrideInput && inputsMap.has(socketName)) {
+            const socket = inputsMap.get(socketName)!;
+            socket.value = overrideInput.value;
+          }
+        }
 
         nodesMap.set(nodeId, nodeInstance);
       }
@@ -1526,6 +1558,57 @@ export class NodeWrangler {
         outputs: new Map(),
       };
       wrangler.nodeGroups.set('root', rootGroup);
+    }
+
+    // --- Reconstruct group node internal trees ---
+    // When a node's type matches a group ID in the deserialized data,
+    // that node is a group instance. We record the mapping so that
+    // consumers (like the NodeEvaluator) can look up the group's
+    // internal nodes when evaluating that group node.
+    for (const [groupId, group] of wrangler.nodeGroups) {
+      for (const [nodeId, node] of group.nodes) {
+        // Check if this node's type references another group in the wrangler
+        if (wrangler.nodeGroups.has(node.type)) {
+          // Tag the node with a reference to its internal group tree.
+          // The NodeEvaluator and ShaderCompiler can use this to
+          // inline or delegate evaluation.
+          (node as any).groupTreeId = node.type;
+          (node as any).settings = {
+            ...(node as any).settings ?? {},
+            nodeTree: node.type,
+          };
+        }
+      }
+    }
+
+    // --- Validate the reconstructed graph ---
+    // Check that all links reference existing nodes and sockets
+    for (const [groupId, group] of wrangler.nodeGroups) {
+      for (const [linkId, link] of group.links) {
+        // Verify source node exists (in this group or any parent)
+        let sourceFound = group.nodes.has(link.fromNode);
+        let targetFound = group.nodes.has(link.toNode);
+
+        if (!sourceFound) {
+          // Check parent groups
+          for (const [, g] of wrangler.nodeGroups) {
+            if (g.nodes.has(link.fromNode)) { sourceFound = true; break; }
+          }
+        }
+        if (!targetFound) {
+          for (const [, g] of wrangler.nodeGroups) {
+            if (g.nodes.has(link.toNode)) { targetFound = true; break; }
+          }
+        }
+
+        if (!sourceFound || !targetFound) {
+          console.warn(
+            `[NodeWrangler.fromJSON] Link "${linkId}" references missing node(s): ` +
+            `fromNode="${link.fromNode}" (found=${sourceFound}), ` +
+            `toNode="${link.toNode}" (found=${targetFound})`
+          );
+        }
+      }
     }
 
     // --- Set counters to be higher than any existing ID ---

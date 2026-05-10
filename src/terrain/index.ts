@@ -186,3 +186,13 @@ export type {
   SurfaceDisplacementConfig,
   SurfaceAttributeType,
 } from './surface/SurfaceRegistry';
+
+export {
+  TerrainSurfaces,
+} from './surface/TerrainSurfaceLibrary';
+
+export type {
+  ShaderNodeDescription,
+  ShaderLinkDescription,
+  TerrainSurfaceDescriptor,
+} from './surface/TerrainSurfaceLibrary';

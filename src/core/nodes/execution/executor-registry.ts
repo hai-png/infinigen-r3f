@@ -40,6 +40,7 @@ import * as SpecializedExecutors from './SpecializedNodeExecutors';
 import * as P1Executors from './P1NodeExecutors';
 import * as P2Executors from './P2NodeExecutors';
 import * as ShaderExecutors from './ShaderNodeExecutors';
+import * as SimZoneExecutors from './SimulationZoneExecutors';
 
 // Re-export CSG utilities so executor modules can import from here
 export { performCSGBoolean, mergeGeometries } from './csg-boolean';
@@ -847,6 +848,62 @@ export function registerAllExecutors(): void {
   registerExecutorAliases(
     ['VolumeIDNode', 'volume_id', 'GeometryNodeInputVolumeID'],
     wrap(EssentialExecutors.executeInputID),
+  );
+
+  // ==========================================================================
+  // SimulationZoneExecutors — Simulation & Repeat Zone executors
+  // ==========================================================================
+
+  // Simulation Zone
+  registerExecutorAliases(
+    ['SimulationZoneNode', 'simulation_zone', 'GeometryNodeSimulationZone'],
+    wrap(SimZoneExecutors.executeSimulationZone),
+  );
+
+  // Repeat Zone
+  registerExecutorAliases(
+    ['RepeatZoneNode', 'repeat_zone', 'GeometryNodeRepeatZone'],
+    wrap(SimZoneExecutors.executeRepeatZone),
+  );
+
+  // Simulation Input
+  registerExecutorAliases(
+    ['SimulationInputNode', 'simulation_input', 'GeometryNodeSimulateInput'],
+    wrap(SimZoneExecutors.executeSimulationInput),
+  );
+
+  // Simulation Output
+  registerExecutorAliases(
+    ['SimulationOutputNode', 'simulation_output', 'GeometryNodeSimulateOutput'],
+    wrap(SimZoneExecutors.executeSimulationOutput),
+  );
+
+  // Repeat Input
+  registerExecutorAliases(
+    ['RepeatInputNode', 'repeat_input', 'GeometryNodeRepeatInput'],
+    wrap(SimZoneExecutors.executeRepeatInput),
+  );
+
+  // Repeat Output
+  registerExecutorAliases(
+    ['RepeatOutputNode', 'repeat_output', 'GeometryNodeRepeatOutput'],
+    wrap(SimZoneExecutors.executeRepeatOutput),
+  );
+
+  // Volume node executors (delegate to VolumeNodes implementations)
+  registerExecutorAliases(
+    ['VolumeInfoNode', 'volume_info', 'GeometryNodeVolumeInfo', 'VolumeAttributeStatsNode', 'volume_attribute_stats'],
+    wrap(SimZoneExecutors.executeVolumeInfo),
+  );
+
+  registerExecutorAliases(
+    ['DensityToAlphaNode', 'density_to_alpha'],
+    wrap(SimZoneExecutors.executeDensityToAlpha),
+  );
+
+  registerExecutorAliases(
+    ['VolumeDistributeNode', 'volume_distribute'],
+    wrap(SimZoneExecutors.executeVolumeDistribute),
   );
 }
 

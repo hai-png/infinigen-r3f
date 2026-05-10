@@ -1,14 +1,20 @@
 /**
  * Camera Nodes Module Export
- * Camera data access, depth of field, and view properties
+ * Camera data access, depth of field, view properties, and Three.js integration
  */
 
 export {
   // Node Classes
   CameraDataNode,
   DepthOfFieldNode,
-  FocalLengthNode,
+  FieldOfViewNode,
+  CameraRayNode,
   ViewMatrixNode,
+
+  // Camera Integration
+  CameraNodeExecutor,
+  setActiveCamera,
+  getActiveCamera,
 
   // Type Definitions
   type CameraNodeBase,
@@ -16,8 +22,10 @@ export {
   type CameraDataOutputs,
   type DepthOfFieldInputs,
   type DepthOfFieldOutputs,
-  type FocalLengthInputs,
-  type FocalLengthOutputs,
+  type FieldOfViewInputs,
+  type FieldOfViewOutputs,
+  type CameraRayInputs,
+  type CameraRayOutputs,
   type ViewMatrixInputs,
   type ViewMatrixOutputs,
 
@@ -25,5 +33,10 @@ export {
   createCameraDataNode,
   createDepthOfFieldNode,
   createFocalLengthNode,
+  createCameraRayNode,
   createViewMatrixNode,
 } from './CameraNodes';
+
+// Backward-compatible aliases
+export { FieldOfViewNode as FocalLengthNode } from './CameraNodes';
+export type { FieldOfViewInputs as FocalLengthInputs, FieldOfViewOutputs as FocalLengthOutputs } from './CameraNodes';

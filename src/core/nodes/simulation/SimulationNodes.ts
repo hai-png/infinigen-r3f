@@ -725,6 +725,422 @@ export class ClothPinGroupNode implements SimulationNodeBase {
 }
 
 // ============================================================================
+// Simulation Zone Nodes (Blender 3.x style)
+// ============================================================================
+
+/**
+ * Simulation state passed between steps in a simulation zone.
+ *
+ * Contains the geometry being simulated along with any custom
+ * attributes that the inner graph reads and writes each step.
+ */
+export interface SimulationState {
+  geometry: any;
+  attributes: Record<string, any>;
+}
+
+/**
+ * Context for a single simulation step, provided by SimulationInputNode.
+ */
+export interface SimulationStepContext {
+  /** Time elapsed since the simulation started */
+  elapsedTime: number;
+  /** Time delta for this step */
+  deltaTime: number;
+  /** Current step index (0-based) */
+  stepIndex: number;
+}
+
+// ----------------------------------------------------------------------------
+// Simulation Zone Node
+// ----------------------------------------------------------------------------
+
+export interface SimulationZoneInputs {
+  /** Initial geometry state before simulation starts */
+  geometry?: any;
+  /** Time step between simulation frames */
+  deltaTime?: number;
+  /** Maximum number of simulation steps */
+  maxSteps?: number;
+  /** Number of substeps per frame (higher = more accurate but slower) */
+  substeps?: number;
+}
+
+export interface SimulationZoneOutputs {
+  /** Final geometry state after all simulation steps */
+  geometry: any;
+  /** Number of steps actually executed */
+  stepsExecuted: number;
+  /** Total elapsed simulation time */
+  elapsedTime: number;
+}
+
+/**
+ * SimulationZoneNode — The core simulation zone (Blender 3.x style).
+ *
+ * A simulation zone defines a looping subgraph that executes for a
+ * configurable number of steps. On each step, the inner graph
+ * (SimulationInput → inner nodes → SimulationOutput) receives the
+ * current state and produces a new state, which feeds back into the
+ * next step.
+ *
+ * The zone maintains:
+ * - The current geometry state
+ * - Step timing information (delta_time, elapsed_time, step_index)
+ * - Any custom attributes passed between steps
+ *
+ * The inner graph is identified by a `zoneId` that links the zone
+ * node with its input/output nodes.
+ */
+export class SimulationZoneNode implements SimulationNodeBase {
+  readonly category = 'simulation';
+  readonly nodeType = 'simulation_zone';
+  readonly name = 'Simulation Zone';
+  readonly inputs: SimulationZoneInputs;
+  readonly outputs: SimulationZoneOutputs;
+  readonly domain: AttributeDomain = 'point';
+  readonly settings: Record<string, any> = {};
+
+  /** Unique identifier linking this zone with its inner Input/Output nodes */
+  zoneId: string;
+
+  constructor(inputs: SimulationZoneInputs = {}, zoneId?: string) {
+    this.inputs = inputs;
+    this.zoneId = zoneId ?? `sim_zone_${SimulationZoneNode._nextId++}`;
+    this.outputs = {
+      geometry: null,
+      stepsExecuted: 0,
+      elapsedTime: 0,
+    };
+  }
+
+  private static _nextId = 0;
+
+  execute(): SimulationZoneOutputs {
+    // The actual stepping is handled by the SimulationZoneExecutor.
+    // This execute() provides a basic pass-through for standalone use.
+    const deltaTime = this.inputs.deltaTime ?? 1 / 60;
+    const maxSteps = this.inputs.maxSteps ?? 1;
+
+    this.outputs.geometry = this.inputs.geometry ?? null;
+    this.outputs.stepsExecuted = maxSteps;
+    this.outputs.elapsedTime = maxSteps * deltaTime;
+
+    return this.outputs;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Repeat Zone Node
+// ----------------------------------------------------------------------------
+
+export interface RepeatZoneInputs {
+  /** Initial geometry state */
+  geometry?: any;
+  /** Number of iterations to execute */
+  iterations?: number;
+}
+
+export interface RepeatZoneOutputs {
+  /** Final geometry state after all iterations */
+  geometry: any;
+  /** Number of iterations actually executed */
+  iterationsExecuted: number;
+}
+
+/**
+ * RepeatZoneNode — A repeat/loop zone (Blender 3.x style).
+ *
+ * Similar to a simulation zone but simpler: the inner graph is
+ * executed N times with the output of one iteration feeding as
+ * input to the next. The iteration index is available inside
+ * the zone via RepeatInputNode.
+ *
+ * This is useful for iterative algorithms like relaxation,
+ * subdivision, or any process that needs to be repeated a
+ * fixed number of times.
+ */
+export class RepeatZoneNode implements SimulationNodeBase {
+  readonly category = 'simulation';
+  readonly nodeType = 'repeat_zone';
+  readonly name = 'Repeat Zone';
+  readonly inputs: RepeatZoneInputs;
+  readonly outputs: RepeatZoneOutputs;
+  readonly domain: AttributeDomain = 'point';
+  readonly settings: Record<string, any> = {};
+
+  /** Unique identifier linking this zone with its inner Input/Output nodes */
+  zoneId: string;
+
+  constructor(inputs: RepeatZoneInputs = {}, zoneId?: string) {
+    this.inputs = inputs;
+    this.zoneId = zoneId ?? `repeat_zone_${RepeatZoneNode._nextId++}`;
+    this.outputs = {
+      geometry: null,
+      iterationsExecuted: 0,
+    };
+  }
+
+  private static _nextId = 0;
+
+  execute(): RepeatZoneOutputs {
+    // The actual iteration is handled by the RepeatZoneExecutor.
+    // This execute() provides a basic pass-through for standalone use.
+    const iterations = this.inputs.iterations ?? 1;
+
+    this.outputs.geometry = this.inputs.geometry ?? null;
+    this.outputs.iterationsExecuted = iterations;
+
+    return this.outputs;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Simulation Input Node
+// ----------------------------------------------------------------------------
+
+export interface SimulationInputInputs {
+  /** Internal: receives the current simulation state from the zone executor */
+  _state?: SimulationState;
+  _stepContext?: SimulationStepContext;
+}
+
+export interface SimulationInputOutputs {
+  /** The current geometry state in this simulation step */
+  geometry: any;
+  /** Time delta for this step */
+  deltaTime: number;
+  /** Total elapsed time since simulation start */
+  elapsedTime: number;
+  /** Current step index (0-based) */
+  stepIndex: number;
+}
+
+/**
+ * SimulationInputNode — The input side of a simulation zone.
+ *
+ * Placed inside a SimulationZone's inner graph. It receives the
+ * current simulation state from the zone executor and outputs
+ * the geometry and step context (delta_time, elapsed_time, step_index)
+ * for the inner graph to process.
+ *
+ * Each SimulationInputNode is linked to its parent zone via zoneId.
+ */
+export class SimulationInputNode implements SimulationNodeBase {
+  readonly category = 'simulation';
+  readonly nodeType = 'simulation_input';
+  readonly name = 'Simulation Input';
+  readonly inputs: SimulationInputInputs;
+  readonly outputs: SimulationInputOutputs;
+  readonly domain: AttributeDomain = 'point';
+  readonly settings: Record<string, any> = {};
+
+  /** Links this input node to its parent SimulationZoneNode */
+  zoneId: string;
+
+  constructor(zoneId?: string) {
+    this.zoneId = zoneId ?? '';
+    this.inputs = {};
+    this.outputs = {
+      geometry: null,
+      deltaTime: 1 / 60,
+      elapsedTime: 0,
+      stepIndex: 0,
+    };
+  }
+
+  execute(): SimulationInputOutputs {
+    const state = this.inputs._state;
+    const context = this.inputs._stepContext;
+
+    if (state) {
+      this.outputs.geometry = state.geometry;
+    }
+
+    if (context) {
+      this.outputs.deltaTime = context.deltaTime;
+      this.outputs.elapsedTime = context.elapsedTime;
+      this.outputs.stepIndex = context.stepIndex;
+    }
+
+    return this.outputs;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Simulation Output Node
+// ----------------------------------------------------------------------------
+
+export interface SimulationOutputInputs {
+  /** The modified geometry from the inner graph to feed to the next step */
+  geometry?: any;
+  /** Custom attributes to carry forward to the next step */
+  attributes?: Record<string, any>;
+}
+
+export interface SimulationOutputOutputs {
+  /** Internal: the updated simulation state for the zone executor */
+  _state: SimulationState;
+}
+
+/**
+ * SimulationOutputNode — The output side of a simulation zone.
+ *
+ * Placed inside a SimulationZone's inner graph. It receives the
+ * modified geometry and attributes from the inner graph and
+ * packages them into a SimulationState that feeds back as input
+ * for the next step.
+ *
+ * Each SimulationOutputNode is linked to its parent zone via zoneId.
+ */
+export class SimulationOutputNode implements SimulationNodeBase {
+  readonly category = 'simulation';
+  readonly nodeType = 'simulation_output';
+  readonly name = 'Simulation Output';
+  readonly inputs: SimulationOutputInputs;
+  readonly outputs: SimulationOutputOutputs;
+  readonly domain: AttributeDomain = 'point';
+  readonly settings: Record<string, any> = {};
+
+  /** Links this output node to its parent SimulationZoneNode */
+  zoneId: string;
+
+  constructor(zoneId?: string) {
+    this.zoneId = zoneId ?? '';
+    this.inputs = {};
+    this.outputs = {
+      _state: { geometry: null, attributes: {} },
+    };
+  }
+
+  execute(): SimulationOutputOutputs {
+    this.outputs._state = {
+      geometry: this.inputs.geometry ?? null,
+      attributes: this.inputs.attributes ?? {},
+    };
+
+    return this.outputs;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Repeat Input Node
+// ----------------------------------------------------------------------------
+
+export interface RepeatInputInputs {
+  /** Internal: receives the current iteration state from the zone executor */
+  _state?: SimulationState;
+  _iterationIndex?: number;
+}
+
+export interface RepeatInputOutputs {
+  /** The current geometry state in this iteration */
+  geometry: any;
+  /** The current iteration index (0-based) */
+  iterationIndex: number;
+}
+
+/**
+ * RepeatInputNode — The input side of a repeat zone.
+ *
+ * Placed inside a RepeatZone's inner graph. It receives the
+ * current iteration state from the zone executor and outputs
+ * the geometry and current iteration index for the inner graph
+ * to process.
+ *
+ * Each RepeatInputNode is linked to its parent zone via zoneId.
+ */
+export class RepeatInputNode implements SimulationNodeBase {
+  readonly category = 'simulation';
+  readonly nodeType = 'repeat_input';
+  readonly name = 'Repeat Input';
+  readonly inputs: RepeatInputInputs;
+  readonly outputs: RepeatInputOutputs;
+  readonly domain: AttributeDomain = 'point';
+  readonly settings: Record<string, any> = {};
+
+  /** Links this input node to its parent RepeatZoneNode */
+  zoneId: string;
+
+  constructor(zoneId?: string) {
+    this.zoneId = zoneId ?? '';
+    this.inputs = {};
+    this.outputs = {
+      geometry: null,
+      iterationIndex: 0,
+    };
+  }
+
+  execute(): RepeatInputOutputs {
+    const state = this.inputs._state;
+
+    if (state) {
+      this.outputs.geometry = state.geometry;
+    }
+
+    this.outputs.iterationIndex = this.inputs._iterationIndex ?? 0;
+
+    return this.outputs;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Repeat Output Node
+// ----------------------------------------------------------------------------
+
+export interface RepeatOutputInputs {
+  /** The modified geometry from the inner graph to feed to the next iteration */
+  geometry?: any;
+  /** Custom attributes to carry forward to the next iteration */
+  attributes?: Record<string, any>;
+}
+
+export interface RepeatOutputOutputs {
+  /** Internal: the updated state for the zone executor */
+  _state: SimulationState;
+}
+
+/**
+ * RepeatOutputNode — The output side of a repeat zone.
+ *
+ * Placed inside a RepeatZone's inner graph. It receives the
+ * modified geometry and attributes from the inner graph and
+ * packages them into a state that feeds back as input for the
+ * next iteration.
+ *
+ * Each RepeatOutputNode is linked to its parent zone via zoneId.
+ */
+export class RepeatOutputNode implements SimulationNodeBase {
+  readonly category = 'simulation';
+  readonly nodeType = 'repeat_output';
+  readonly name = 'Repeat Output';
+  readonly inputs: RepeatOutputInputs;
+  readonly outputs: RepeatOutputOutputs;
+  readonly domain: AttributeDomain = 'point';
+  readonly settings: Record<string, any> = {};
+
+  /** Links this output node to its parent RepeatZoneNode */
+  zoneId: string;
+
+  constructor(zoneId?: string) {
+    this.zoneId = zoneId ?? '';
+    this.inputs = {};
+    this.outputs = {
+      _state: { geometry: null, attributes: {} },
+    };
+  }
+
+  execute(): RepeatOutputOutputs {
+    this.outputs._state = {
+      geometry: this.inputs.geometry ?? null,
+      attributes: this.inputs.attributes ?? {},
+    };
+
+    return this.outputs;
+  }
+}
+
+// ============================================================================
 // Factory Functions
 // ============================================================================
 
@@ -762,4 +1178,28 @@ export function createClothSetupNode(inputs?: ClothSetupInputs): ClothSetupNode 
 
 export function createClothPinGroupNode(inputs?: ClothPinGroupInputs): ClothPinGroupNode {
   return new ClothPinGroupNode(inputs);
+}
+
+export function createSimulationZoneNode(inputs?: SimulationZoneInputs, zoneId?: string): SimulationZoneNode {
+  return new SimulationZoneNode(inputs, zoneId);
+}
+
+export function createRepeatZoneNode(inputs?: RepeatZoneInputs, zoneId?: string): RepeatZoneNode {
+  return new RepeatZoneNode(inputs, zoneId);
+}
+
+export function createSimulationInputNode(zoneId?: string): SimulationInputNode {
+  return new SimulationInputNode(zoneId);
+}
+
+export function createSimulationOutputNode(zoneId?: string): SimulationOutputNode {
+  return new SimulationOutputNode(zoneId);
+}
+
+export function createRepeatInputNode(zoneId?: string): RepeatInputNode {
+  return new RepeatInputNode(zoneId);
+}
+
+export function createRepeatOutputNode(zoneId?: string): RepeatOutputNode {
+  return new RepeatOutputNode(zoneId);
 }
