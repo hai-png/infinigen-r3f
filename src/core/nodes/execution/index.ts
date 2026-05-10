@@ -557,3 +557,29 @@ export {
   executeMapRange as executeMapRangeP1,
   executeFloatCurve as executeFloatCurveP1,
 } from './P1NodeExecutors';
+
+// ============================================================================
+// NodeGraphKernelizer — Transpiles NodeGroup instances into GLSL shader code
+// ============================================================================
+
+export {
+  NodeGraphKernelizer,
+  kernelizeNodeGroup,
+} from './NodeGraphKernelizer';
+
+export type {
+  KernelizerResult,
+  KernelizerMode,
+} from './NodeGraphKernelizer';
+
+// ============================================================================
+// TerrainNodeExecutors — Per-vertex executors for terrain surface evaluation
+// ============================================================================
+
+export {
+  registerTerrainNodeExecutors,
+  getTerrainExecutorEntries,
+} from './TerrainNodeExecutors';
+
+/** @deprecated Import individual executors from `./TerrainNodeExecutors` instead */
+export * as TerrainNodeExecutors from './TerrainNodeExecutors';

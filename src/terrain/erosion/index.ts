@@ -19,3 +19,7 @@ export type { CoastalConfig } from './CoastalErosion';
 // Erosion visualization: visual overlay for erosion effects
 export { ErosionVisualization, ErosionType } from './ErosionVisualization';
 export type { ErosionVisualizationConfig } from './ErosionVisualization';
+
+// GPU-accelerated hydraulic erosion
+export { HydraulicErosionGPU } from '../gpu/HydraulicErosionGPU';
+export type { HydraulicErosionGPUConfig, ErosionGPUResult } from '../gpu/HydraulicErosionGPU';

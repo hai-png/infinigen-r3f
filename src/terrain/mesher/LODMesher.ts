@@ -43,6 +43,18 @@ export interface LODChunk {
   needsUpdate: boolean;
 }
 
+/** Information about a shared boundary face between two adjacent chunks */
+interface SharedBoundaryInfo {
+  /** The axis along which the two chunks share a face */
+  axis: 'x' | 'y' | 'z';
+  /** The world-space coordinate value of the shared face */
+  coordinate: number;
+  /** Which side of chunk1's bounds touches the shared face */
+  chunk1Side: 'min' | 'max';
+  /** Which side of chunk2's bounds touches the shared face */
+  chunk2Side: 'min' | 'max';
+}
+
 export class LODMesher extends SphericalMesher {
   protected lodConfig: LODConfig;
   protected rootChunk: LODChunk | null;
@@ -232,33 +244,33 @@ export class LODMesher extends SphericalMesher {
   }
 
   /**
-   * Subdivide bounds into 4 sub-chunks
+   * Subdivide bounds into 8 sub-chunks (octree-style)
+   *
+   * Splits the bounding box along all three axes (X, Y, Z), producing
+   * eight octant children. The bit pattern of the child index determines
+   * which half of each axis the octant occupies:
+   *   bit 0 → X: 0 = left (min→mid), 1 = right (mid→max)
+   *   bit 1 → Y: 0 = bottom (min→mid), 1 = top (mid→max)
+   *   bit 2 → Z: 0 = front (min→mid), 1 = back (mid→max)
    */
   protected subdivideBounds(bounds: Box3): Box3[] {
-    const center = bounds.getCenter(new Vector3());
     const min = bounds.min;
     const max = bounds.max;
+    const cx = (min.x + max.x) / 2;
+    const cy = (min.y + max.y) / 2;
+    const cz = (min.z + max.z) / 2;
 
-    // For spherical subdivision, we use angular subdivision
-    // This is simplified - proper implementation would use spherical coordinates
-    return [
-      new Box3(
-        new Vector3(min.x, min.y, min.z),
-        new Vector3(center.x, center.y, center.z)
-      ),
-      new Box3(
-        new Vector3(center.x, min.y, min.z),
-        new Vector3(max.x, center.y, center.z)
-      ),
-      new Box3(
-        new Vector3(min.x, center.y, min.z),
-        new Vector3(center.x, max.y, center.z)
-      ),
-      new Box3(
-        new Vector3(center.x, center.y, min.z),
-        new Vector3(max.x, max.y, center.z)
-      ),
-    ];
+    const octants: Box3[] = [];
+    for (let i = 0; i < 8; i++) {
+      const x0 = (i & 1) !== 0 ? cx : min.x;
+      const y0 = (i & 2) !== 0 ? cy : min.y;
+      const z0 = (i & 4) !== 0 ? cz : min.z;
+      const x1 = (i & 1) !== 0 ? max.x : cx;
+      const y1 = (i & 2) !== 0 ? max.y : cy;
+      const z1 = (i & 4) !== 0 ? max.z : cz;
+      octants.push(new Box3(new Vector3(x0, y0, z0), new Vector3(x1, y1, z1)));
+    }
+    return octants;
   }
 
   /**
@@ -370,34 +382,205 @@ export class LODMesher extends SphericalMesher {
   }
 
   /**
-   * Check if two chunks are adjacent
+   * Check if two chunks are adjacent (share a face).
+   *
+   * Two chunks are face-adjacent iff they touch along exactly one axis
+   * and overlap with *positive* area on the other two axes.  Merely
+   * sharing an edge or a single vertex does not count as adjacent.
    */
   protected areAdjacent(chunk1: LODChunk, chunk2: LODChunk): boolean {
-    // Simplified adjacency check - proper implementation would use spatial hashing
-    const bounds1 = chunk1.bounds;
-    const bounds2 = chunk2.bounds;
-
-    return bounds1.intersectsBox(bounds2);
+    return this.getSharedBoundary(chunk1, chunk2) !== null;
   }
 
   /**
-   * Stitch borders between chunks to prevent cracks
+   * Determine the shared boundary face between two chunks, if any.
+   *
+   * Returns null when the chunks are not face-adjacent (they could be
+   * disjoint, share only an edge / vertex, or overlap in volume).
+   */
+  protected getSharedBoundary(chunk1: LODChunk, chunk2: LODChunk): SharedBoundaryInfo | null {
+    const eps = 1e-4;
+    const b1 = chunk1.bounds;
+    const b2 = chunk2.bounds;
+
+    const axes: ('x' | 'y' | 'z')[] = ['x', 'y', 'z'];
+
+    for (const axis of axes) {
+      const otherAxes = axes.filter(a => a !== axis);
+
+      // Check if the two chunks touch along this axis
+      const touchMax1Min2 = Math.abs(b1.max[axis] - b2.min[axis]) < eps;
+      const touchMax2Min1 = Math.abs(b2.max[axis] - b1.min[axis]) < eps;
+
+      if (!touchMax1Min2 && !touchMax2Min1) continue;
+
+      // Verify strict overlap on the other two axes (must be > 0, not just touching)
+      let hasOverlap = true;
+      for (const otherAxis of otherAxes) {
+        const overlapMin = Math.max(b1.min[otherAxis], b2.min[otherAxis]);
+        const overlapMax = Math.min(b1.max[otherAxis], b2.max[otherAxis]);
+        if (overlapMax - overlapMin <= eps) {
+          hasOverlap = false;
+          break;
+        }
+      }
+
+      if (!hasOverlap) continue;
+
+      // Found face-adjacency along this axis
+      const coordinate = touchMax1Min2 ? b1.max[axis] : b2.max[axis];
+      const chunk1Side = touchMax1Min2 ? 'max' : 'min';
+      const chunk2Side = touchMax1Min2 ? 'min' : 'max';
+
+      return { axis, coordinate, chunk1Side, chunk2Side };
+    }
+
+    return null;
+  }
+
+  /**
+   * Stitch borders between chunks to prevent cracks.
+   *
+   * For each high-LOD boundary vertex, we compute a target position by
+   * interpolating among the low-LOD boundary vertices and snap the
+   * high-LOD vertex to that position.  This creates a seamless
+   * transition between LOD levels.
    */
   protected stitchChunkBorders(lowLODChunk: LODChunk, highLODChunk: LODChunk): void {
-    // Modify vertex positions along shared edges to match
-    // This is a simplified implementation - full version would modify geometry buffers
+    const boundary = this.getSharedBoundary(lowLODChunk, highLODChunk);
+    if (!boundary) return;
 
-    const lowGeom = lowLODChunk.geometry;
-    const highGeom = highLODChunk.geometry;
+    // Collect boundary vertices from both chunks
+    const lowBoundaryVerts = this.getBoundaryVertices(
+      lowLODChunk, boundary.axis, boundary.coordinate, boundary.chunk1Side
+    );
+    const highBoundaryVerts = this.getBoundaryVertices(
+      highLODChunk, boundary.axis, boundary.coordinate, boundary.chunk2Side
+    );
 
-    // In a full implementation, we would:
-    // 1. Identify shared edge vertices
-    // 2. Interpolate high-LOD vertices to match low-LOD edge
-    // 3. Update geometry buffers
+    if (lowBoundaryVerts.length === 0 || highBoundaryVerts.length === 0) return;
 
-    // For now, mark chunks as needing update
-    lowLODChunk.needsUpdate = true;
+    // Snap each high-LOD boundary vertex to the interpolated low-LOD position
+    const highPosAttr = highLODChunk.geometry.getAttribute('position');
+
+    for (const { index: highIdx } of highBoundaryVerts) {
+      const highPos = new Vector3(
+        highPosAttr.getX(highIdx),
+        highPosAttr.getY(highIdx),
+        highPosAttr.getZ(highIdx)
+      );
+
+      const targetPos = this.interpolateBoundaryPosition(
+        highPos, lowBoundaryVerts, boundary.axis
+      );
+
+      highPosAttr.setXYZ(highIdx, targetPos.x, targetPos.y, targetPos.z);
+    }
+
+    highPosAttr.needsUpdate = true;
+    highLODChunk.geometry.computeVertexNormals();
     highLODChunk.needsUpdate = true;
+  }
+
+  /**
+   * Find all vertices of a chunk's geometry that lie on a given boundary face.
+   *
+   * A vertex is on the boundary face when its coordinate along `axis`
+   * is approximately equal to `coordinate`, and its tangent-space
+   * coordinates fall within the chunk's bounds on the other two axes.
+   */
+  protected getBoundaryVertices(
+    chunk: LODChunk,
+    axis: 'x' | 'y' | 'z',
+    coordinate: number,
+    _side: 'min' | 'max'
+  ): { index: number; position: Vector3 }[] {
+    const positions = chunk.geometry.getAttribute('position');
+    const boundaryVerts: { index: number; position: Vector3 }[] = [];
+
+    // Relative tolerance based on chunk size
+    const size = new Vector3();
+    chunk.bounds.getSize(size);
+    const eps = Math.max(size.x, size.y, size.z) * 1e-3;
+
+    const tangentAxes = (['x', 'y', 'z'] as const).filter(a => a !== axis);
+
+    for (let i = 0; i < positions.count; i++) {
+      const pos = new Vector3(
+        positions.getX(i),
+        positions.getY(i),
+        positions.getZ(i)
+      );
+
+      // Vertex must lie on the boundary face
+      if (Math.abs(pos[axis] - coordinate) < eps) {
+        // Also verify the vertex is within the chunk's extent on tangent axes
+        const withinBounds = tangentAxes.every(ta =>
+          pos[ta] >= chunk.bounds.min[ta] - eps &&
+          pos[ta] <= chunk.bounds.max[ta] + eps
+        );
+
+        if (withinBounds) {
+          boundaryVerts.push({ index: i, position: pos });
+        }
+      }
+    }
+
+    return boundaryVerts;
+  }
+
+  /**
+   * Compute the target position for a high-LOD boundary vertex by
+   * interpolating among low-LOD boundary vertices.
+   *
+   * Strategy:
+   * 1. Project positions onto the tangent plane (the 2D plane of the
+   *    shared face, ignoring the boundary axis).
+   * 2. If the high-LOD vertex coincides with a low-LOD vertex in tangent
+   *    space, snap directly.
+   * 3. Otherwise, use inverse-distance-weighted interpolation among the
+   *    K=4 nearest low-LOD vertices to compute a smooth target position.
+   */
+  protected interpolateBoundaryPosition(
+    highPos: Vector3,
+    lowBoundaryVerts: { position: Vector3 }[],
+    axis: 'x' | 'y' | 'z'
+  ): Vector3 {
+    const tangentAxes = (['x', 'y', 'z'] as const).filter(a => a !== axis);
+    const snapEps = 1e-4;
+
+    // Compute tangent-space distances to every low-LOD boundary vertex
+    const candidates: { tangentDist: number; position: Vector3 }[] = [];
+
+    for (const { position: lowPos } of lowBoundaryVerts) {
+      const dx = highPos[tangentAxes[0]] - lowPos[tangentAxes[0]];
+      const dy = highPos[tangentAxes[1]] - lowPos[tangentAxes[1]];
+      const tangentDist = Math.sqrt(dx * dx + dy * dy);
+
+      // Exact match in tangent space → snap directly
+      if (tangentDist < snapEps) {
+        return lowPos.clone();
+      }
+
+      candidates.push({ tangentDist, position: lowPos });
+    }
+
+    // Sort by tangent-space distance and use IDW with K nearest neighbours
+    candidates.sort((a, b) => a.tangentDist - b.tangentDist);
+    const K = Math.min(4, candidates.length);
+
+    let totalWeight = 0;
+    const result = new Vector3(0, 0, 0);
+
+    for (let i = 0; i < K; i++) {
+      // Inverse-distance weight (power parameter p = 2)
+      const weight = 1 / (candidates[i].tangentDist * candidates[i].tangentDist);
+      result.addScaledVector(candidates[i].position, weight);
+      totalWeight += weight;
+    }
+
+    result.divideScalar(totalWeight);
+    return result;
   }
 
   /**

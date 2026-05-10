@@ -1,10 +1,10 @@
 /**
  * Infinigen R3F Port - GPU Module Exports
  *
- * NOTE: HydraulicErosionGPU is CPU-only despite the name.
- * ErosionConfig and ErosionData here have different shapes than
- * the ones in erosion/ErosionEnhanced.ts. We alias them to avoid
- * name collisions in the barrel export.
+ * HydraulicErosionGPU now has full WebGPU compute shader support with
+ * CPU fallback. The new primary types are HydraulicErosionGPUConfig and
+ * ErosionGPUResult. The old ErosionConfig/ErosionData aliases are kept
+ * for backward compatibility but are deprecated.
  */
 
 export {
@@ -15,8 +15,12 @@ export {
 
 export {
   HydraulicErosionGPU,
-  type ErosionConfig as HydraulicErosionGPUConfig,
-  type ErosionData as HydraulicErosionGPUData,
+  DEFAULT_HYDRAULIC_EROSION_GPU_CONFIG,
+  type HydraulicErosionGPUConfig,
+  type ErosionGPUResult,
+  // Backward-compatible aliases (deprecated — use the new types above)
+  type ErosionConfig as HydraulicErosionGPUConfigLegacy,
+  type ErosionData as HydraulicErosionGPUDataLegacy,
 } from './HydraulicErosionGPU';
 
 export {

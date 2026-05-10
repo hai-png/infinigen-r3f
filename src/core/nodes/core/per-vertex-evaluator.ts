@@ -18,6 +18,7 @@ import { NodeWrangler, NodeInstance, NodeLink } from './node-wrangler';
 import { AttributeStream, AttributeDataType, AttributeDomain } from './attribute-stream';
 import { GeometryContext } from './geometry-context';
 import { NodeTypes } from './node-types';
+import { registerTerrainNodeExecutors } from '../execution/TerrainNodeExecutors';
 
 // ---------------------------------------------------------------------------
 // Evaluation context
@@ -728,3 +729,10 @@ export class PerVertexEvaluator {
 }
 
 export default PerVertexEvaluator;
+
+// ---------------------------------------------------------------------------
+// Register terrain node executors from TerrainNodeExecutors
+// ---------------------------------------------------------------------------
+
+// Register all 13 terrain per-vertex executors into the global registry
+registerTerrainNodeExecutors(perVertexExecutors);

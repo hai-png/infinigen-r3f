@@ -19,6 +19,7 @@
 
 import * as THREE from 'three';
 import { NodeGroup } from '@/core/nodes/core/NodeGeometryModifierBridge';
+import { NodeGraphKernelizer, kernelizeNodeGroup } from '@/core/nodes/execution/NodeGraphKernelizer';
 import {
   GLSLTextureGraphBuilder,
   ColorRampStop,
@@ -78,6 +79,8 @@ export enum MaterialChannel {
  * Controls displacement mode, scale, which PBR channels to generate,
  * and the output texture resolution.
  */
+export type KernelizerMode = 'cpu' | 'gpu';
+
 export interface SurfaceKernelConfig {
   /** How displacement is applied to the geometry */
   displacementMode: DisplacementMode;
@@ -97,6 +100,8 @@ export interface SurfaceKernelConfig {
   useVertexColors: boolean;
   /** Noise seed for procedural material generation */
   seed: number;
+  /** Kernelizer mode: 'cpu' uses existing per-vertex evaluation, 'gpu' kernelizes the NodeGroup to GLSL and renders displacement via a full-screen quad */
+  kernelizerMode: KernelizerMode;
 }
 
 /**
@@ -117,6 +122,7 @@ export const DEFAULT_SURFACE_KERNEL_CONFIG: SurfaceKernelConfig = {
   normalScale: 1.0,
   useVertexColors: true,
   seed: 42,
+  kernelizerMode: 'cpu',
 };
 
 // ============================================================================
@@ -262,7 +268,52 @@ export class SurfaceKernel {
       }
     }
 
-    // Evaluate shader graph per-vertex for displacement
+    // ----------------------------------------------------------------------
+    // GPU-accelerated kernelizer path
+    // ----------------------------------------------------------------------
+    if (effectiveConfig.kernelizerMode === 'gpu' && shaderGraph) {
+      try {
+        const displacementValues = this.applyDisplacementGPU(
+          posArray,
+          normalArray,
+          uvAttr,
+          vertexCount,
+          shaderGraph,
+          effectiveConfig,
+        );
+
+        // Apply displacement along normals
+        for (let i = 0; i < vertexCount; i++) {
+          const disp = displacementValues[i] * effectiveConfig.displacementScale;
+          const nx = normalArray[i * 3];
+          const ny = normalArray[i * 3 + 1];
+          const nz = normalArray[i * 3 + 2];
+
+          posArray[i * 3] += nx * disp;
+          posArray[i * 3 + 1] += ny * disp;
+          posArray[i * 3 + 2] += nz * disp;
+        }
+
+        // Build result geometry
+        const result = geometry.clone();
+        const resultPosAttr = result.getAttribute('position') as THREE.BufferAttribute;
+        (resultPosAttr.array as Float32Array).set(posArray);
+        resultPosAttr.needsUpdate = true;
+
+        result.computeVertexNormals();
+        result.computeBoundingSphere();
+        result.computeBoundingBox();
+
+        return result;
+      } catch (err) {
+        console.warn('[SurfaceKernel] GPU kernelizer displacement failed, falling back to CPU:', err);
+        // Fall through to CPU path
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // CPU per-vertex evaluation path (original)
+    // ----------------------------------------------------------------------
     const displacementValues = this.evaluateDisplacementGraph(
       posArray,
       normalArray,
@@ -296,6 +347,114 @@ export class SurfaceKernel {
     result.computeBoundingBox();
 
     return result;
+  }
+
+  /**
+   * GPU-accelerated displacement via NodeGraphKernelizer.
+   *
+   * Kernelizes the NodeGroup to GLSL, creates a WebGL shader material,
+   * and renders displacement to a DataTexture using a full-screen quad.
+   * The displacement texture is then applied to the mesh vertices.
+   *
+   * Falls back to CPU evaluation if kernelization fails.
+   */
+  private applyDisplacementGPU(
+    posArray: Float32Array,
+    normalArray: Float32Array,
+    uvAttr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null,
+    vertexCount: number,
+    shaderGraph: NodeGroup,
+    config: SurfaceKernelConfig,
+  ): Float32Array {
+    // Step 1: Kernelize the NodeGroup to GLSL
+    const kernelizer = new NodeGraphKernelizer();
+    const kernelResult = kernelizer.kernelize(shaderGraph, 'displacement');
+
+    if (kernelResult.errors.length > 0) {
+      console.warn('[SurfaceKernel] Kernelizer errors:', kernelResult.errors);
+      throw new Error(`Kernelizer produced errors: ${kernelResult.errors.join('; ')}`);
+    }
+
+    // Step 2: Create a WebGL renderer and full-screen quad for displacement rendering
+    const resolution = Math.min(Math.ceil(Math.sqrt(vertexCount)), config.resolution);
+    const renderer = new THREE.WebGLRenderer({ alpha: true, premultipliedAlpha: false });
+    renderer.setSize(resolution, resolution);
+
+    // Step 3: Build shader material from kernelized GLSL
+    const uniforms: Record<string, { value: any }> = {};
+    for (const [name, uniform] of kernelResult.uniforms) {
+      uniforms[name] = { value: uniform.value };
+    }
+
+    // Add position and normal textures as uniforms
+    const posTexture = new THREE.DataTexture(
+      posArray,
+      vertexCount,
+      1,
+      THREE.RedFormat,
+      THREE.FloatType,
+    );
+    posTexture.needsUpdate = true;
+
+    const displacementMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        ...uniforms,
+        uResolution: { value: resolution },
+        uDisplacementScale: { value: config.displacementScale },
+        uDisplacementMidLevel: { value: config.displacementMidLevel },
+      },
+      vertexShader: kernelResult.vertexShader,
+      fragmentShader: kernelResult.fragmentShader,
+      depthTest: false,
+      depthWrite: false,
+    });
+
+    // Step 4: Render displacement to a DataTexture via a full-screen quad
+    const renderTarget = new THREE.WebGLRenderTarget(resolution, resolution, {
+      format: THREE.RedFormat,
+      type: THREE.FloatType,
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+    });
+
+    const quadGeometry = new THREE.PlaneGeometry(2, 2);
+    const quadMesh = new THREE.Mesh(quadGeometry, displacementMaterial);
+    const scene = new THREE.Scene();
+    scene.add(quadMesh);
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    renderer.setRenderTarget(renderTarget);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+
+    // Step 5: Read back displacement values from the render target
+    const displacementBuffer = new Float32Array(resolution * resolution * 4);
+    renderer.readRenderTargetPixels(renderTarget, 0, 0, resolution, resolution, displacementBuffer);
+
+    // Map the displacement texture back to per-vertex values
+    const displacement = new Float32Array(vertexCount);
+    for (let i = 0; i < vertexCount; i++) {
+      const u = uvAttr
+        ? (uvAttr.array as Float32Array)[i * 2] ?? (i / vertexCount)
+        : (i % resolution) / resolution;
+      const v = uvAttr
+        ? (uvAttr.array as Float32Array)[i * 2 + 1] ?? 0
+        : Math.floor(i / resolution) / resolution;
+
+      const px = Math.floor(u * (resolution - 1));
+      const py = Math.floor(v * (resolution - 1));
+      const idx = (py * resolution + px) * 4;
+      displacement[i] = displacementBuffer[idx] ?? 0;
+    }
+
+    // Cleanup GPU resources
+    renderTarget.dispose();
+    displacementMaterial.dispose();
+    quadGeometry.dispose();
+    posTexture.dispose();
+    renderer.dispose();
+
+    return displacement;
   }
 
   /**
