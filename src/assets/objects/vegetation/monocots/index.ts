@@ -13,3 +13,18 @@ export type {
   MonocotGrowthParams,
   MonocotResult,
 } from './MonocotGrowth';
+
+export {
+  KelpGenerator,
+  generateKelp,
+  type KelpConfig,
+  type KelpSpecies,
+} from './KelpGenerator';
+
+export {
+  PineconeGenerator,
+  generatePinecone,
+  type PineconeConfig,
+  type PineconeSpecies,
+  type PineconeState,
+} from './PineconeGenerator';

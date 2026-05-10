@@ -17,7 +17,10 @@
  * - MixRGB (mix, multiply, add, subtract, screen, overlay, difference, divide)
  * - Math (all math operations)
  * - VectorMath (all vector operations)
+ * - Wave Texture (bands, rings, ridges, sine wave with distortion)
  * - PrincipledBSDF (Cook-Torrance BRDF with GGX distribution)
+ * - Anisotropic GGX BRDF (brushed metal, hair, silk)
+ * - Subsurface Scattering (separable Jimenez, profile-based)
  * - Mix Shader / Add Shader (shader combination)
  *
  * @module core/nodes/execution/glsl
@@ -1328,4 +1331,94 @@ export const GLSL_SNIPPET_MAP: Record<string, string> = {
   'IBL_GLSL': IBL_GLSL,
   'MULTI_LIGHT_GLSL': MULTI_LIGHT_GLSL,
   'SHADOW_MAPPING_GLSL': SHADOW_MAPPING_GLSL,
+  'WAVE_TEXTURE_GLSL': WAVE_TEXTURE_GLSL,
 };
+
+// ============================================================================
+// Wave Texture GLSL (bands, rings, ridges, sine wave with distortion)
+// ============================================================================
+
+export const WAVE_TEXTURE_GLSL = /* glsl */ `
+// ============================================================================
+// Wave Texture (bands, rings, ridges, sine wave with distortion)
+// Matches Blender's ShaderNodeTexWave used heavily in Infinigen
+// ============================================================================
+
+// Wave texture node function
+// waveType: 0=bands, 1=rings, 2=ridges, 3=wave (sine)
+// direction: 0=x, 1=y, 2=z, 3=diagonal
+float waveTexture(vec3 coord, float scale, float distortion, float detail,
+                  float detailScale, float detailRoughness, float phaseOffset,
+                  int waveType, int direction) {
+  vec3 p = coord * scale;
+
+  // Apply noise-based distortion
+  if (distortion > 0.0) {
+    int octaves = int(detail);
+    float gain = 1.0 - detailRoughness;
+    p += vec3(
+      fbm3D(p * detailScale, octaves, 2.0, gain),
+      fbm3D((p + vec3(5.2, 1.3, 2.8)) * detailScale, octaves, 2.0, gain),
+      fbm3D((p + vec3(9.1, 3.7, 7.4)) * detailScale, octaves, 2.0, gain)
+    ) * distortion;
+  }
+
+  float value = 0.0;
+
+  if (waveType == 0) {
+    // Bands: sawtooth along direction
+    float coord;
+    if (direction == 0) coord = p.x;
+    else if (direction == 1) coord = p.y;
+    else if (direction == 2) coord = p.z;
+    else coord = (p.x + p.y + p.z) / 1.7320508; // sqrt(3)
+
+    coord += phaseOffset;
+    value = coord - floor(coord); // Fract
+  }
+  else if (waveType == 1) {
+    // Rings: concentric rings from origin
+    float dist;
+    if (direction == 0) dist = length(p.yz);
+    else if (direction == 1) dist = length(p.xz);
+    else if (direction == 2) dist = length(p.xy);
+    else dist = length(p);
+
+    dist += phaseOffset;
+    value = dist - floor(dist);
+  }
+  else if (waveType == 2) {
+    // Ridges: sharp V-shaped ridges (wood grain)
+    float coord;
+    if (direction == 0) coord = p.x;
+    else if (direction == 1) coord = p.y;
+    else if (direction == 2) coord = p.z;
+    else coord = (p.x + p.y + p.z) / 1.7320508;
+
+    coord += phaseOffset;
+    float frac = coord - floor(coord);
+    value = 1.0 - abs(2.0 * frac - 1.0);
+  }
+  else {
+    // Wave: smooth sine wave
+    float coord;
+    if (direction == 0) coord = p.x;
+    else if (direction == 1) coord = p.y;
+    else if (direction == 2) coord = p.z;
+    else coord = (p.x + p.y + p.z) / 1.7320508;
+
+    coord += phaseOffset;
+    value = sin(coord * 2.0 * PI) * 0.5 + 0.5;
+  }
+
+  return clamp(value, 0.0, 1.0);
+}
+
+vec3 waveTextureColor(vec3 coord, float scale, float distortion, float detail,
+                      float detailScale, float detailRoughness, float phaseOffset,
+                      int waveType, int direction) {
+  float f = waveTexture(coord, scale, distortion, detail, detailScale,
+                        detailRoughness, phaseOffset, waveType, direction);
+  return vec3(f);
+}
+`;

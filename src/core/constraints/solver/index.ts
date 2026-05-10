@@ -131,18 +131,24 @@ export {
   DOFSolverEnhanced,
   type DOFResult,
   type DOFApplicationResult,
+  type StabilityCheckResult as DOFStabilityCheckResult,
+  type SnapResult,
 } from './dof-solver';
 
 // Enhanced Plane Extractor (Planes class with area/face indices)
 export {
   Planes,
   type EnhancedPlane,
+  type FaceTagData,
+  tagCanonicalSurfaces,
+  taggedFaceMask,
 } from './plane-extractor';
 
 // Enhanced Stability Checker (detailed stability results)
 export {
   EnhancedStabilityChecker,
   type StabilityResult as StabilityCheckResult,
+  type COMStabilityResult,
 } from './stability-checker';
 
 // BVH Collision Detection
@@ -150,3 +156,10 @@ export {
   CollisionDetector,
   type CollisionResult,
 } from './bvh-collision';
+
+// 2D Geometry Library (Shapely-equivalent)
+export {
+  Point2D,
+  LineString2D,
+  Polygon2D,
+} from '../geometry-2d';

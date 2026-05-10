@@ -14,3 +14,5 @@ export { MushroomGenerator, type MushroomConfig } from './MushroomGenerator';
 export { MonocotGenerator, MonocotSpeciesPresets, type MonocotConfig } from './MonocotGenerator';
 export { SmallPlantGenerator, type SmallPlantConfig } from './SmallPlantGenerator';
 export { TropicPlantGenerator, TropicSpeciesPresets, type TropicPlantConfig } from './TropicPlantGenerator';
+export { DandelionGenerator, type DandelionConfig, type DandelionLifecycle, generateDandelion } from './DandelionGenerator';
+export { LichenGenerator, type LichenConfig, type LichenGrowthForm, generateLichen } from './LichenGenerator';

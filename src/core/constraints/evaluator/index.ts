@@ -88,3 +88,14 @@ export {
   clearance_cost_bvh,
   path_obstruction_cost_bvh,
 } from './GeometryCosts';
+
+// BVH Collision Manager (trimesh.collision.CollisionManager equivalent)
+export {
+  BVHCollisionManager,
+  getDefaultCollisionManager,
+  setDefaultCollisionManager,
+  resetDefaultCollisionManager,
+  type CollisionQueryResult,
+  type ContainmentResult,
+  type AccessibilityCostResult,
+} from './bvh-collision';

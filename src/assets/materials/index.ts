@@ -131,3 +131,15 @@ export type { CreatureVariantType, CreatureVariantParams } from './categories/Cr
 // Material assignment system — tag-based material selection and assignment
 export { MaterialAssignmentSystem } from './assignment/MaterialAssignmentSystem';
 export type { MaterialAssignmentEntry, MaterialAssignmentList } from './assignment/MaterialAssignmentSystem';
+
+// SDF Perturb surface — SDF-aware displacement for material detail
+export { SDFPerturbSurface, SDF_PERTURB_PRESETS, applySDFPerturb } from './surface/SDFPerturbSurface';
+export type { SDFPerturbType, SDFPerturbConfig, SDFPerturbResult } from './surface/SDFPerturbSurface';
+
+// Erosion-driven material blending — erosion mask → terrain material blends
+export { ErosionMaterialBlending, createErosionBlendMask } from './blending/ErosionMaterialBlending';
+export type { ErosionData, ErosionBlendConfig, TerrainBlendWeights, ErosionBlendResult } from './blending/ErosionMaterialBlending';
+
+// Anisotropic material — GGX anisotropic BRDF for brushed metal, hair, silk
+export { AnisotropicMaterial, ANISOTROPIC_PRESETS, createAnisotropicMaterial } from './AnisotropicMaterial';
+export type { AnisotropicConfig, AnisotropicPreset } from './AnisotropicMaterial';

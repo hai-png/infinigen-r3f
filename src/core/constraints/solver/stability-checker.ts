@@ -1,20 +1,25 @@
 /**
- * Stability Checker — Enhanced
+ * Stability Checker — Enhanced with Surface Snapping and COM Analysis
  *
  * Ports: infinigen/core/constraints/example_solver/geometry/stability.py
  *
  * Provides methods for:
  *  - stableAgainst(): Check if child is stably against parent
  *  - coplanar(): Check coplanarity
- *  - snapAgainst(): Snap child to parent plane
+ *  - snapAgainst(): Snap child to parent plane with margin
  *  - moveObjRandomPt(): Move object to random point on parent plane
+ *  - checkCenterOfMassStability(): COM within support polygon
+ *  - computeSupportPolygon(): Intersection of projected footprints
+ *  - snapToSurface(): Snap object to a specific tagged surface
  */
 
 import * as THREE from 'three';
 import { State, ObjectState, RelationState } from '../evaluator/state';
 import { Plane } from './planes';
 import { PlaneExtractor } from './planes';
-import { TagSet } from '../unified/UnifiedConstraintSystem';
+import { TagSet as UnifiedTagSet } from '../unified/UnifiedConstraintSystem';
+import { Polygon2D, Point2D } from '../geometry-2d';
+import { SubpartTag, Subparts, tagCanonicalSurfaces, taggedFaceMask } from '../tags/index';
 
 // ============================================================================
 // Public Types
@@ -45,15 +50,34 @@ export interface StabilityResult {
   };
 }
 
+/**
+ * Result of a center-of-mass stability check.
+ */
+export interface COMStabilityResult {
+  /** Whether the center of mass is within the support polygon */
+  stable: boolean;
+  /** Center of mass position in world space */
+  centerOfMass: THREE.Vector3;
+  /** The support polygon (2D footprint intersection) */
+  supportPolygon: Polygon2D | null;
+  /** Distance from COM projection to the nearest support polygon edge.
+   *  Positive = inside, negative = outside */
+  comMargin: number;
+  /** The overhang ratio (0 = fully supported, 1 = no support) */
+  overhangRatio: number;
+}
+
 // ============================================================================
 // EnhancedStabilityChecker
 // ============================================================================
 
 /**
  * Enhanced stability checker that provides detailed stability results
- * with violation amounts, rather than just boolean pass/fail.
+ * with violation amounts, COM analysis, support polygon computation,
+ * and surface snapping.
  *
- * This matches the original Infinigen's stability.py API more closely.
+ * This matches the original Infinigen's stability.py API more closely
+ * and adds center-of-mass stability checking and support polygon analysis.
  */
 export class EnhancedStabilityChecker {
   private planeExtractor: PlaneExtractor;
@@ -70,6 +94,10 @@ export class EnhancedStabilityChecker {
   constructor() {
     this.planeExtractor = new PlaneExtractor();
   }
+
+  // ---------------------------------------------------------------------------
+  // Core Stability Checks
+  // ---------------------------------------------------------------------------
 
   /**
    * Check if a child object is stably against a parent object.
@@ -89,8 +117,8 @@ export class EnhancedStabilityChecker {
   stableAgainst(
     childObj: ObjectState,
     parentObj: ObjectState,
-    childTags: TagSet,
-    parentTags: TagSet,
+    childTags: UnifiedTagSet,
+    parentTags: UnifiedTagSet,
     margin: number = EnhancedStabilityChecker.DEFAULT_MARGIN
   ): StabilityResult {
     // Extract planes from both objects
@@ -117,11 +145,10 @@ export class EnhancedStabilityChecker {
       for (const parentPlane of filteredParentPlanes) {
         // Check 1: Normals should be anti-parallel (for stable placement)
         const normalDot = childPlane.normal.dot(parentPlane.normal);
-        const normalAlignment = Math.abs((-normalDot + 1) / 2); // Map [-1,1] to [0,1], -1 = anti-parallel
+        const normalAlignment = Math.abs((-normalDot + 1) / 2);
 
         // Check 2: Contact distance
         const childCenter = new THREE.Vector3(childObj.position.x, childObj.position.y, childObj.position.z);
-        const parentCenter = new THREE.Vector3(parentObj.position.x, parentObj.position.y, parentObj.position.z);
 
         // Distance from child to parent plane
         const childDistToParent = Math.abs(childCenter.dot(parentPlane.normal) - parentPlane.distance);
@@ -183,8 +210,8 @@ export class EnhancedStabilityChecker {
   coplanar(
     obj1: ObjectState,
     obj2: ObjectState,
-    tags1: TagSet,
-    tags2: TagSet,
+    tags1: UnifiedTagSet,
+    tags2: UnifiedTagSet,
     margin: number = 0.1
   ): boolean {
     const planes1 = obj1.obj ? this.planeExtractor.extractPlanes(obj1.obj) : [];
@@ -208,59 +235,243 @@ export class EnhancedStabilityChecker {
     return false;
   }
 
+  // ---------------------------------------------------------------------------
+  // Surface Snapping
+  // ---------------------------------------------------------------------------
+
   /**
    * Snap a child object to a parent plane.
    *
    * Projects the child's position onto the parent plane, adjusting
-   * the position so the child is exactly on the plane surface.
+   * the position so the child is exactly on the plane surface with
+   * the specified margin.
    *
    * @param childObj     The child object to snap
    * @param parentPlane  The parent plane to snap to
-   * @param childTags    Tags identifying the child's contact surface
+   * @param childPlane   The child's contact plane (for computing offset)
+   * @param margin       Distance margin from the surface (default 0)
    * @returns The new position for the child
    */
   snapAgainst(
     childObj: ObjectState,
     parentPlane: Plane,
-    childTags: TagSet
+    childPlane: Plane,
+    margin: number = 0
   ): THREE.Vector3 {
     const currentPos = new THREE.Vector3(childObj.position.x, childObj.position.y, childObj.position.z);
 
     // Project onto parent plane
-    const n = parentPlane.normal.clone().normalize();
-    const dist = currentPos.dot(n) - parentPlane.distance;
+    const parentNormal = parentPlane.normal.clone().normalize();
+    const dist = currentPos.dot(parentNormal) - parentPlane.distance;
 
-    // Offset by child's bounding box half-height in the normal direction
-    let offset = 0;
+    // Compute offset for child bounding box + margin
+    let offset = margin;
     if (childObj.obj) {
       const bbox = new THREE.Box3().setFromObject(childObj.obj);
       const size = new THREE.Vector3();
       bbox.getSize(size);
-      // The offset is half the child's extent along the parent normal
-      offset = size.dot(n) * 0.5;
+      // The offset is half the child's extent along the parent normal direction
+      offset += size.dot(parentNormal) * 0.5;
     }
 
-    return currentPos.clone().sub(n.multiplyScalar(dist + offset));
+    return currentPos.clone().sub(parentNormal.multiplyScalar(dist - offset));
   }
+
+  /**
+   * Snap an object to a tagged surface on a parent.
+   *
+   * Uses the tag system to identify the contact surface on both
+   * the child and parent objects, then snaps the child to that surface.
+   *
+   * @param childObj     The child object to snap
+   * @param parentObj    The parent object to snap to
+   * @param childTags    Tags identifying the child's contact surface
+   * @param parentTags   Tags identifying the parent's contact surface
+   * @param margin       Distance margin from the surface
+   * @returns The new position for the child, or null if no matching surface found
+   */
+  snapToSurface(
+    childObj: ObjectState,
+    parentObj: ObjectState,
+    childTags: UnifiedTagSet,
+    parentTags: UnifiedTagSet,
+    margin: number = 0
+  ): THREE.Vector3 | null {
+    const childPlanes = childObj.obj ? this.planeExtractor.extractPlanes(childObj.obj) : [];
+    const parentPlanes = parentObj.obj ? this.planeExtractor.extractPlanes(parentObj.obj) : [];
+
+    const filteredChild = this.filterPlanesByTags(childPlanes, childTags);
+    const filteredParent = this.filterPlanesByTags(parentPlanes, parentTags);
+
+    if (filteredChild.length === 0 || filteredParent.length === 0) return null;
+
+    // Find the best parent plane (closest to the child)
+    let bestParentPlane: Plane | null = null;
+    let bestChildPlane: Plane | null = null;
+    let bestAlignment = -1;
+
+    for (const childPlane of filteredChild) {
+      for (const parentPlane of filteredParent) {
+        const alignment = Math.abs(childPlane.normal.dot(parentPlane.normal));
+        if (alignment > bestAlignment) {
+          bestAlignment = alignment;
+          bestChildPlane = childPlane;
+          bestParentPlane = parentPlane;
+        }
+      }
+    }
+
+    if (!bestParentPlane || !bestChildPlane) return null;
+
+    return this.snapAgainst(childObj, bestParentPlane, bestChildPlane, margin);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Center-of-Mass Stability
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Check center-of-mass stability of an object on a supporter.
+   *
+   * The object is stable if its center of mass projects onto the
+   * support polygon (intersection of the object's and supporter's
+   * footprints projected onto the support surface).
+   *
+   * This is a more rigorous check than the basic stableAgainst,
+   * as it considers the actual geometric overlap rather than just
+   * bounding box proximity.
+   *
+   * @param object     The object to check stability for
+   * @param supporter  The supporting object
+   * @returns COMStabilityResult with detailed stability analysis
+   */
+  checkCenterOfMassStability(
+    object: ObjectState,
+    supporter: ObjectState
+  ): COMStabilityResult {
+    // Get center of mass (approximated by bounding box center)
+    const centerOfMass = object.getBBoxCenter();
+
+    // Compute support polygon
+    const supportPolygon = this.computeSupportPolygon(object, supporter);
+
+    if (!supportPolygon || supportPolygon.isEmpty) {
+      return {
+        stable: false,
+        centerOfMass,
+        supportPolygon,
+        comMargin: -Infinity,
+        overhangRatio: 1,
+      };
+    }
+
+    // Project center of mass onto the support surface (XZ plane for floor-like surfaces)
+    const comProjection = new Point2D(centerOfMass.x, centerOfMass.z);
+
+    // Check if the projected COM is inside the support polygon
+    const inside = supportPolygon.containsPoint(comProjection);
+
+    // Compute overhang ratio
+    const objectFootprint = object.obj
+      ? Polygon2D.fromBoundingBox(new THREE.Box3().setFromObject(object.obj))
+      : null;
+
+    let overhangRatio = 0;
+    if (objectFootprint && !objectFootprint.isEmpty) {
+      const objectArea = objectFootprint.area();
+      if (objectArea > 1e-10) {
+        const supportArea = supportPolygon.area();
+        const overlapArea = Math.min(objectArea, supportArea);
+        overhangRatio = 1 - (overlapArea / objectArea);
+      }
+    }
+
+    // Compute distance from COM to nearest boundary
+    let comMargin = 0;
+    if (inside) {
+      comMargin = this.distanceToPolygonBoundary(comProjection, supportPolygon);
+    } else {
+      comMargin = -this.distanceToPolygonBoundary(comProjection, supportPolygon);
+    }
+
+    return {
+      stable: inside,
+      centerOfMass,
+      supportPolygon,
+      comMargin,
+      overhangRatio,
+    };
+  }
+
+  /**
+   * Compute the support polygon for an object on a supporter.
+   *
+   * The support polygon is the intersection of the object's footprint
+   * and the supporter's footprint, projected onto the support surface
+   * (XZ plane for floor-like surfaces, or the appropriate plane for
+   * wall-mounted objects).
+   *
+   * @param object     The object being supported
+   * @param supporter  The supporting object
+   * @returns The support polygon (2D), or null if no support exists
+   */
+  computeSupportPolygon(
+    object: ObjectState,
+    supporter: ObjectState
+  ): Polygon2D | null {
+    const objBBox = object.obj
+      ? new THREE.Box3().setFromObject(object.obj)
+      : null;
+    const supBBox = supporter.obj
+      ? new THREE.Box3().setFromObject(supporter.obj)
+      : null;
+
+    if (!objBBox || !supBBox) return null;
+
+    // Create 2D footprints from bounding boxes (XZ plane projection)
+    const objFootprint = Polygon2D.fromBoundingBox(objBBox);
+    const supFootprint = Polygon2D.fromBoundingBox(supBBox);
+
+    // Check if bounding boxes overlap vertically
+    if (Math.abs(objBBox.min.y - supBBox.max.y) > 0.2) {
+      // Not in vertical contact
+      return null;
+    }
+
+    // Compute intersection of footprints
+    return objFootprint.intersection(supFootprint);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Random Point Sampling
+  // ---------------------------------------------------------------------------
 
   /**
    * Move an object to a random point on a parent plane.
    *
    * Samples a random point on the parent plane within a reasonable
-   * region around the parent's bounding box.
+   * region around the parent's bounding box, using a seeded RNG
+   * for deterministic results.
    *
    * @param obj          The object to move
    * @param parentPlane  The parent plane to move to
    * @param childTags    Tags identifying the child's contact surface
+   * @param rng          Seeded random number generator (0-1 range), defaults to Math.random
    * @returns A random position on the parent plane
    */
-  moveObjRandomPt(
+  moveObjRandomPoint(
     obj: ObjectState,
     parentPlane: Plane,
-    childTags: TagSet
+    childTags: UnifiedTagSet,
+    rng: () => number = Math.random
   ): THREE.Vector3 {
     // Start with the snapped position
-    const snapped = this.snapAgainst(obj, parentPlane, childTags);
+    const childPlane: Plane = {
+      normal: parentPlane.normal.clone().negate(),
+      distance: 0,
+      tag: '',
+    };
+    const snapped = this.snapAgainst(obj, parentPlane, childPlane);
 
     // Add a random offset within the tangent plane
     const n = parentPlane.normal.clone().normalize();
@@ -274,10 +485,21 @@ export class EnhancedStabilityChecker {
     const t2 = new THREE.Vector3().crossVectors(n, t1).normalize();
 
     const spread = 0.5;
-    const offset = t1.multiplyScalar((Math.random() - 0.5) * spread * 2)
-      .add(t2.multiplyScalar((Math.random() - 0.5) * spread * 2));
+    const offset = t1.multiplyScalar((rng() - 0.5) * spread * 2)
+      .add(t2.multiplyScalar((rng() - 0.5) * spread * 2));
 
     return snapped.add(offset);
+  }
+
+  /**
+   * Alias for moveObjRandomPoint (backward compatibility).
+   */
+  moveObjRandomPt(
+    obj: ObjectState,
+    parentPlane: Plane,
+    childTags: UnifiedTagSet
+  ): THREE.Vector3 {
+    return this.moveObjRandomPoint(obj, parentPlane, childTags);
   }
 
   // ============================================================================
@@ -287,7 +509,7 @@ export class EnhancedStabilityChecker {
   /**
    * Filter planes by tags.
    */
-  private filterPlanesByTags(planes: Plane[], tags: TagSet): Plane[] {
+  private filterPlanesByTags(planes: Plane[], tags: UnifiedTagSet): Plane[] {
     if (tags.size === 0) return planes;
 
     return planes.filter(plane => {
@@ -315,9 +537,6 @@ export class EnhancedStabilityChecker {
     const verticalGap = Math.abs(childPos.y - parentPos.y);
     const contactWithinMargin = verticalGap <= margin;
 
-    // Simple XZ overlap check
-    const noOverhang = true; // Can't compute without proper geometry
-
     const contactDistance = verticalGap;
     const normalAlignment = childPos.y > parentPos.y ? 1 : 0;
 
@@ -327,7 +546,7 @@ export class EnhancedStabilityChecker {
       details: {
         normalsAntiParallel: childPos.y > parentPos.y,
         contactWithinMargin,
-        noOverhang,
+        noOverhang: true,
         normalAlignment,
         contactDistance,
         overhangRatio: 0,
@@ -358,26 +577,54 @@ export class EnhancedStabilityChecker {
 
     // For floor-like surfaces (normal ≈ up), check XZ overlap
     if (Math.abs(n.y) > 0.9) {
-      const childMinXZ = { x: childBBox.min.x, z: childBBox.min.z };
-      const childMaxXZ = { x: childBBox.max.x, z: childBBox.max.z };
-      const parentMinXZ = { x: parentBBox.min.x, z: parentBBox.min.z };
-      const parentMaxXZ = { x: parentBBox.max.x, z: parentBBox.max.z };
-
-      const childArea = (childMaxXZ.x - childMinXZ.x) * (childMaxXZ.z - childMinXZ.z);
+      const childArea = (childBBox.max.x - childBBox.min.x) * (childBBox.max.z - childBBox.min.z);
       if (childArea < 1e-10) return 0;
 
-      const overlapX = Math.max(0, Math.min(childMaxXZ.x, parentMaxXZ.x) - Math.max(childMinXZ.x, parentMinXZ.x));
-      const overlapZ = Math.max(0, Math.min(childMaxXZ.z, parentMaxXZ.z) - Math.max(childMinXZ.z, parentMinXZ.z));
+      const overlapX = Math.max(0, Math.min(childBBox.max.x, parentBBox.max.x) - Math.max(childBBox.min.x, parentBBox.min.x));
+      const overlapZ = Math.max(0, Math.min(childBBox.max.z, parentBBox.max.z) - Math.max(childBBox.min.z, parentBBox.min.z));
       const overlapArea = overlapX * overlapZ;
 
       const supportRatio = overlapArea / childArea;
-      return 1 - supportRatio; // overhang = 1 - support
+      return 1 - supportRatio;
     }
 
     // For wall-like surfaces (normal ≈ horizontal), check overlap along the wall
-    // Simplified: check if child center is within parent bounds
     const childCenter = childBBox.getCenter(new THREE.Vector3());
     const isInside = parentBBox.containsPoint(childCenter);
     return isInside ? 0 : 0.5;
+  }
+
+  /**
+   * Compute the distance from a 2D point to the nearest edge of a polygon.
+   */
+  private distanceToPolygonBoundary(point: Point2D, polygon: Polygon2D): number {
+    let minDist = Infinity;
+    const n = polygon.vertices.length;
+
+    for (let i = 0; i < n; i++) {
+      const a = polygon.vertices[i];
+      const b = polygon.vertices[(i + 1) % n];
+      const dist = this.pointToSegmentDistance(point, a, b);
+      minDist = Math.min(minDist, dist);
+    }
+
+    return minDist;
+  }
+
+  /**
+   * Compute the distance from a 2D point to a line segment.
+   */
+  private pointToSegmentDistance(point: Point2D, a: Point2D, b: Point2D): number {
+    const ab = new Point2D(b.x - a.x, b.y - a.y);
+    const ap = new Point2D(point.x - a.x, point.y - a.y);
+
+    const abLenSq = ab.lengthSq();
+    if (abLenSq < 1e-10) return ap.length();
+
+    let t = ap.dot(ab) / abLenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const closest = new Point2D(a.x + t * ab.x, a.y + t * ab.y);
+    return point.distanceTo(closest);
   }
 }

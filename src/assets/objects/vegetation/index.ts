@@ -269,3 +269,123 @@ export {
   type RootSegment,
   type RootSystemResult,
 } from './trees/RootSystemGenerator';
+
+// ── Feature Parity Additions ──────────────────────────────────────────────
+
+// Tree Branching Configs — recursive branching configuration system
+export {
+  TreeSkeletonGenerator,
+  applyBranchingConfig,
+  getBranchingConfigPreset,
+  getAvailableBranchingPresets,
+  BRANCHING_CONFIG_PRESETS,
+  DEFAULT_PATH_KARGS,
+  DEFAULT_SPAWN_KARGS,
+  BroadleafTrunk,
+  PineTrunk,
+  BaobabTrunk,
+  WillowTrunk,
+  PalmTrunk,
+  BushTrunk,
+  ConiferTwig,
+  DeciduousTwig,
+  PineTwig,
+  FruitTwig,
+  WillowTwig,
+  type BranchingConfig,
+  type PathKargs,
+  type SpawnKargs,
+  type BranchSymmetry,
+} from './trees/TreeBranchingConfigs';
+
+// Coconut Palm Generator — extends PalmGenerator with coconuts
+export {
+  CoconutPalmGenerator,
+  createCoconutPalm,
+  type CoconutPalmConfig,
+  type CoconutVariant,
+} from './trees/CoconutPalmGenerator';
+
+// Kelp Generator — underwater kelp with fronds and gas bladders
+export {
+  KelpGenerator,
+  generateKelp,
+  type KelpConfig,
+  type KelpSpecies,
+} from './monocots/KelpGenerator';
+
+// Pinecone Generator — Fibonacci spiral phyllotaxis scales
+export {
+  PineconeGenerator,
+  generatePinecone,
+  type PineconeConfig,
+  type PineconeSpecies,
+  type PineconeState,
+} from './monocots/PineconeGenerator';
+
+// Dandelion Generator — lifecycle states: flower → seed head → dispersing
+export {
+  DandelionGenerator,
+  generateDandelion,
+  type DandelionConfig,
+  type DandelionLifecycle,
+} from './plants/DandelionGenerator';
+
+// Lichen Generator — crustose, foliose, fruticose growth forms
+export {
+  LichenGenerator,
+  generateLichen,
+  type LichenConfig,
+  type LichenGrowthForm,
+} from './plants/LichenGenerator';
+
+// Snow Layer Scatter — snow accumulation with slope awareness
+export {
+  SnowLayerScatter,
+  generateSnowLayer,
+  type SnowLayerConfig,
+} from './scatter/SnowLayerScatter';
+
+// Lichen Scatter — surface patches on rocks/trees
+export {
+  LichenScatter,
+  generateLichenScatter,
+  type LichenScatterConfig,
+} from './scatter/LichenScatter';
+
+// Slime Mold Scatter — vein-like network patterns
+export {
+  SlimeMoldScatter,
+  generateSlimeMoldScatter,
+  type SlimeMoldConfig,
+} from './scatter/SlimeMoldScatter';
+
+// Jellyfish Scatter — bioluminescent jellyfish
+export {
+  JellyfishScatter,
+  generateJellyfishScatter,
+  type JellyfishScatterConfig,
+  type JellyfishSpecies,
+} from './scatter/JellyfishScatter';
+
+// Vegetation Adaptive Detail — camera-aware detail adjustment
+export {
+  AdaptiveDetailManager,
+  targetFaceSize,
+  simplifyGeometryForDistance,
+  splitInView,
+  DEFAULT_ADAPTIVE_DETAIL_CONFIG,
+  type AdaptiveDetailConfig,
+  type AdaptiveDetailEntry,
+  type SplitInViewResult,
+} from './VegetationAdaptiveDetail';
+
+// Enhanced Fruit System — pineapple, cross-section, seed & stem libraries
+export {
+  EnhancedFruitFactory,
+  ExtendedFruitType,
+  SEED_LIBRARY,
+  STEM_LIBRARY,
+  type SeedDescriptor,
+  type StemDescriptor,
+} from './EnhancedFruitSystem';
