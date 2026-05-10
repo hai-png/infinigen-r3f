@@ -1,28 +1,32 @@
 /**
  * TerrainNodeExecutors — Per-vertex executors for terrain surface evaluation
  *
- * Provides 13 per-vertex executor implementations needed for terrain feature
+ * Provides 17 per-vertex executor implementations needed for terrain feature
  * parity with the original infinigen procedural generation system. Each
  * executor operates on AttributeStreams — evaluating per-vertex data in
  * bulk rather than calling scalar node executors one vertex at a time.
  *
  * ## Supported Node Types
  *
- * | # | Node Type              | Canonical Name             |
- * |---|------------------------|----------------------------|
- * | 1 | NoiseTexture           | ShaderNodeTexNoise         |
- * | 2 | MusgraveTexture        | ShaderNodeTexMusgrave      |
- * | 3 | VoronoiTexture         | ShaderNodeTexVoronoi       |
- * | 4 | WaveTexture            | ShaderNodeTexWave          |
- * | 5 | ColorRamp              | ShaderNodeValToRGB         |
- * | 6 | FloatCurve             | ShaderNodeFloatCurve       |
- * | 7 | MapRange               | ShaderNodeMapRange         |
- * | 8 | Mapping                | ShaderNodeMapping          |
- * | 9 | TextureCoordinate      | ShaderNodeTexCoord         |
- * |10 | SeparateXYZ            | ShaderNodeSeparateXYZ      |
- * |11 | CombineXYZ             | ShaderNodeCombineXYZ       |
- * |12 | SeparateColor          | ShaderNodeSeparateColor    |
- * |13 | CombineColor           | ShaderNodeCombineColor / FunctionNodeCombineColor |
+ * | #  | Node Type              | Canonical Name             |
+ * |----|------------------------|----------------------------|
+ * |  1 | NoiseTexture           | ShaderNodeTexNoise         |
+ * |  2 | MusgraveTexture        | ShaderNodeTexMusgrave      |
+ * |  3 | VoronoiTexture         | ShaderNodeTexVoronoi       |
+ * |  4 | WaveTexture            | ShaderNodeTexWave          |
+ * |  5 | ColorRamp              | ShaderNodeValToRGB         |
+ * |  6 | FloatCurve             | ShaderNodeFloatCurve       |
+ * |  7 | MapRange               | ShaderNodeMapRange         |
+ * |  8 | Mapping                | ShaderNodeMapping          |
+ * |  9 | TextureCoordinate      | ShaderNodeTexCoord         |
+ * | 10 | SeparateXYZ            | ShaderNodeSeparateXYZ      |
+ * | 11 | CombineXYZ             | ShaderNodeCombineXYZ       |
+ * | 12 | SeparateColor          | ShaderNodeSeparateColor    |
+ * | 13 | CombineColor           | ShaderNodeCombineColor / FunctionNodeCombineColor |
+ * | 14 | SurfaceKernel          | TerrainNodeSurfaceKernel   |
+ * | 15 | TerrainAttribute       | TerrainNodeAttribute       |
+ * | 16 | TerrainMask            | TerrainNodeMask            |
+ * | 17 | TerrainBlend           | TerrainNodeBlend           |
  *
  * ## Registration
  *
@@ -1318,6 +1322,26 @@ const TERRAIN_EXECUTORS: [string, PerVertexExecutor][] = [
   ['FunctionNodeCombineColor', combineColorExecutor],
   [String(NodeTypes.FunctionCombineColor), combineColorExecutor],
   ['FunctionCombineColor', combineColorExecutor],
+
+  // 14. SurfaceKernel — evaluates a surface kernel node graph per-vertex
+  ['TerrainNodeSurfaceKernel', surfaceKernelExecutor],
+  ['SurfaceKernelNode', surfaceKernelExecutor],
+  ['surface_kernel', surfaceKernelExecutor],
+
+  // 15. TerrainAttribute — reads terrain-specific per-vertex attributes
+  ['TerrainNodeAttribute', terrainAttributeExecutor],
+  ['TerrainAttributeNode', terrainAttributeExecutor],
+  ['terrain_attribute', terrainAttributeExecutor],
+
+  // 16. TerrainMask — generates terrain selection masks
+  ['TerrainNodeMask', terrainMaskExecutor],
+  ['TerrainMaskNode', terrainMaskExecutor],
+  ['terrain_mask', terrainMaskExecutor],
+
+  // 17. TerrainBlend — blends materials based on terrain masks
+  ['TerrainNodeBlend', terrainBlendExecutor],
+  ['TerrainBlendNode', terrainBlendExecutor],
+  ['terrain_blend', terrainBlendExecutor],
 ];
 
 /**
@@ -1363,4 +1387,8 @@ export {
   combineXYZExecutor,
   separateColorExecutor,
   combineColorExecutor,
+  surfaceKernelExecutor,
+  terrainAttributeExecutor,
+  terrainMaskExecutor,
+  terrainBlendExecutor,
 };

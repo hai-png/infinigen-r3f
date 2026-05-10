@@ -12,6 +12,16 @@ export type { LakeGeneratorConfig, LakeInfo } from './LakeGeneratorV2';
 export { RiverNetworkV2 } from './RiverNetworkV2';
 export type { RiverNetworkConfig, RiverPath, RiverSegment } from './RiverNetworkV2';
 
+export { WaterBoundarySDF } from './WaterBoundarySDF';
+export type { WaterBoundarySDFConfig, BoundarySDFResult } from './WaterBoundarySDF';
+
+export { RiverFlowAccumulation, D8_DIRECTIONS, D8_DIST } from './RiverFlowAccumulation';
+export type {
+  FlowAccumulationResult,
+  RiverSegment as FlowRiverSegment,
+  RiverFlowConfig,
+} from './RiverFlowAccumulation';
+
 // ── Other water systems ────────────────────────────────────────────────────
 export { WaterfallGenerator } from './WaterfallGenerator';
 export { OceanSurface, OceanSystem } from './OceanSystem';

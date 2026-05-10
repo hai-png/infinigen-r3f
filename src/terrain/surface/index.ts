@@ -76,3 +76,37 @@ export type {
   ShaderLinkDescription,
   TerrainSurfaceDescriptor,
 } from './TerrainSurfaceLibrary';
+
+// Surface Kernelizer — GLSL compilation and GPU evaluation
+export {
+  SurfaceKernelizer,
+  CompiledSurfaceKernel,
+  SurfaceKernelPresets,
+  DEFAULT_KERNELIZER_CONFIG,
+  compileSurfaceToDisplacement,
+} from './SurfaceKernelizer';
+
+export type {
+  SurfaceKernelCompileResult,
+  SurfaceKernelEvalResult,
+  SurfaceKernelizerConfig,
+  SurfaceKernelizerMode,
+  UniformDecl,
+  SurfaceKernelFunction,
+} from './SurfaceKernelizer';
+
+// NodeTerrainBridge — Integration between Node System and Terrain Surface
+export {
+  TerrainNodeBridge,
+  DEFAULT_NODE_TERRAIN_BRIDGE_CONFIG,
+  surfaceFuncToKernel,
+  addTerrainSurface,
+  compileSurfaceToDisplacementFunc,
+  perturbSDFWithNodes,
+} from './NodeTerrainBridge';
+
+export type {
+  SurfaceNodeFunc,
+  TerrainSurfaceResult,
+  NodeTerrainBridgeConfig,
+} from './NodeTerrainBridge';
